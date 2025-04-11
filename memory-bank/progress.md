@@ -27,6 +27,7 @@
 - `package.json` scripts updated.
 - **VS Code Launch Configuration (`.vscode/launch.json`) updated to use `npm: watch` for `preLaunchTask`, enabling development mode HMR.**
 - **TypeScript RootDir Issue (TS6059) Fixed:** Main `tsconfig.json` updated with `include: ["src/**/*"]` to prevent conflicts with the separate `webview-ui` project.
+- **TypeScript DOM Type Errors (TS2304) Fixed:** Added `"DOM"` to `compilerOptions.lib` in main `tsconfig.json` to resolve type issues from `@ai-sdk/ui-utils`.
 
 ## What's Left (Potential Future Enhancements)
 - Refine Preact component structure.

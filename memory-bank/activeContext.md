@@ -15,9 +15,10 @@ Finalizing documentation and preparing for task completion after implementing de
     - Adjusted CSP policies for both modes.
 - **Fixed Preact Mount Point:** Corrected the target element ID in `webview-ui/src/main.tsx` from `#app` to `#root` to match the development HTML structure in `src/extension.ts`, resolving the "無野睇" issue in dev mode.
 - **Fixed TypeScript RootDir Issue (TS6059):** Modified the main `tsconfig.json` to explicitly include only the `src/**/*` directory, preventing the compiler from trying to process files in the separate `webview-ui` project.
+- **Fixed TypeScript DOM Type Errors (TS2304):** Added `"DOM"` to the `compilerOptions.lib` array in the main `tsconfig.json` to resolve type errors originating from `@ai-sdk/ui-utils` dependency.
 
 ## Next Steps
-- Update `memory-bank/progress.md` to reflect the development mode support, Preact mount point fix, and the tsconfig fix.
+- Update `memory-bank/progress.md` to reflect all recent fixes (dev mode, mount point, tsconfig include, tsconfig lib).
 - Commit the latest changes.
 - Attempt completion.
 - Attempt completion.
