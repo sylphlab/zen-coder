@@ -9,7 +9,7 @@
 - Model selection dropdown implemented and functional.
 - Communication between Preact UI and extension host updated.
 - `minicoder.startChat` command registered and activated.
-- **Webview panel creation logic loads correctly in both Development (Vite Dev Server for HMR) and Production (Vite build output) modes.**
+- **Webview panel creation logic loads correctly in both Development (Vite Dev Server for HMR) and Production (Vite build output) modes.** (Fixed Preact mount point to `#root` in `webview-ui/src/main.tsx` for dev mode).
 - CSP nonce handling adapted for both modes.
 - `AiService` class created (`src/ai/aiService.ts`) with:
     - API Key Management methods using `vscode.SecretStorage`.

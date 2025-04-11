@@ -13,9 +13,10 @@ Finalizing documentation and preparing for task completion after implementing de
     - Updated `.vscode/launch.json` to use `npm: watch` as `preLaunchTask`.
     - Modified `getWebviewContent` in `src/extension.ts` to detect `extensionMode` and load from Vite dev server (`http://localhost:5173`) in development or from `dist/webview` in production.
     - Adjusted CSP policies for both modes.
+- **Fixed Preact Mount Point:** Corrected the target element ID in `webview-ui/src/main.tsx` from `#app` to `#root` to match the development HTML structure in `src/extension.ts`, resolving the "無野睇" issue in dev mode.
 
 ## Next Steps
-- Update `memory-bank/progress.md` to reflect the development mode support.
+- Update `memory-bank/progress.md` to reflect the development mode support and the Preact mount point fix.
 - Commit the latest changes.
 - Attempt completion.
 
