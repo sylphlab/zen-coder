@@ -91,50 +91,79 @@ export async function activate(context: vscode.ExtensionContext) {
 
                                 for (const line of lines) {
                                     if (line.trim() === '') continue;
-                                    // Match the prefix (e.g., '0:', '1:', '2:') and the JSON data
-                                    const match = line.match(/^(\d+):(.*)$/);
-                                    if (match && match[2]) {
+                                    // Match known prefixes (e.g., '0:', 'd:', 'e:', 'f:') and the JSON data
+                                    // Allows single letter or digit prefixes
+                                    const match = line.match(/^([0-9a-zA-Z]):(.*)$/);
+                                    if (match && match[1] && match[2]) {
+                                        const prefix = match[1];
                                         const jsonData = match[2];
                                         try {
                                             const part = JSON.parse(jsonData); // Parse the JSON part after the prefix
 
-                                            // Process the parsed part based on its type
-                                            switch (part.type) {
-                                                case 'text-delta':
-                                                    chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
-                                                    break;
-                                                case 'tool-call':
-                                                    console.log('Tool call received in stream:', part);
-                                                    break;
-                                                case 'tool-result':
-                                                    console.log('Tool result received in stream:', part);
-                                                    break;
-                                                case 'message-annotation':
-                                                    console.log('Message annotation (tool status):', part);
-                                                    // Ensure message exists and is a string before sending
-                                                    const statusMessage = (typeof part.message === 'string') ? part.message : undefined;
-                                                    chatPanel?.webview.postMessage({
-                                                        type: 'toolStatusUpdate',
-                                                        toolCallId: part.toolCallId,
-                                                        toolName: part.toolName,
-                                                        status: part.status,
-                                                        message: statusMessage // Send validated message
-                                                    });
-                                                    break;
-                                                case 'error':
-                                                    console.error('Error received in stream:', part.error);
-                                                    vscode.window.showErrorMessage(`Stream Error: ${part.error}`);
-                                                    chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
-                                                    break;
-                                                // Other types like 'finish' are implicitly handled by the loop ending
+                                            // Process based on prefix or parsed content type
+                                            if (prefix >= '0' && prefix <= '9' || prefix === 'd') {
+                                                // Handle data chunks (numbered or 'd:')
+                                                switch (part.type) {
+                                                    case 'text-delta':
+                                                        chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
+                                                        break;
+                                                    case 'tool-call':
+                                                        console.log('Tool call received in stream:', part);
+                                                        // Potentially send update to UI if needed
+                                                        break;
+                                                    case 'tool-result':
+                                                        console.log('Tool result received in stream:', part);
+                                                         // Potentially send update to UI if needed
+                                                        break;
+                                                    case 'message-annotation':
+                                                        console.log('Message annotation (tool status):', part);
+                                                        const statusMessage = (typeof part.message === 'string') ? part.message : undefined;
+                                                        chatPanel?.webview.postMessage({
+                                                            type: 'toolStatusUpdate',
+                                                            toolCallId: part.toolCallId,
+                                                            toolName: part.toolName,
+                                                            status: part.status,
+                                                            message: statusMessage
+                                                        });
+                                                        break;
+                                                    case 'error':
+                                                        console.error('Error received in data stream:', part.error);
+                                                        vscode.window.showErrorMessage(`Stream Error: ${part.error}`);
+                                                        chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
+                                                        break;
+                                                    // Other data types can be logged or handled
+                                                    default:
+                                                        console.log(`Received unhandled data type '${part.type}' with prefix '${prefix}':`, part);
+                                                }
+                                            } else if (prefix === 'e') {
+                                                // Handle event/error messages
+                                                console.log('Event/End message received:', part);
+                                                if (part.finishReason === 'stop') {
+                                                    // Stream finished signal, can potentially trigger final actions if needed
+                                                    console.log('Stream finished according to "e:" message.');
+                                                } else if (part.error) {
+                                                     console.error('Error received via "e:" prefix:', part.error);
+                                                     vscode.window.showErrorMessage(`Stream Event Error: ${part.error}`);
+                                                     chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, an error occurred: ${part.error}` });
+                                                }
+                                            } else if (prefix === 'f') {
+                                                // Handle final metadata messages
+                                                console.log('Final metadata received:', part);
+                                                // e.g., log messageId: part.messageId
+                                            } else {
+                                                // Handle other potential prefixes if necessary
+                                                console.warn(`Received line with unhandled known prefix '${prefix}':`, line);
                                             }
+
                                         } catch (e) {
-                                            console.error('Failed to parse stream chunk JSON:', jsonData, e);
-                                            // Handle parsing error
+                                            console.error(`Failed to parse stream chunk JSON with prefix '${prefix}':`, jsonData, e);
+                                            // Handle parsing error, maybe post a generic error to UI
                                         }
                                     } else {
-                                        // Handle lines that don't match the expected format (e.g., could be metadata lines)
-                                        console.warn('Received stream line without expected prefix:', line);
+                                        // Handle lines that don't match any expected prefix format
+                                        if (line.trim() !== '') { // Avoid logging empty lines
+                                           console.warn('Received stream line without expected prefix format:', line);
+                                        }
                                     }
                                 } // End for loop processing lines
                             } // End while loop reading stream

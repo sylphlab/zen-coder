@@ -16,17 +16,17 @@ Refactoring and expanding the toolset for enhanced functionality and modularity.
     - Installed `node-fetch` and `@types/node-fetch` dependencies.
     - Fixed ESM/CJS import issues for `node-fetch` using dynamic `import()`.
     - Implemented basic streaming status updates for tools via `StreamData` and `message-annotation`.
-    - **Fixed Stream Parsing:** Corrected stream parsing logic in `src/extension.ts` to handle Vercel AI SDK's data stream format (with prefixes like `0:`) using Web Streams API.
+    - **Fixed Stream Parsing (Initial):** Corrected stream parsing logic in `src/extension.ts` to handle Vercel AI SDK's data stream format (with prefixes like `0:`) using Web Streams API.
     - **UI Update (Tool Status):** Updated `webview-ui/src/app.tsx` to handle `toolStatusUpdate` messages and display tool execution status. Added corresponding CSS styles in `webview-ui/src/app.css`.
+    - **Fixed Stream Parsing (Enhanced):** Updated stream parsing logic in `src/extension.ts` to handle additional Vercel AI SDK prefixes (`d:`, `e:`, `f:`) reported by user.
 - **AiService Refactoring:** Modified `AiService` (`src/ai/aiService.ts`) to import and use the consolidated `allTools` object from `src/tools/index.ts`, removing internal tool definitions and execution methods.
 - **Configuration Update:** Updated `package.json` (`contributes.configuration.properties`) to reflect the new tool names (e.g., `zencoder.tools.readFileTool.enabled`) for enabling/disabling. Removed JSON comment error.
 - **Previous:** Project renamed to Zen Coder; Vercel AI SDK enhancements (multi-step, error handling, repair) applied.
 
 ## Next Steps
 - Update `progress.md`.
-- Commit stream parsing fix and UI update for tool status.
-- **Next:** Thorough testing of tool enhancements and status display.
-- Attempt completion after UI update.
+- Commit enhanced stream parsing fix.
+- **Next:** Thorough testing of tool enhancements, status display, and stream parsing.
 - Attempt completion.
 
 ## Active Decisions
@@ -34,3 +34,4 @@ Refactoring and expanding the toolset for enhanced functionality and modularity.
 - Numerous new tools added across filesystem, utils, system, and vscode categories.
 - `AiService` now utilizes the modular tool structure.
 - Configuration in `package.json` updated for new tools.
+- Stream parsing logic enhanced to handle more prefix types.
