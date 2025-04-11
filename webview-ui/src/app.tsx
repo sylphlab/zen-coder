@@ -6,6 +6,13 @@ interface Message {
     sender: 'user' | 'assistant';
     text: string;
 }
+ // Define tool status structure
+ interface ToolStatus {
+     name: string;
+     status: 'in-progress' | 'complete' | 'error' | 'cancelled' | 'warning'; // Add more statuses as needed
+     message?: string;
+ }
+ 
 
 // Define available models (matching the previous HTML)
 const availableModels = [
@@ -25,7 +32,8 @@ export function App() {
     const [userInput, setUserInput] = useState('');
     const [selectedModel, setSelectedModel] = useState(availableModels[0].value); // Default to first model
     const messageListRef = useRef<HTMLDivElement>(null);
-    const lastAssistantMessageRef = useRef<HTMLDivElement>(null); // Ref for streaming
+    const lastAssistantMessageRef = useRef<HTMLDivElement>(null); // Ref for streaming text
+    const [toolStatuses, setToolStatuses] = useState<Record<string, ToolStatus>>({}); // State for tool statuses
 
     // Scroll to bottom when messages change
     useEffect(() => {
@@ -64,6 +72,19 @@ export function App() {
                      console.warn("No last assistant message ref found for chunk, adding as new message.");
                      setMessages(prev => [...prev, { sender: 'assistant', text: message.textDelta }]);
                 }
+                break;
+            case 'toolStatusUpdate':
+                console.log('Tool status update:', message);
+                setToolStatuses(prev => ({
+                    ...prev,
+                    [message.toolCallId]: {
+                        name: message.toolName,
+                        status: message.status,
+                        message: message.message,
+                    }
+                }));
+                // Optionally clear 'complete' or 'error' statuses after a delay?
+                // Or maybe just update them and let them persist for a while.
                 break;
             // Add other message handlers if needed
         }
@@ -145,6 +166,17 @@ export function App() {
                     >
                         {/* Render simple text for user messages */}
                         {/* {msg.sender === 'user' ? msg.text : null} */}
+                    </div>
+                ))}
+            </div>
+
+            {/* Tool Status Area */}
+            <div id="tool-status-area">
+                {Object.entries(toolStatuses).map(([id, status]) => (
+                    <div key={id} className={`tool-status status-${status.status}`}>
+                        <strong>Tool: {status.name}</strong> ({status.status})
+                        {status.message && `: ${status.message}`}
+                        {/* Add a button to clear status? */}
                     </div>
                 ))}
             </div>

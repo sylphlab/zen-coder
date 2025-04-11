@@ -16,6 +16,11 @@
     --vscode-widget-border: var(--vscode-editorWidget-border, #ccc);
     --vscode-code-background: var(--vscode-textBlockQuote-background, #f0f0f0);
     --vscode-code-border: var(--vscode-textBlockQuote-border, #ddd);
+    /* Add colors for tool statuses */
+    --vscode-editorInfo-foreground: var(--vscode-editorInfo-foreground, #316bcd);
+    --vscode-testing-iconPassed: var(--vscode-testing-iconPassed, #388a34);
+    --vscode-errorForeground: var(--vscode-errorForeground, #a1260d);
+    --vscode-editorWarning-foreground: var(--vscode-editorWarning-foreground, #b88a00);
 }
 
 body {
@@ -158,4 +163,45 @@ h1 {
 
 #send-button:hover {
     background-color: var(--vscode-button-hover-background);
+}
+
+/* Tool Status Area Styles */
+#tool-status-area {
+    padding: 5px 10px;
+    border-top: 1px solid var(--vscode-editorWidget-border);
+    font-size: 0.9em;
+    max-height: 100px; /* Limit height */
+    overflow-y: auto; /* Add scroll if needed */
+    flex-shrink: 0; /* Prevent shrinking */
+    margin-top: 5px; /* Add some space above */
+}
+
+.tool-status {
+    padding: 2px 0;
+    border-bottom: 1px dashed var(--vscode-editorWidget-border);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tool-status:last-child {
+    border-bottom: none;
+}
+
+.status-in-progress {
+    color: var(--vscode-editorInfo-foreground); /* Blueish */
+}
+
+.status-complete {
+    color: var(--vscode-testing-iconPassed); /* Green */
+}
+
+.status-error {
+    color: var(--vscode-errorForeground); /* Red */
+}
+
+.status-cancelled {
+    color: var(--vscode-editorWarning-foreground); /* Yellowish */
+}
+.status-warning {
+    color: var(--vscode-editorWarning-foreground); /* Yellowish */
 }
