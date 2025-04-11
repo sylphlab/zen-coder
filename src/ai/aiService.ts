@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, StreamData, Tool, StepResult, ToolCallPart, ToolResultPart } from 'ai'; // Use Tool, add StepResult types
+// Import necessary types and functions, removing deprecated/incorrect ones
+import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall } from 'ai'; // Removed ToolError as it's not exported. Added StreamTextResult, ToolCall.
 // Import the factory function as per documentation
 import { createAnthropic } from '@ai-sdk/anthropic';
 // Import the correct factory function for Google
@@ -121,7 +122,8 @@ export class AiService {
         return activeToolNames;
     }
 
-    public async getAiResponseStream(prompt: string) {
+    // Return type should be Promise<ReadableStream | null>
+    public async getAiResponseStream(prompt: string): Promise<ReadableStream | null> {
         const modelInstance = this._getProviderInstance();
 
         if (!modelInstance) {
@@ -135,85 +137,49 @@ export class AiService {
         // Use the imported allTools directly
         const activeToolNames = this._getActiveToolNames();
 
-        // Only proceed if there are active tools or if tools are not required by the model implicitly
-        // Note: Some models might error if tools are provided but none are active.
-        // Consider adding logic here or using toolChoice: 'none' if activeToolNames is empty.
-
-        // Create a StreamData instance for this call
-        const data = new StreamData();
-
-        // Wrap tools to inject StreamData and toolCallId into execute context
-        const toolsWithStreaming: Record<string, Tool<any, any>> = {}; // Use Tool type
-        for (const [name, toolDef] of Object.entries(allTools)) {
-            if (activeToolNames.includes(name as ToolName)) { // Only wrap active tools
-                toolsWithStreaming[name] = {
-                    ...toolDef,
-                    execute: async (args: any, executionContext: any) => {
-                        // The SDK provides toolCallId in the second arg (executionContext)
-                        const toolCallId = executionContext?.toolCallId;
-                        if (!toolCallId) {
-                            console.error(`Tool ${name} execution context missing toolCallId.`);
-                            // Proceed without streaming if ID is missing, or throw error?
-                        } else {
-                             // Send 'in-progress' status immediately
-                             data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: name, status: 'in-progress' });
-                        }
-
-                        try {
-                            // Call the original execute function, passing the StreamData instance and toolCallId
-                            // Modify the context passed to the original execute if needed
-                            const result = await toolDef.execute(args, { ...executionContext, data, toolCallId }); // Pass data and toolCallId
-
-                            // Send 'complete' status if execution finishes without error (before returning)
-                            // Note: The actual tool result is handled by the SDK stream
-                            if (toolCallId) {
-                                // Check if result indicates success before sending 'complete'
-                                const isSuccess = typeof result === 'object' && result !== null && result.success === true;
-                                const status = isSuccess ? 'complete' : 'error'; // Infer status if possible
-                                // Safely access message or error
-                                const message = isSuccess
-                                    ? (result as any).message ?? 'Success'
-                                    : (result as any).error ?? 'Error';
-                                data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: name, status: status, message: String(message).substring(0, 100) }); // Limit message length
-                            }
-                            return result;
-                        } catch (error: any) {
-                            // Send 'error' status if the execute function throws
-                            if (toolCallId) {
-                                data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: name, status: 'error', message: error.message?.substring(0, 100) });
-                            }
-                            throw error; // Re-throw the error for SDK handling
-                        }
-                    },
-                };
+        // Filter the main allTools object based on activeToolNames
+        const activeTools: Record<string, Tool<any, any>> = {};
+        for (const toolName of activeToolNames) {
+            if (allTools[toolName]) {
+                activeTools[toolName] = allTools[toolName];
             }
         }
 
         try {
-            const result = await streamText({
+            // Use standard streamText with the filtered activeTools
+            // Provide the correct generic type for StreamTextResult based on the tools being passed
+            const result: StreamTextResult<typeof activeTools, any> = await streamText({ // Provide both generic types
                 model: modelInstance,
                 messages: this.conversationHistory,
-                tools: toolsWithStreaming, // Use the wrapped tools
-                // experimental_activeTools: activeToolNames.length > 0 ? activeToolNames : undefined, // No longer needed as we filter when wrapping
-                maxSteps: 5, // Allow multiple steps for tool results processing
+                tools: activeTools, // Pass the filtered tools directly
+                maxSteps: 5,
+                // Let TypeScript infer the event type from the StreamTextResult context
                 onFinish: async (event) => {
-                    // Add assistant message and tool results to history after the stream finishes
+                    // History update logic
+                    // Access properties based on inferred type (or add explicit type if inference fails)
                     if (event.finishReason === 'stop' || event.finishReason === 'tool-calls') {
-                        this.addAssistantResponseToHistory(event.text ?? ''); // Add final text if any
-                        // Process tool calls and results from the *entire* multi-step process
-                        // Use event.steps and add explicit types
-                        event.steps?.forEach((step: StepResult<any>) => {
-                            step.toolCalls?.forEach((tc: ToolCallPart) => this.addToolCallToHistory(tc));
-                            step.toolResults?.forEach((tr: ToolResultPart) => this.addToolResultToHistory(tr));
-                        });
+                        // Assuming 'text', 'toolCalls', 'toolResults' are available on the inferred event type
+                        this.addAssistantResponseToHistory(event.text ?? '');
+                        event.toolCalls?.forEach((tc) => this.addToolCallToHistory(tc));
+                        event.toolResults?.forEach((tr) => this.addToolResultToHistory(tr));
                     }
-                    // Close the StreamData instance
-                    data.close();
-                    console.log("Stream finished, StreamData closed.");
+                    console.log("Stream finished.");
                 },
 
                 // Experimental Tool Repair (Re-ask Strategy) - Keep this logic
-                experimental_repairToolCall: async ({ toolCall, error, messages, system }) => {
+                // Add correct types to repairToolCall parameters
+                experimental_repairToolCall: async ({
+                    toolCall,
+                    error,
+                    messages,
+                    system
+                }: {
+                    // Use the imported ToolCall and standard Error type
+                    toolCall: ToolCall<string, any>;
+                    error: Error; // Use standard Error type
+                    messages: CoreMessage[];
+                    system?: string;
+                }) => {
                     console.warn(`Attempting to repair tool call for ${toolCall.toolName} due to error: ${error.message}`);
                     // ... (Keep existing repair logic, ensuring it uses 'allTools' for re-ask)
                     try {
@@ -226,11 +192,11 @@ export class AiService {
                                 { role: 'tool', content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: `Error executing tool: ${error.message}. Please try again with corrected arguments.` }] }
                             ],
                             tools: allTools, // Use original allTools for repair attempt definition
-                            // No need for activeTools here, let the model choose from all for repair
                         });
                         const newToolCall = repairResult.toolCalls.find(newTc => newTc.toolName === toolCall.toolName);
                         if (newToolCall) {
                             console.log(`Tool call ${toolCall.toolName} successfully repaired.`);
+                            // The SDK expects the arguments as a string for the 'function' type repair
                             return { toolCallType: 'function', toolCallId: toolCall.toolCallId, toolName: newToolCall.toolName, args: JSON.stringify(newToolCall.args) };
                         } else {
                             console.error(`Tool call repair failed for ${toolCall.toolName}: Model did not generate a new call.`); return null;
@@ -240,8 +206,8 @@ export class AiService {
                     }
                 }
             });
-            // Return the response stream along with the StreamData
-            return result.toDataStreamResponse({ data });
+            // Return the standard stream from the result
+            return result.toDataStream(); // Use the suggested toDataStream() method
         } catch (error: any) {
             // Handle specific tool errors
             if (NoSuchToolError.isInstance(error)) {
@@ -267,7 +233,6 @@ export class AiService {
             vscode.window.showErrorMessage(`Error interacting with AI: ${error.message}`);
             // Remove the last user message if the initial streamText call failed entirely
             this.conversationHistory.pop();
-            data.close(); // Ensure data stream is closed on error too
             return null;
         }
     }
@@ -288,19 +253,18 @@ export class AiService {
     }
 
      // Method to add tool call and result to history
-     public addToolCallToHistory(toolCall: any) { // Use more specific type if available from SDK
-        // Assuming toolCall structure needs to be adapted for CoreMessage
-        // This might need adjustment based on actual SDK types
+     // Use ToolCallPart and ToolResultPart for better typing
+     public addToolCallToHistory(toolCall: ToolCallPart) {
         this.conversationHistory.push({
             role: 'assistant',
-            content: [{ type: 'tool-call', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: toolCall.args }]
+            content: [toolCall] // Directly use the ToolCallPart
         });
      }
 
-     public addToolResultToHistory(toolResult: any) { // Use more specific type if available from SDK
+     public addToolResultToHistory(toolResult: ToolResultPart) {
          this.conversationHistory.push({
              role: 'tool',
-             content: [{ type: 'tool-result', toolCallId: toolResult.toolCallId, toolName: toolResult.toolName, result: toolResult.result }]
+             content: [toolResult] // Directly use the ToolResultPart
          });
      }
 

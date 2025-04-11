@@ -72,10 +72,11 @@ export async function activate(context: vscode.ExtensionContext) {
                             chatPanel?.webview.postMessage({ type: 'startAssistantMessage', sender: 'assistant' });
 
                             // Process the stream using Web Streams API
-                            if (!streamResult.body) {
-                                throw new Error("Response body is null");
+                            // streamResult is now directly the ReadableStream or null
+                            if (!streamResult) {
+                                throw new Error("AI service returned a null stream.");
                             }
-                            const reader = streamResult.body.getReader();
+                            const reader = streamResult.getReader(); // Get reader directly from the stream
                             const decoder = new TextDecoder();
                             let buffer = '';
                             let isDone = false;

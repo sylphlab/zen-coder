@@ -1,29 +1,27 @@
 # Active Context
 
 ## Current Focus
-Debugging and finalizing Vercel AI SDK stream parsing logic.
+Finalizing Vercel AI SDK integration after addressing stream parsing and deprecated API issues.
 
 ## Recent Changes
 - **Tool Refactoring & Expansion:** (Completed previously)
-- **Fixed Stream Parsing (Initial):** Corrected stream parsing logic in `src/extension.ts` to handle Vercel AI SDK's data stream format (with prefixes like `0:`) using Web Streams API.
-- **UI Update (Tool Status):** Updated `webview-ui/src/app.tsx` to handle `toolStatusUpdate` messages and display tool execution status. Added corresponding CSS styles in `webview-ui/src/app.css`.
-- **Fixed Stream Parsing (Enhanced):** Updated stream parsing logic in `src/extension.ts` to handle additional Vercel AI SDK prefixes (`d:`, `e:`, `f:`) reported by user.
-- **Fixed Stream Parsing (Refined):** Further refined stream parsing logic in `src/extension.ts` to handle `0:` prefixes followed by raw text chunks (incorrectly) and `d:` prefixes with typeless JSON.
-- **Fixed Stream Parsing (Final - JSON Strings):** Corrected the handling of `0:` prefixes in `src/extension.ts`. It now correctly assumes the content is always JSON (either a string or an object) and parses it accordingly, fixing the extra quotes issue.
-- **Fixed Stream Parsing (Final - Tool Prefixes):** Added specific handling for tool-related prefixes (`8:`, `9:`, `a:`) observed during testing, logging the data and sending status updates to the UI where appropriate.
+- **Fixed Stream Parsing (Comprehensive):** Iteratively refined stream parsing logic in `src/extension.ts` to handle various Vercel AI SDK prefixes (`0:`-`7:`, `8:`, `9:`, `a:`, `d:`, `e:`, `f:`) and correctly parse JSON-encoded strings and tool call/result messages.
+- **Removed Deprecated `StreamData`:** Refactored `src/ai/aiService.ts` to remove usage of the deprecated `StreamData` API for sending custom tool status updates. Temporarily removed the feature of sending 'in-progress', 'complete', 'error' statuses during tool execution to simplify and stabilize the core functionality.
+- **Standardized `streamText` Usage:** Ensured `src/ai/aiService.ts` uses the standard `streamText` function, corrected type definitions for `StreamTextResult`, `onFinish` callback, and `experimental_repairToolCall` parameters.
+- **Corrected Stream Handling:** Fixed `src/extension.ts` to correctly handle the `ReadableStream` returned by the updated `getAiResponseStream` method in `aiService.ts` (using `streamResult.getReader()` instead of `streamResult.body.getReader()`).
+- **Corrected Stream Return Value:** Fixed `src/ai/aiService.ts` to return `result.toDataStream()` instead of the non-existent `result.stream` or `result.toAIStream()`.
+- **UI Update (Tool Status):** (Completed previously, but status updates are now disabled pending reimplementation with new APIs if needed).
 - **AiService Refactoring:** (Completed previously)
 - **Configuration Update:** (Completed previously)
 - **Previous:** Project renamed to Zen Coder; Vercel AI SDK enhancements (multi-step, error handling, repair) applied.
 
 ## Next Steps
 - Update `progress.md`.
-- Commit comprehensive stream parsing fix.
-- **Next:** Test stream parsing thoroughly with various models and tool calls.
+- Commit fixes for `StreamData` deprecation and related type errors.
+- **Next:** Test core chat functionality and tool execution (without custom status updates) thoroughly.
+- Consider re-implementing tool status updates using recommended Vercel AI SDK APIs if necessary.
 - Attempt completion.
 
 ## Active Decisions
-- Toolset successfully refactored into a modular structure under `src/tools/`.
-- Numerous new tools added across filesystem, utils, system, and vscode categories.
-- `AiService` now utilizes the modular tool structure.
-- Configuration in `package.json` updated for new tools.
-- Stream parsing logic iteratively refined and finalized to correctly handle various Vercel AI SDK stream formats, including JSON-encoded strings and tool call/result prefixes.
+- Prioritized fixing core stream parsing and removing deprecated API usage over maintaining custom tool status updates for now.
+- Standardized on documented Vercel AI SDK APIs (`streamText`, `toDataStream`).

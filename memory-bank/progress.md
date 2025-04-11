@@ -14,7 +14,7 @@
 - `AiService` class created (`src/ai/aiService.ts`) with:
     - API Key Management methods using `vscode.SecretStorage`.
     - Correct model provider instantiation logic using factory functions.
-    - `getAiResponseStream` method.
+    - `getAiResponseStream` method using standard `streamText`.
     - Tool definitions for all required tools.
     - Basic tool execution logic implemented for most tools.
     - `executeSearch` updated to indicate requirement for MCP integration (placeholder removed).
@@ -42,25 +42,26 @@
     - `package.json` configuration updated for new/enhanced tool names.
     - Dependencies (`node-fetch`, types) added and import issues resolved.
     - Previous enhancements (multi-step, error handling, repair, activation) remain integrated.
-    - Basic streaming status updates implemented via `StreamData` (demonstrated in `listFilesTool`, `readFileTool`, etc.).
-    - **Fixed Stream Parsing (Comprehensive):** Corrected stream parsing in `extension.ts` to handle Vercel AI SDK format, including various prefixes (`0:`-`7:`, `8:`, `9:`, `a:`, `d:`, `e:`, `f:`) and correctly parsing JSON-encoded strings and handling tool call/result messages.
-    - **UI Update (Tool Status):** Webview UI (`app.tsx`, `app.css`) updated to display tool execution status updates received via `message-annotation` and custom statuses for tool calls/results.
+- **Fixed Stream Parsing (Comprehensive):** Corrected stream parsing in `extension.ts` to handle Vercel AI SDK format, including various prefixes (`0:`-`7:`, `8:`, `9:`, `a:`, `d:`, `e:`, `f:`) and correctly parsing JSON-encoded strings and handling tool call/result messages.
+- **Removed Deprecated `StreamData`:** Refactored `aiService.ts` to remove `StreamData` usage and associated custom tool status updates.
+- **Corrected `streamText` Usage:** Fixed types and return value handling for `streamText` in `aiService.ts` and `extension.ts`.
+- **UI Update (Tool Status):** (Completed previously, but custom status updates are currently disabled).
 ## What's Left (Potential Future Enhancements)
 - Implement conversation history persistence.
-- Thorough testing and debugging of new tools and stream parsing across different models and tool interactions.
+- Thorough testing and debugging of core chat and tool execution.
 - Remove unused `@vscode/webview-ui-toolkit` dependency.
 - Implement actual MCP client integration for tools like `search` (currently placeholder/disabled).
 - Refine Preact component structure.
 - Improve Markdown rendering in Preact UI.
 - Improve error handling in Preact UI.
+- Re-implement tool status updates using recommended Vercel AI SDK APIs (if desired).
 
 ## Current Status
-- **Toolset Refactored & Expanded:** All requested tools implemented in a modular structure under `src/tools/`. `AiService` and configuration updated accordingly. Project remains functional with the enhanced toolset.
-- **Stream Parsing Fixed:** Logic updated to comprehensively handle various Vercel AI SDK stream variations, including text, metadata, events, and tool call/result messages.
-- Project is stable, pending final testing of stream parsing, especially with tool calls.
+- **Core Functionality Stabilized:** Stream parsing and Vercel AI SDK interaction logic corrected and simplified by removing deprecated APIs. Custom tool status updates temporarily disabled.
+- Project should be stable for core chat and tool execution, pending testing.
 
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
 - Search tool functionality relies on the external `search_files` tool (requires environment support).
 - Conversation history is not persisted.
-- Webview UI now displays basic tool status updates, including tool call requests/results. (Further refinement might be needed).
+- Custom tool execution status updates (in-progress, complete, error) are currently disabled.
