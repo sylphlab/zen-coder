@@ -1,0 +1,19 @@
+# Cline Rules for Simplified AI Coder VS Code Extension
+
+## Project-Specific Patterns
+- (To be populated as patterns emerge)
+
+## Preferences
+- Use `pnpm` for package management.
+- Prefer VS Code Webview UI Toolkit initially.
+- Use TypeScript strictly.
+- Follow established VS Code extension best practices.
+
+## Intelligence
+- (To be populated with learned insights)
+
+## Challenges
+- Ensuring secure handling of API keys (`vscode.SecretStorage`).
+- Implementing robust user confirmation for `runCommand`.
+- Managing state effectively between the extension host and webview.
+- Handling potential errors from AI APIs and tools gracefully.
