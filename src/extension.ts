@@ -96,87 +96,89 @@ export async function activate(context: vscode.ExtensionContext) {
                                     const match = line.match(/^([0-9a-zA-Z]):(.*)$/);
                                     if (match && match[1] && match[2]) {
                                         const prefix = match[1];
-                                        const contentData = match[2]; // Renamed from jsonData as it might be raw text
+                                        const contentData = match[2]; // Renamed from jsonData as it might be raw text or JSON
 
-                                        if (prefix >= '0' && prefix <= '9') {
-                                            // Handle numbered prefixes (should always be JSON: string or object)
-                                            try {
+                                        // --- Handle specific prefixes ---
+                                        try { // Wrap parsing attempts in a try-catch
+                                            if (prefix >= '0' && prefix <= '7') {
+                                                // Handle numbered prefixes (0-7) - Expected: JSON string or simple JSON object
                                                 const part = JSON.parse(contentData);
-
                                                 if (typeof part === 'string') {
-                                                    // Handle JSON-encoded string content
                                                     chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part });
                                                 } else if (typeof part === 'object' && part !== null) {
-                                                    // Handle JSON object content
                                                     switch (part.type) {
                                                         case 'text-delta':
-                                                            // This might be redundant if text comes as strings, but handle just in case
                                                             chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
                                                             break;
                                                         case 'error':
-                                                            console.error('Error object received in numbered data stream:', part.error);
+                                                            console.error('Error object received via 0-7 prefix:', part.error);
                                                             vscode.window.showErrorMessage(`Stream Error: ${part.error}`);
                                                             chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
                                                             break;
-                                                        // Handle other potential object types if they appear with numbered prefixes
                                                         default:
                                                             console.log(`Received unhandled JSON object type '${part.type}' with prefix '${prefix}':`, part);
                                                     }
                                                 } else {
-                                                    // Handle other primitive types if necessary (e.g., numbers, booleans)
                                                     console.log(`Received unexpected primitive type '${typeof part}' with prefix '${prefix}':`, part);
                                                 }
-                                            } catch (e) {
-                                                // This should ideally not happen if the stream format is consistent
-                                                console.error(`Failed to parse expected JSON with prefix '${prefix}':`, contentData, e);
-                                                // Do not send raw contentData to UI as it likely includes quotes
-                                            }
-                                        } else if (prefix === 'd') {
-                                            // Handle 'd:' prefix (seems to be JSON data/metadata)
-                                            try {
+                                            } else if (prefix === '8') {
+                                                // Handle '8:' prefix - Tool-related metadata (often typeless JSON)
                                                 const part = JSON.parse(contentData);
-                                                // Check if part.type exists before switching
-                                                if (part.type) {
-                                                    switch (part.type) {
-                                                        // Handle known types if they appear with 'd:'
-                                                        case 'tool-call':
-                                                            console.log('Tool call received via "d:" prefix:', part);
-                                                            break;
-                                                        case 'tool-result':
-                                                            console.log('Tool result received via "d:" prefix:', part);
-                                                            break;
-                                                        case 'message-annotation':
-                                                            console.log('Message annotation (tool status) via "d:" prefix:', part);
-                                                            const statusMessage = (typeof part.message === 'string') ? part.message : undefined;
-                                                            chatPanel?.webview.postMessage({
-                                                                type: 'toolStatusUpdate',
-                                                                toolCallId: part.toolCallId,
-                                                                toolName: part.toolName,
-                                                                status: part.status,
-                                                                message: statusMessage
-                                                            });
-                                                            break;
-                                                        case 'error':
-                                                            console.error('Error received via "d:" prefix:', part.error);
-                                                            vscode.window.showErrorMessage(`Stream Error: ${part.error}`);
-                                                            chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
-                                                            break;
-                                                        default:
-                                                            // Log JSON that has an unknown type
-                                                            console.log(`Received JSON with unknown type '${part.type}' via "d:" prefix:`, part);
-                                                    }
+                                                console.log(`Received data with prefix '8:':`, part);
+                                                // No UI update for this internal data for now
+                                            } else if (prefix === '9') {
+                                                // Handle '9:' prefix - Tool Call Request
+                                                const part = JSON.parse(contentData);
+                                                if (part.toolCallId && part.toolName) {
+                                                    console.log('Tool call request received via "9:" prefix:', part);
+                                                    chatPanel?.webview.postMessage({
+                                                        type: 'toolStatusUpdate',
+                                                        toolCallId: part.toolCallId,
+                                                        toolName: part.toolName,
+                                                        status: 'tool_call_request',
+                                                        message: `Calling tool: ${part.toolName}`
+                                                    });
                                                 } else {
-                                                     // Log JSON that doesn't have a type property (like the finishReason message)
-                                                     console.log(`Received JSON with missing type via "d:" prefix:`, part);
+                                                    console.warn(`Received unexpected JSON structure with prefix '9:':`, part);
                                                 }
-                                            } catch (e) {
-                                                console.error(`Failed to parse JSON with prefix 'd:':`, contentData, e);
-                                            }
-                                        } else if (prefix === 'e') {
-                                            // Handle 'e:' prefix (events/errors)
-                                            try {
+                                            } else if (prefix === 'a') {
+                                                // Handle 'a:' prefix - Tool Result
                                                 const part = JSON.parse(contentData);
-                                                console.log('Event/End message received:', part);
+                                                if (part.toolCallId && part.result) {
+                                                    console.log('Tool result received via "a:" prefix:', part);
+                                                    chatPanel?.webview.postMessage({
+                                                        type: 'toolStatusUpdate',
+                                                        toolCallId: part.toolCallId,
+                                                        status: 'tool_result_received',
+                                                        message: `Tool result received.` // Consider adding result summary if safe/useful
+                                                    });
+                                                } else {
+                                                    console.warn(`Received unexpected JSON structure with prefix 'a:':`, part);
+                                                }
+                                            } else if (prefix === 'd') {
+                                                // Handle 'd:' prefix - Data/Metadata (often message annotations)
+                                                const part = JSON.parse(contentData);
+                                                if (part.type === 'message-annotation') {
+                                                    console.log('Message annotation (tool status) via "d:" prefix:', part);
+                                                    const statusMessage = (typeof part.message === 'string') ? part.message : undefined;
+                                                    chatPanel?.webview.postMessage({
+                                                        type: 'toolStatusUpdate',
+                                                        toolCallId: part.toolCallId,
+                                                        toolName: part.toolName,
+                                                        status: part.status,
+                                                        message: statusMessage
+                                                    });
+                                                } else if (part.type === 'error') {
+                                                    console.error('Error received via "d:" prefix:', part.error);
+                                                    vscode.window.showErrorMessage(`Stream Error: ${part.error}`);
+                                                    chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
+                                                } else {
+                                                    console.log(`Received other data via "d:" prefix:`, part); // e.g., finishReason
+                                                }
+                                            } else if (prefix === 'e') {
+                                                // Handle 'e:' prefix - Events/Errors
+                                                const part = JSON.parse(contentData);
+                                                console.log('Event/End message received via "e:" prefix:', part);
                                                 if (part.finishReason === 'stop') {
                                                     console.log('Stream finished according to "e:" message.');
                                                 } else if (part.error) {
@@ -184,26 +186,22 @@ export async function activate(context: vscode.ExtensionContext) {
                                                     vscode.window.showErrorMessage(`Stream Event Error: ${part.error}`);
                                                     chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, an error occurred: ${part.error}` });
                                                 }
-                                            } catch (e) {
-                                                console.error(`Failed to parse JSON with prefix 'e:':`, contentData, e);
-                                            }
-                                        } else if (prefix === 'f') {
-                                            // Handle 'f:' prefix (final metadata)
-                                            try {
+                                            } else if (prefix === 'f') {
+                                                // Handle 'f:' prefix - Final Metadata
                                                 const part = JSON.parse(contentData);
-                                                console.log('Final metadata received:', part);
-                                                // e.g., log messageId: part.messageId
-                                            } catch (e) {
-                                                console.error(`Failed to parse JSON with prefix 'f:':`, contentData, e);
+                                                console.log('Final metadata received via "f:" prefix:', part);
+                                            } else {
+                                                // Handle any other unexpected prefixes
+                                                console.warn(`Received line with unhandled prefix '${prefix}':`, line);
                                             }
-                                        } else {
-                                            // Handle other potential prefixes if necessary
-                                            console.warn(`Received line with unhandled known prefix '${prefix}':`, line);
+                                        } catch (e) {
+                                            // Catch JSON parsing errors for any prefix
+                                            console.error(`Failed to parse JSON for prefix '${prefix}':`, contentData, e);
                                         }
                                     } else {
                                         // Handle lines that don't match any expected prefix format
                                         if (line.trim() !== '') { // Avoid logging empty lines
-                                           console.warn('Received stream line without expected prefix format:', line);
+                                            console.warn('Received stream line without expected prefix format:', line);
                                         }
                                     }
                                 } // End for loop processing lines

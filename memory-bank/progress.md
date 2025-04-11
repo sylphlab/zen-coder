@@ -43,11 +43,11 @@
     - Dependencies (`node-fetch`, types) added and import issues resolved.
     - Previous enhancements (multi-step, error handling, repair, activation) remain integrated.
     - Basic streaming status updates implemented via `StreamData` (demonstrated in `listFilesTool`, `readFileTool`, etc.).
-    - **Fixed Stream Parsing (Final):** Corrected stream parsing in `extension.ts` to handle Vercel AI SDK format, including various prefixes (`0:`, `d:`, `e:`, `f:`) and correctly parsing JSON-encoded strings following `0:` prefixes.
-    - **UI Update (Tool Status):** Webview UI (`app.tsx`, `app.css`) updated to display tool execution status updates received via `message-annotation`.
+    - **Fixed Stream Parsing (Comprehensive):** Corrected stream parsing in `extension.ts` to handle Vercel AI SDK format, including various prefixes (`0:`-`7:`, `8:`, `9:`, `a:`, `d:`, `e:`, `f:`) and correctly parsing JSON-encoded strings and handling tool call/result messages.
+    - **UI Update (Tool Status):** Webview UI (`app.tsx`, `app.css`) updated to display tool execution status updates received via `message-annotation` and custom statuses for tool calls/results.
 ## What's Left (Potential Future Enhancements)
 - Implement conversation history persistence.
-- Thorough testing and debugging of new tools and stream parsing across different models.
+- Thorough testing and debugging of new tools and stream parsing across different models and tool interactions.
 - Remove unused `@vscode/webview-ui-toolkit` dependency.
 - Implement actual MCP client integration for tools like `search` (currently placeholder/disabled).
 - Refine Preact component structure.
@@ -56,11 +56,11 @@
 
 ## Current Status
 - **Toolset Refactored & Expanded:** All requested tools implemented in a modular structure under `src/tools/`. `AiService` and configuration updated accordingly. Project remains functional with the enhanced toolset.
-- **Stream Parsing Fixed:** Logic updated to correctly handle various Vercel AI SDK stream variations, including JSON-encoded strings.
-- Project is stable, pending final testing of stream parsing.
+- **Stream Parsing Fixed:** Logic updated to comprehensively handle various Vercel AI SDK stream variations, including text, metadata, events, and tool call/result messages.
+- Project is stable, pending final testing of stream parsing, especially with tool calls.
 
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
 - Search tool functionality relies on the external `search_files` tool (requires environment support).
 - Conversation history is not persisted.
-- Webview UI now displays basic tool status updates. (Further refinement might be needed).
+- Webview UI now displays basic tool status updates, including tool call requests/results. (Further refinement might be needed).
