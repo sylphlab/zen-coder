@@ -26,6 +26,7 @@
 - Vite build configuration updated.
 - `package.json` scripts updated.
 - **VS Code Launch Configuration (`.vscode/launch.json`) updated to use `npm: watch` for `preLaunchTask`, enabling development mode HMR.**
+- **TypeScript RootDir Issue (TS6059) Fixed:** Main `tsconfig.json` updated with `include: ["src/**/*"]` to prevent conflicts with the separate `webview-ui` project.
 
 ## What's Left (Potential Future Enhancements)
 - Refine Preact component structure.

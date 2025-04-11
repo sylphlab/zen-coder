@@ -14,10 +14,12 @@ Finalizing documentation and preparing for task completion after implementing de
     - Modified `getWebviewContent` in `src/extension.ts` to detect `extensionMode` and load from Vite dev server (`http://localhost:5173`) in development or from `dist/webview` in production.
     - Adjusted CSP policies for both modes.
 - **Fixed Preact Mount Point:** Corrected the target element ID in `webview-ui/src/main.tsx` from `#app` to `#root` to match the development HTML structure in `src/extension.ts`, resolving the "無野睇" issue in dev mode.
+- **Fixed TypeScript RootDir Issue (TS6059):** Modified the main `tsconfig.json` to explicitly include only the `src/**/*` directory, preventing the compiler from trying to process files in the separate `webview-ui` project.
 
 ## Next Steps
-- Update `memory-bank/progress.md` to reflect the development mode support and the Preact mount point fix.
+- Update `memory-bank/progress.md` to reflect the development mode support, Preact mount point fix, and the tsconfig fix.
 - Commit the latest changes.
+- Attempt completion.
 - Attempt completion.
 
 ## Active Decisions
