@@ -1,6 +1,6 @@
 {
-  "name": "minicoder",
-  "displayName": "MiniCoder",
+  "name": "zencoder",
+  "displayName": "Zen Coder",
   "description": "",
   "version": "0.0.1",
   "engines": {
@@ -10,40 +10,90 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:minicoder.startChat",
-    "onCommand:minicoder.setAnthropicKey",
-    "onCommand:minicoder.setGoogleKey",
-    "onCommand:minicoder.setOpenRouterKey",
-    "onCommand:minicoder.setDeepseekKey"
+    "onCommand:zencoder.startChat",
+    "onCommand:zencoder.setAnthropicKey",
+    "onCommand:zencoder.setGoogleKey",
+    "onCommand:zencoder.setOpenRouterKey",
+    "onCommand:zencoder.setDeepseekKey"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "minicoder.startChat",
-        "title": "Start AI Coder Chat"
+        "command": "zencoder.startChat",
+        "title": "Start Zen Coder Chat"
       },
       {
-        "command": "minicoder.setAnthropicKey",
+        "command": "zencoder.setAnthropicKey",
         "title": "Set Anthropic API Key",
-        "category": "AI Coder"
+        "category": "Zen Coder"
       },
       {
-        "command": "minicoder.setGoogleKey",
+        "command": "zencoder.setGoogleKey",
         "title": "Set Google API Key",
-        "category": "AI Coder"
+        "category": "Zen Coder"
       },
       {
-        "command": "minicoder.setOpenRouterKey",
+        "command": "zencoder.setOpenRouterKey",
         "title": "Set OpenRouter API Key",
-        "category": "AI Coder"
+        "category": "Zen Coder"
       },
       {
-        "command": "minicoder.setDeepseekKey",
+        "command": "zencoder.setDeepseekKey",
         "title": "Set Deepseek API Key",
-        "category": "AI Coder"
+        "category": "Zen Coder"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Zen Coder Settings",
+      "properties": {
+        "zencoder.tools.readFile.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'readFile' tool."
+        },
+        "zencoder.tools.writeFile.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'writeFile' tool."
+        },
+        "zencoder.tools.listFiles.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'listFiles' tool."
+        },
+        "zencoder.tools.runCommand.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'runCommand' tool (requires user confirmation)."
+        },
+        "zencoder.tools.search.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'search' tool (requires MCP integration)."
+        },
+        "zencoder.tools.fetch.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'fetch' tool."
+        },
+        "zencoder.tools.getOpenTabs.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'getOpenTabs' tool."
+        },
+        "zencoder.tools.getActiveTerminals.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'getActiveTerminals' tool."
+        },
+        "zencoder.tools.getCurrentTime.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'getCurrentTime' tool."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",

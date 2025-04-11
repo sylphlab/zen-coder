@@ -12,30 +12,15 @@ let aiServiceInstance: AiService | undefined = undefined; // Hold AiService inst
 // Make activate async to await AiService initialization
 export async function activate(context: vscode.ExtensionContext) {
 
-    console.log('Congratulations, your extension "minicoder" is now active!');
+    console.log('Congratulations, your extension "zencoder" is now active!');
 
-    // Placeholder function for executing MCP tools - replace with actual implementation if available
-    const executeMcpToolPlaceholder = async (serverName: string, toolName: string, args: any): Promise<any> => {
-        console.warn(`MCP Tool Execution Placeholder: Server=${serverName}, Tool=${toolName}, Args=`, args);
-        // In a real scenario, this would interact with the MCP client/system
-        // For now, return a placeholder error or mock response for the search tool
-        if (serverName === 'brave-search' && toolName === 'brave_web_search') {
-            return Promise.resolve([
-                { title: 'Placeholder Result 1', url: '#', description: 'This is a placeholder result from the executeMcpToolPlaceholder function.' },
-                { title: 'Placeholder Result 2', url: '#', description: 'Actual search requires external MCP integration.' }
-            ]);
-            // Or return an error:
-            // return Promise.reject(new Error('MCP tool execution not implemented in this context.'));
-        }
-        return Promise.reject(new Error(`MCP tool ${serverName}/${toolName} execution not implemented.`));
-    };
-
-    // Instantiate and initialize AiService, passing the executor
-    aiServiceInstance = new AiService(context, executeMcpToolPlaceholder);
+    // Instantiate and initialize AiService.
+    // MCP tool execution will be handled internally by AiService if an MCP client is configured.
+    aiServiceInstance = new AiService(context);
     await aiServiceInstance.initialize(); // Wait for keys to be loaded
 
     // --- Register Chat Command ---
-    const startChatCommand = vscode.commands.registerCommand('minicoder.startChat', () => {
+    const startChatCommand = vscode.commands.registerCommand('zencoder.startChat', () => {
         // Ensure AiService is ready before opening chat
         if (!aiServiceInstance) {
              vscode.window.showErrorMessage("AI Service is not yet initialized. Please wait a moment and try again.");
@@ -178,10 +163,10 @@ export async function activate(context: vscode.ExtensionContext) {
         context.subscriptions.push(disposable);
     };
 
-    registerApiKeyCommand('minicoder.setAnthropicKey', 'ANTHROPIC', 'Anthropic');
-    registerApiKeyCommand('minicoder.setGoogleKey', 'GOOGLE', 'Google');
-    registerApiKeyCommand('minicoder.setOpenRouterKey', 'OPENROUTER', 'OpenRouter');
-    registerApiKeyCommand('minicoder.setDeepseekKey', 'DEEPSEEK', 'Deepseek');
+    registerApiKeyCommand('zencoder.setAnthropicKey', 'ANTHROPIC', 'Anthropic');
+    registerApiKeyCommand('zencoder.setGoogleKey', 'GOOGLE', 'Google');
+    registerApiKeyCommand('zencoder.setOpenRouterKey', 'OPENROUTER', 'OpenRouter');
+    registerApiKeyCommand('zencoder.setDeepseekKey', 'DEEPSEEK', 'Deepseek');
 
 } // End of activate function
 

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CoreMessage, streamText, tool } from 'ai';
+import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText } from 'ai';
 // Import the factory function as per documentation
 import { createAnthropic } from '@ai-sdk/anthropic';
 // Import the correct factory function for Google
@@ -10,10 +10,10 @@ import { z } from 'zod';
 
 // Define keys for SecretStorage
 const SECRET_KEYS = {
-    ANTHROPIC: 'aiCoder.anthropicApiKey',
-    GOOGLE: 'aiCoder.googleApiKey',
-    OPENROUTER: 'aiCoder.openRouterApiKey',
-    DEEPSEEK: 'aiCoder.deepseekApiKey',
+    ANTHROPIC: 'zenCoder.anthropicApiKey',
+    GOOGLE: 'zenCoder.googleApiKey',
+    OPENROUTER: 'zenCoder.openRouterApiKey',
+    DEEPSEEK: 'zenCoder.deepseekApiKey',
 };
 
 // Model list - used for validation and potentially UI
@@ -27,11 +27,18 @@ const availableModelIds = [
 
 type ModelId = typeof availableModelIds[number];
 
-// Removed ModelId type definition from here, moved above
-
-// Define the structure for the AI interaction service
 // Define the expected structure for the MCP tool executor function
 type McpToolExecutor = (serverName: string, toolName: string, args: any) => Promise<any>;
+
+// Define the known tool names manually for robust typing outside the class
+const ALL_TOOL_NAMES = [
+    'readFile', 'writeFile', 'listFiles', 'runCommand', 'search',
+    'fetch', 'getOpenTabs', 'getActiveTerminals', 'getCurrentTime'
+] as const; // Use const assertion
+
+// Derive the union type from the constant array
+type ToolName = typeof ALL_TOOL_NAMES[number];
+
 
 export class AiService {
     private currentModelId: ModelId = 'claude-3-5-sonnet'; // Default model
@@ -40,13 +47,13 @@ export class AiService {
     private googleApiKey: string | undefined;
     private openRouterApiKey: string | undefined;
     private deepseekApiKey: string | undefined;
-    private executeMcpTool: McpToolExecutor; // Store the executor function
+    // private executeMcpTool: McpToolExecutor; // Removed - MCP execution will be handled differently if integrated
 
     constructor(
-        private context: vscode.ExtensionContext,
-        mcpToolExecutor: McpToolExecutor // Accept the executor function
+        private context: vscode.ExtensionContext
+        // mcpToolExecutor: McpToolExecutor // Removed parameter
     ) {
-        this.executeMcpTool = mcpToolExecutor;
+        // this.executeMcpTool = mcpToolExecutor; // Removed assignment
         // TODO: Load conversation history if persisted
     }
 
@@ -105,6 +112,20 @@ export class AiService {
         }
     }
 
+    // Helper method to get the names of enabled tools based on configuration
+    private _getActiveToolNames(): ToolName[] {
+        const config = vscode.workspace.getConfiguration('zencoder.tools');
+        const activeToolNames: ToolName[] = [];
+
+        // Iterate over the predefined tool names
+        for (const toolName of ALL_TOOL_NAMES) {
+            if (config.get<boolean>(`${toolName}.enabled`, true)) { // Default to true if not set
+                activeToolNames.push(toolName);
+            }
+        }
+        console.log("Active tools based on configuration:", activeToolNames);
+        return activeToolNames;
+    }
 
     public async getAiResponseStream(prompt: string) {
         const modelInstance = this._getProviderInstance();
@@ -117,22 +138,93 @@ export class AiService {
         // Add user prompt to history
         this.conversationHistory.push({ role: 'user', content: prompt });
 
+        const allTools = this._getAllToolDefinitions();
+        const activeToolNames = this._getActiveToolNames();
+
+        // Only proceed if there are active tools or if tools are not required by the model implicitly
+        // Note: Some models might error if tools are provided but none are active.
+        // Consider adding logic here or using toolChoice: 'none' if activeToolNames is empty.
+
         try {
             const result = await streamText({
                 model: modelInstance,
                 messages: this.conversationHistory,
-                tools: this.getTools(),
-                // onFinish: (result) => {
-                //     // Add assistant response to history after streaming finishes
-                //     if (result.finishReason === 'stop' || result.finishReason === 'tool-calls') {
-                //         this.conversationHistory.push({ role: 'assistant', content: result.text });
-                //         // TODO: Persist conversation history
-                //     }
-                //     console.log("Streaming finished:", result);
-                // }
+                tools: allTools, // Provide all tool definitions
+                experimental_activeTools: activeToolNames.length > 0 ? activeToolNames : undefined, // Activate only enabled tools
+                maxSteps: 5, // Allow multiple steps for tool results processing
+                // onFinish: (result) => { ... } // Keep existing onFinish logic if needed
+
+                // Experimental Tool Repair (Re-ask Strategy)
+                experimental_repairToolCall: async ({ toolCall, error, messages, system }) => {
+                    console.warn(`Attempting to repair tool call for ${toolCall.toolName} due to error: ${error.message}`);
+                    try {
+                        // Re-ask the model with the error message included in the history
+                        const repairResult = await generateText({
+                            model: modelInstance, // Use the same model instance
+                            system: system, // Pass the original system prompt if available
+                            messages: [
+                                ...messages, // Original messages leading to the failed call
+                                {
+                                    role: 'assistant',
+                                    content: [{ type: 'tool-call', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: toolCall.args }]
+                                },
+                                {
+                                    role: 'tool',
+                                    content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: `Error executing tool: ${error.message}. Please try again with corrected arguments.` }]
+                                }
+                            ],
+                            tools: allTools, // Provide tools again
+                            experimental_activeTools: activeToolNames.length > 0 ? activeToolNames : undefined,
+                        });
+
+                        // Find the potentially repaired tool call in the new response
+                        const newToolCall = repairResult.toolCalls.find(
+                            newTc => newTc.toolName === toolCall.toolName
+                        );
+
+                        if (newToolCall) {
+                            console.log(`Tool call ${toolCall.toolName} successfully repaired.`);
+                            // Return the repaired tool call structure expected by the SDK
+                            // Add toolCallType and ensure args are structured correctly (stringified if needed by SDK)
+                            // The SDK likely expects args as an object, not stringified here unless generateText returns it that way.
+                            return {
+                                toolCallType: 'function', // Required property
+                                toolCallId: toolCall.toolCallId, // Keep the original ID
+                                toolName: newToolCall.toolName,
+                                args: JSON.stringify(newToolCall.args), // Use the repaired arguments, stringified
+                            };
+                        } else {
+                            console.error(`Tool call repair failed for ${toolCall.toolName}: Model did not generate a new call.`);
+                            return null; // Indicate repair failed
+                        }
+                    } catch (repairError: any) {
+                         console.error(`Error during tool call repair attempt for ${toolCall.toolName}:`, repairError);
+                         return null; // Indicate repair failed
+                    }
+                }
             });
             return result;
         } catch (error: any) {
+            // Handle specific tool errors
+            if (NoSuchToolError.isInstance(error)) {
+                 console.error("Tool Error: Model tried to call a tool that doesn't exist:", error.toolName);
+                 vscode.window.showErrorMessage(`Error: The AI tried to use an unknown tool: ${error.toolName}`);
+            } else if (InvalidToolArgumentsError.isInstance(error)) {
+                 console.error("Tool Error: Model provided invalid arguments for tool:", error.toolName, error.message); // Log message instead of non-existent args
+                 vscode.window.showErrorMessage(`Error: The AI provided invalid arguments for the tool: ${error.toolName}`);
+            } else if (ToolExecutionError.isInstance(error)) {
+                 console.error("Tool Error: An error occurred during tool execution:", error.toolName, error.cause);
+                 // Check if cause exists and has a message property before accessing it
+                 const causeMessage = (error.cause && typeof error.cause === 'object' && 'message' in error.cause) ? (error.cause as Error).message : 'Unknown execution error';
+                 vscode.window.showErrorMessage(`Error executing tool ${error.toolName}: ${causeMessage}`);
+            // } else if (ToolCallRepairError.isInstance(error)) { // Assuming this error type exists or might be added
+            //      console.error("Tool Error: Failed to repair tool call:", error);
+            //      vscode.window.showErrorMessage(`Error: Failed to automatically repair the tool call for ${error.toolName}.`);
+            } else {
+                 // General error handling
+                 console.error('Error calling AI SDK:', error);
+                 vscode.window.showErrorMessage(`Error interacting with AI: ${error.message}`);
+            }
             console.error('Error calling AI SDK:', error);
             vscode.window.showErrorMessage(`Error interacting with AI: ${error.message}`);
             // Remove the last user message if the call failed
@@ -142,7 +234,8 @@ export class AiService {
     }
 
     // --- Tool Definitions ---
-    private getTools() {
+    // Returns all tool definitions, used internally and for getting active tools
+    private _getAllToolDefinitions() {
         return {
             readFile: tool({
                 description: 'Reads the content of a file specified by its workspace path.',
@@ -307,28 +400,11 @@ export class AiService {
 
     private async executeSearch(query: string): Promise<string> {
         console.log(`Executing search tool with query: ${query}`);
-        try {
-            // Use the provided MCP executor function to call the brave-search tool
-            const searchResult = await this.executeMcpTool('brave-search', 'brave_web_search', { query: query, count: 5 }); // Request 5 results
-
-            // Check if the result has the expected structure (adjust based on actual brave-search output)
-            if (searchResult && Array.isArray(searchResult)) {
-                 if (searchResult.length === 0) {
-                     return `No web search results found for "${query}".`;
-                 }
-                 // Format the results into a string
-                 const formattedResults = searchResult.map((item: any, index: number) =>
-                     `${index + 1}. ${item.title || 'No Title'}\n   ${item.url || 'No URL'}\n   ${item.description || 'No Description'}`
-                 ).join('\n\n');
-                 return `Web search results for "${query}":\n\n${formattedResults}`;
-            } else {
-                 console.error('Unexpected search result format:', searchResult);
-                 return `Received unexpected format from web search for "${query}".`;
-            }
-        } catch (error: any) {
-            console.error(`Error executing web search for "${query}":`, error);
-            return `Error performing web search: ${error.message}`;
-        }
+        // Placeholder implementation - Requires actual MCP client integration
+        console.warn(`Search tool called with query: ${query}. MCP integration is required for actual search.`);
+        return Promise.resolve(`Search tool execution requires MCP integration. Query was: "${query}"`);
+        // Or throw an error:
+        // return Promise.reject(new Error('Search tool requires MCP integration.'));
     }
 
     private async executeFetch(url: string): Promise<string> {

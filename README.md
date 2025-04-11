@@ -1,6 +1,6 @@
-# minicoder README
+# Zen Coder README
 
-This is the README for your extension "minicoder". After writing up a brief description, we recommend including the following sections.
+This is the README for your extension "Zen Coder". After writing up a brief description, we recommend including the following sections.
 
 ## Features
 

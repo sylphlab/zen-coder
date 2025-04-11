@@ -1,4 +1,4 @@
-# Project Brief: Simplified AI Coder VS Code Extension (MVP)
+# Project Brief: Zen Coder VS Code Extension (MVP)
 
 ## Objective
 Build a lightweight VS Code extension that provides a simple chat interface to interact with selected AI models for coding assistance. Focus on core functionality, ease of use for a single developer, and direct integration with essential VS Code actions via AI tools.

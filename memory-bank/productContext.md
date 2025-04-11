@@ -1,4 +1,4 @@
-# Product Context: Simplified AI Coder VS Code Extension
+# Product Context: Zen Coder VS Code Extension
 
 ## Problem Solved
 Provides a simple, integrated way for a developer to leverage various AI models (Anthropic, Google, OpenRouter, DeepSeek) directly within VS Code for coding assistance, without needing complex setups or switching contexts. Enables AI to interact with the workspace via defined tools.

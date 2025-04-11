@@ -1,30 +1,25 @@
 # Active Context
 
 ## Current Focus
-Finalizing documentation and preparing for task completion after implementing development mode support for webview loading.
+Renaming project to "Zen Coder" and enhancing tool functionality based on Vercel AI SDK documentation (tool activation, multi-step, error handling, repair).
 
 ## Recent Changes
-- Completed core MVP functionality.
-- Refactored Webview UI to Vite + Preact.
-- Implemented Model Selection UI and logic.
-- Updated relevant files (`package.json`, `src/extension.ts`, `webview-ui/*`) for Vite + Preact.
-- Fixed Webview Loading Issue for production builds.
-- **Implemented Development Mode Support:**
-    - Updated `.vscode/launch.json` to use `npm: watch` as `preLaunchTask`.
-    - Modified `getWebviewContent` in `src/extension.ts` to detect `extensionMode` and load from Vite dev server (`http://localhost:5173`) in development or from `dist/webview` in production.
-    - Adjusted CSP policies for both modes.
-- **Fixed Preact Mount Point:** Corrected the target element ID in `webview-ui/src/main.tsx` from `#app` to `#root` to match the development HTML structure in `src/extension.ts`, resolving the "無野睇" issue in dev mode.
-- **Fixed TypeScript RootDir Issue (TS6059):** Modified the main `tsconfig.json` to explicitly include only the `src/**/*` directory, preventing the compiler from trying to process files in the separate `webview-ui` project.
-- **Fixed TypeScript DOM Type Errors (TS2304):** Added `"DOM"` to the `compilerOptions.lib` array in the main `tsconfig.json` to resolve type errors originating from `@ai-sdk/ui-utils` dependency.
-- **Fixed CORS Issue in Dev Mode:** Updated `webview-ui/vite.config.ts` to include `server: { cors: true }`, allowing the VS Code webview (`vscode-webview://`) to fetch resources from the Vite dev server (`http://localhost:5173`).
+- **Project Renamed to Zen Coder:** Updated `package.json`, `src/extension.ts`, `README.md`, and Memory Bank files (`projectbrief.md`, `productContext.md`, `.clinerules`). Updated `webview-ui/index.html` title and root element ID. Updated secret keys prefix in `aiService.ts`.
+- **Tool Enhancement (Vercel AI SDK):**
+    - Added configuration options in `package.json` for enabling/disabling individual tools (`zencoder.tools.*.enabled`).
+    - Modified `AiService` (`_getActiveToolNames`, `getAiResponseStream`) to read configuration and pass active tools via `experimental_activeTools` to `streamText`.
+    - Added `maxSteps: 5` to `streamText` call in `AiService` to enable multi-step tool execution.
+    - Added experimental tool error handling (`NoSuchToolError`, `InvalidToolArgumentsError`, `ToolExecutionError`) in `getAiResponseStream`.
+    - Added experimental tool repair (`experimental_repairToolCall` with re-ask strategy) to `streamText` call in `AiService`.
+    - Removed placeholder MCP executor logic from `src/extension.ts` and `AiService`. Updated `executeSearch` in `AiService` to reflect dependency on future MCP integration.
 
 ## Next Steps
-- Update `memory-bank/progress.md` to reflect all recent fixes (dev mode, mount point, tsconfig include, tsconfig lib, vite cors).
-- Commit the latest changes.
+- Update `memory-bank/progress.md` to reflect project renaming and tool enhancements.
+- Commit changes.
 - Attempt completion.
 - Attempt completion.
 
 ## Active Decisions
-- Webview UI successfully refactored and loading correctly in both development (with HMR via Vite dev server) and production modes.
-- Model selection functionality implemented.
-- Core logic remains stable.
+- Project successfully renamed across relevant files.
+- Tool functionality enhanced with activation controls, multi-step capability, and basic error/repair handling based on Vercel AI SDK features.
+- Code prepared for potential future MCP integration.
