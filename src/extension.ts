@@ -91,71 +91,85 @@ export async function activate(context: vscode.ExtensionContext) {
 
                                 for (const line of lines) {
                                     if (line.trim() === '') continue;
-                                    try {
-                                        const part = JSON.parse(line); // Parse the JSON line
+                                    // Match the prefix (e.g., '0:', '1:', '2:') and the JSON data
+                                    const match = line.match(/^(\d+):(.*)$/);
+                                    if (match && match[2]) {
+                                        const jsonData = match[2];
+                                        try {
+                                            const part = JSON.parse(jsonData); // Parse the JSON part after the prefix
 
-                                        // Process the parsed part based on its type
-                                        switch (part.type) {
-                                            case 'text-delta':
-                                                chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
-                                                break;
-                                            case 'tool-call':
-                                                console.log('Tool call received in stream:', part);
-                                                // UI update for tool call start can be handled via message-annotation
-                                                break;
-                                            case 'tool-result':
-                                                console.log('Tool result received in stream:', part);
-                                                // UI update for tool result can be handled via message-annotation
-                                                break;
-                                            case 'message-annotation':
-                                                console.log('Message annotation (tool status):', part);
-                                                chatPanel?.webview.postMessage({
-                                                    type: 'toolStatusUpdate',
-                                                    toolCallId: part.toolCallId,
-                                                    toolName: part.toolName,
-                                                    status: part.status,
-                                                    message: part.message
-                                                });
-                                                break;
-                                            case 'error':
-                                                console.error('Error received in stream:', part.error);
-                                                vscode.window.showErrorMessage(`Stream Error: ${part.error}`);
-                                                chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
-                                                break;
-                                            // Other types like 'finish' are implicitly handled by the loop ending
+                                            // Process the parsed part based on its type
+                                            switch (part.type) {
+                                                case 'text-delta':
+                                                    chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
+                                                    break;
+                                                case 'tool-call':
+                                                    console.log('Tool call received in stream:', part);
+                                                    break;
+                                                case 'tool-result':
+                                                    console.log('Tool result received in stream:', part);
+                                                    break;
+                                                case 'message-annotation':
+                                                    console.log('Message annotation (tool status):', part);
+                                                    // Ensure message exists and is a string before sending
+                                                    const statusMessage = (typeof part.message === 'string') ? part.message : undefined;
+                                                    chatPanel?.webview.postMessage({
+                                                        type: 'toolStatusUpdate',
+                                                        toolCallId: part.toolCallId,
+                                                        toolName: part.toolName,
+                                                        status: part.status,
+                                                        message: statusMessage // Send validated message
+                                                    });
+                                                    break;
+                                                case 'error':
+                                                    console.error('Error received in stream:', part.error);
+                                                    vscode.window.showErrorMessage(`Stream Error: ${part.error}`);
+                                                    chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
+                                                    break;
+                                                // Other types like 'finish' are implicitly handled by the loop ending
+                                            }
+                                        } catch (e) {
+                                            console.error('Failed to parse stream chunk JSON:', jsonData, e);
+                                            // Handle parsing error
                                         }
-                                    } catch (e) {
-                                        console.error('Failed to parse stream chunk line:', line, e);
-                                        // Handle parsing error, maybe log it or show a generic error
+                                    } else {
+                                        // Handle lines that don't match the expected format (e.g., could be metadata lines)
+                                        console.warn('Received stream line without expected prefix:', line);
                                     }
-                                }
-                            }
-                            // Process any remaining buffer content (should ideally be empty if stream terminates correctly)
-                            if (buffer.trim() !== '') {
-                                console.warn('Processing remaining stream buffer:', buffer);
+                                } // End for loop processing lines
+                            } // End while loop reading stream
+
+                            // Process any remaining buffer content
+                            // Attempt to parse the remaining buffer only if it's not empty and seems like JSON
+                            if (buffer.trim().startsWith('{') && buffer.trim().endsWith('}')) {
                                 try {
                                     const part = JSON.parse(buffer);
                                     // Process the final part (repeat switch logic if necessary)
-                                     switch (part.type) {
-                                            case 'text-delta': chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta }); break;
-                                            case 'message-annotation': chatPanel?.webview.postMessage({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, toolName: part.toolName, status: part.status, message: part.message }); break;
-                                            case 'error': vscode.window.showErrorMessage(`Stream Error: ${part.error}`); chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` }); break;
-                                            default: console.log("Final buffer part:", part); // Log other types
-                                        }
+                                    switch (part.type) {
+                                        case 'text-delta': chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta }); break;
+                                        case 'message-annotation':
+                                             const statusMessage = (typeof part.message === 'string') ? part.message : undefined;
+                                             chatPanel?.webview.postMessage({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, toolName: part.toolName, status: part.status, message: statusMessage });
+                                             break;
+                                        case 'error': vscode.window.showErrorMessage(`Stream Error: ${part.error}`); chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` }); break;
+                                        default: console.log("Final buffer part:", part); // Log other types
+                                    }
                                 } catch (e) {
                                     console.error('Failed to parse final stream buffer:', buffer, e);
                                 }
+                            } else if (buffer.trim() !== '') {
+                                console.warn('Non-JSON content in final stream buffer:', buffer);
                             }
 
                             // History updates are handled by the onFinish callback in AiService
                             // TODO: Persist history
 
-                        } catch (error: any) {
+                        } catch (error: any) { // Catch block for the main try block in 'sendMessage'
                             console.error("Error processing AI stream:", error);
                             vscode.window.showErrorMessage(`Failed to get AI response: ${error.message}`);
                             chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, an error occurred: ${error.message}` });
                         }
-                        return;
+                        return; // End of 'sendMessage' case
 
                     case 'webviewReady':
                         console.log('Webview is ready');
@@ -171,8 +185,8 @@ export async function activate(context: vscode.ExtensionContext) {
                             console.error('Failed to set model: AiService not ready or invalid modelId', message);
                         }
                         return;
-                }
-            },
+                } // End switch (message.type)
+            }, // End onDidReceiveMessage handler
             undefined,
             context.subscriptions
         );

@@ -43,6 +43,7 @@
     - Dependencies (`node-fetch`, types) added and import issues resolved.
     - Previous enhancements (multi-step, error handling, repair, activation) remain integrated.
     - Basic streaming status updates implemented via `StreamData` (demonstrated in `listFilesTool`, `readFileTool`, etc.).
+    - **Fixed Stream Parsing:** Corrected stream parsing in `extension.ts` to handle Vercel AI SDK format.
 ## What's Left (Potential Future Enhancements)
 - Implement conversation history persistence.
 - Thorough testing and debugging of new tools.
@@ -60,3 +61,4 @@
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
 - Search tool functionality relies on the external `search_files` tool (requires environment support).
 - Conversation history is not persisted.
+- Webview UI does not yet display tool status updates.

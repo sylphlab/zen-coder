@@ -16,14 +16,16 @@ Refactoring and expanding the toolset for enhanced functionality and modularity.
     - Installed `node-fetch` and `@types/node-fetch` dependencies.
     - Fixed ESM/CJS import issues for `node-fetch` using dynamic `import()`.
     - Implemented basic streaming status updates for tools via `StreamData` and `message-annotation`.
+    - **Fixed Stream Parsing:** Corrected stream parsing logic in `src/extension.ts` to handle Vercel AI SDK's data stream format (with prefixes like `0:`) using Web Streams API.
 - **AiService Refactoring:** Modified `AiService` (`src/ai/aiService.ts`) to import and use the consolidated `allTools` object from `src/tools/index.ts`, removing internal tool definitions and execution methods.
 - **Configuration Update:** Updated `package.json` (`contributes.configuration.properties`) to reflect the new tool names (e.g., `zencoder.tools.readFileTool.enabled`) for enabling/disabling. Removed JSON comment error.
 - **Previous:** Project renamed to Zen Coder; Vercel AI SDK enhancements (multi-step, error handling, repair) applied.
 
 ## Next Steps
-- Update other Memory Bank files (`progress.md`, `techContext.md`, `systemPatterns.md`).
-- Commit all changes related to tool refactoring.
-- Attempt completion.
+- Update `progress.md`.
+- Commit stream parsing fix.
+- **Next:** Update Webview UI (`webview-ui/src/app.tsx`) to display tool status updates received via `toolStatusUpdate` message.
+- Attempt completion after UI update.
 - Attempt completion.
 
 ## Active Decisions
