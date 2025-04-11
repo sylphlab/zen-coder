@@ -1,21 +1,21 @@
 # Active Context
 
 ## Current Focus
-Finalizing documentation and preparing for task completion after successfully refactoring the UI and implementing model selection.
+Finalizing documentation and preparing for task completion after fixing the webview content loading issue.
 
 ## Recent Changes
-- Completed core MVP functionality (chat loop, streaming, tools, API key storage/setting, provider instantiation).
-- Refined `search` tool to use an MCP executor bridge (placeholder).
-- **Refactored Webview UI:** Migrated from plain JS/HTML/CSS to a Vite + Preact setup within the `webview-ui` directory.
-- **Implemented Model Selection:** Added UI elements (likely a dropdown) in the Preact application to allow users to select from available AI models. This selection is communicated back to the extension host to update the `AiService`.
-- Updated relevant files (`package.json`, `src/extension.ts`, `webview-ui/*`) to support the new UI structure and build process.
+- Completed core MVP functionality.
+- Refactored Webview UI to Vite + Preact.
+- Implemented Model Selection UI and logic.
+- Updated relevant files (`package.json`, `src/extension.ts`, `webview-ui/*`) for Vite + Preact.
+- **Fixed Webview Loading Issue:** Modified `getWebviewContent` in `src/extension.ts` to correctly load assets (JS/CSS) from the Vite build output (`dist/webview`) using `webview.asWebviewUri` and adjusted CSP/nonce injection. Updated `localResourceRoots` accordingly.
 
 ## Next Steps
-- Update `memory-bank/progress.md` to reflect the final state.
+- Update `memory-bank/progress.md` to reflect the fix.
 - Commit the latest changes.
 - Attempt completion.
 
 ## Active Decisions
-- Webview UI successfully refactored to Vite + Preact.
-- Model selection functionality implemented as requested.
+- Webview UI successfully refactored and loading correctly.
+- Model selection functionality implemented.
 - Core logic remains stable.

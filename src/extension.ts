@@ -57,10 +57,8 @@ export async function activate(context: vscode.ExtensionContext) {
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [
-                    vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview'), // Allow access to build output
-                    vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview', 'assets') // Allow access to assets
-                ]
+                // IMPORTANT: Allow loading content ONLY from the Vite build output directory
+                localResourceRoots: [ vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview') ]
             }
         );
 
@@ -189,71 +187,50 @@ export async function activate(context: vscode.ExtensionContext) {
 // --- Helper Functions (getWebviewContent, getNonce) remain the same ---
 
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-    // Path to the Vite build output
+    // Path to the Vite build output directory within the extension root
     const buildPath = vscode.Uri.joinPath(extensionUri, 'dist', 'webview');
+    // Path to the index.html file within the build output
     const htmlPath = vscode.Uri.joinPath(buildPath, 'index.html');
     const nonce = getNonce();
 
-    // Get URIs for assets from the manifest (more robust than guessing paths)
-    const manifestPath = vscode.Uri.joinPath(buildPath, 'manifest.json');
-    let scriptUri: vscode.Uri | undefined;
-    let styleUri: vscode.Uri | undefined;
-
     try {
-        const manifestContent = fs.readFileSync(manifestPath.fsPath, 'utf8');
-        const manifest = JSON.parse(manifestContent);
-        // Find the entry JS and CSS files in the manifest
-        // This assumes a single entry point named 'index.html' or similar
-        const entryKey = Object.keys(manifest).find(key => manifest[key].isEntry);
-        if (entryKey && manifest[entryKey]) {
-             if (manifest[entryKey].file) {
-                 scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, manifest[entryKey].file));
-             }
-             if (manifest[entryKey].css && manifest[entryKey].css.length > 0) {
-                 styleUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, manifest[entryKey].css[0]));
-             }
-        } else {
-            console.error("Could not find entry point in manifest.json");
-            // Fallback to guessing paths (less reliable)
-            scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, 'assets', 'index.js')); // Adjust filename if needed
-            styleUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, 'assets', 'index.css')); // Adjust filename if needed
-        }
-
-    } catch (e) {
-        console.error(`Error reading manifest.json: ${e}`);
-        // Fallback to guessing paths if manifest fails
-        scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, 'assets', 'index.js')); // Adjust filename if needed
-        styleUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, 'assets', 'index.css')); // Adjust filename if needed
-    }
-
-    if (!scriptUri || !styleUri) {
-         console.error("Failed to determine script or style URI for webview.");
-         return `<html><body>Error loading webview assets. Check console and build output.</body></html>`;
-    }
-
-    try {
-
+        // Read the index.html file from the build output
         let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf8');
 
-        // Inject URIs and CSP nonce
-        // IMPORTANT: Adjust placeholders if your index.html structure differs
-        htmlContent = htmlContent
-            .replace(
-                '</head>',
-                `<link rel="stylesheet" href="${styleUri}">
-                 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; connect-src 'self';">
-                 </head>`
-            )
-            .replace(
-                '</body>',
-                `<script type="module" nonce="${nonce}" src="${scriptUri}"></script>
-                 </body>`
-            );
+        // Replace asset paths with webview URIs
+        // Vite generates paths relative to index.html (e.g., /assets/index-....js)
+        // We need to convert these to webview URIs relative to the buildPath
+        // This regex handles src="/..." and href="/..."
+        htmlContent = htmlContent.replace(/(href|src)="(\/[^"]+)"/g, (match, attr, path) => {
+            // Construct the full URI for the asset within the build directory
+            const assetUriOnDisk = vscode.Uri.joinPath(buildPath, path);
+            // Convert the disk URI to a webview-accessible URI
+            const assetWebviewUri = webview.asWebviewUri(assetUriOnDisk);
+            console.log(`Mapping ${path} to ${assetWebviewUri}`); // Log mapping for debugging
+            return `${attr}="${assetWebviewUri}"`;
+        });
+
+        // Inject CSP meta tag and nonce into script tags
+        // Find the main script tag (assuming type="module") and add nonce
+        // Make the regex less greedy and more specific
+        htmlContent = htmlContent.replace(
+            /(<script type="module" crossorigin src="[^"]+")>/, // Match the specific script tag Vite generates
+            `$1 nonce="${nonce}">`
+        );
+
+        // Add CSP meta tag to the head
+        // Allow styles from webview source, scripts with nonce, connect-src 'self', and img-src for potential icons/data URIs
+        htmlContent = htmlContent.replace(
+            '</head>',
+            `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; img-src ${webview.cspSource} data:;">
+             </head>`
+        );
 
         return htmlContent;
     } catch (e) {
-        console.error(`Error reading webview HTML: ${e}`);
-        return `<html><body>Error loading webview content. Check console.</body></html>`;
+        console.error(`Error reading or processing webview HTML from ${htmlPath.fsPath}: ${e}`);
+        // Provide more specific error message
+        return `<html><body>Error loading webview content. Failed to read or process build output. Check console and ensure 'pnpm run build:webview' has run successfully. Path: ${htmlPath.fsPath} Error: ${e}</body></html>`;
     }
 }
 

@@ -4,12 +4,12 @@
 - Initial project structure exists.
 - Memory Bank files created and updated.
 - Core dependencies installed.
-- **Webview UI refactored to use Vite + Preact.**
-- **Basic Preact chat UI structure implemented (`app.tsx`, `app.css`).**
-- **Model selection dropdown implemented in Preact UI and functional.**
+- Webview UI refactored to use Vite + Preact.
+- Basic Preact chat UI structure implemented.
+- Model selection dropdown implemented and functional.
 - Communication between Preact UI and extension host updated.
 - `minicoder.startChat` command registered and activated.
-- Basic Webview panel creation logic implemented, loading the Vite build output.
+- **Webview panel creation logic correctly loads Vite build output (`dist/webview/index.html`) and assets.**
 - CSP nonce handling adapted for Vite build.
 - `AiService` class created (`src/ai/aiService.ts`) with:
     - API Key Management methods using `vscode.SecretStorage`.
@@ -19,12 +19,12 @@
     - Basic tool execution logic implemented for most tools.
     - `executeSearch` updated to use an MCP tool executor bridge.
     - Conversation history update methods.
-- `AiService` integrated into `src/extension.ts` (including async initialization).
-- Placeholder MCP tool executor (`executeMcpToolPlaceholder`) defined in `src/extension.ts` and passed to `AiService`.
+- `AiService` integrated into `src/extension.ts`.
+- Placeholder MCP tool executor defined and passed to `AiService`.
 - Streaming logic adapted for Preact UI.
 - API Key Setting Commands and handlers implemented.
-- Vite build configuration updated for webview integration.
-- `package.json` scripts updated for webview build/watch.
+- Vite build configuration updated.
+- `package.json` scripts updated.
 
 ## What's Left (Potential Future Enhancements)
 - Refine Preact component structure.
@@ -37,8 +37,8 @@
 - Improve error handling in Preact UI.
 
 ## Current Status
-- **MVP + Model Selection Complete:** Core functionality, API key management, and model selection UI are implemented using Vite + Preact.
-- Project is in a functional state meeting the extended requirements.
+- **MVP + Model Selection Complete & Functional:** Core functionality, API key management, model selection UI (Vite + Preact), and webview loading are implemented and working.
+- Project is in a stable, functional state meeting the extended requirements.
 
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused after refactor but still listed in `package.json`.
