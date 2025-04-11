@@ -1,21 +1,25 @@
 # Active Context
 
 ## Current Focus
-Finalizing documentation and preparing for task completion after fixing the webview content loading issue.
+Finalizing documentation and preparing for task completion after implementing development mode support for webview loading.
 
 ## Recent Changes
 - Completed core MVP functionality.
 - Refactored Webview UI to Vite + Preact.
 - Implemented Model Selection UI and logic.
 - Updated relevant files (`package.json`, `src/extension.ts`, `webview-ui/*`) for Vite + Preact.
-- **Fixed Webview Loading Issue:** Modified `getWebviewContent` in `src/extension.ts` to correctly load assets (JS/CSS) from the Vite build output (`dist/webview`) using `webview.asWebviewUri` and adjusted CSP/nonce injection. Updated `localResourceRoots` accordingly.
+- Fixed Webview Loading Issue for production builds.
+- **Implemented Development Mode Support:**
+    - Updated `.vscode/launch.json` to use `npm: watch` as `preLaunchTask`.
+    - Modified `getWebviewContent` in `src/extension.ts` to detect `extensionMode` and load from Vite dev server (`http://localhost:5173`) in development or from `dist/webview` in production.
+    - Adjusted CSP policies for both modes.
 
 ## Next Steps
-- Update `memory-bank/progress.md` to reflect the fix.
+- Update `memory-bank/progress.md` to reflect the development mode support.
 - Commit the latest changes.
 - Attempt completion.
 
 ## Active Decisions
-- Webview UI successfully refactored and loading correctly.
+- Webview UI successfully refactored and loading correctly in both development (with HMR via Vite dev server) and production modes.
 - Model selection functionality implemented.
 - Core logic remains stable.

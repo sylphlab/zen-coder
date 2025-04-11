@@ -15,7 +15,8 @@
 			"outFiles": [
 				"${workspaceFolder}/dist/**/*.js"
 			],
-			"preLaunchTask": "${defaultBuildTask}"
+			// Use the 'watch' script defined in package.json to enable HMR for webview
+			"preLaunchTask": "npm: watch"
 		}
 	]
 }

@@ -9,8 +9,8 @@
 - Model selection dropdown implemented and functional.
 - Communication between Preact UI and extension host updated.
 - `minicoder.startChat` command registered and activated.
-- **Webview panel creation logic correctly loads Vite build output (`dist/webview/index.html`) and assets.**
-- CSP nonce handling adapted for Vite build.
+- **Webview panel creation logic loads correctly in both Development (Vite Dev Server for HMR) and Production (Vite build output) modes.**
+- CSP nonce handling adapted for both modes.
 - `AiService` class created (`src/ai/aiService.ts`) with:
     - API Key Management methods using `vscode.SecretStorage`.
     - Correct model provider instantiation logic using factory functions.
@@ -25,6 +25,7 @@
 - API Key Setting Commands and handlers implemented.
 - Vite build configuration updated.
 - `package.json` scripts updated.
+- **VS Code Launch Configuration (`.vscode/launch.json`) updated to use `npm: watch` for `preLaunchTask`, enabling development mode HMR.**
 
 ## What's Left (Potential Future Enhancements)
 - Refine Preact component structure.
@@ -37,7 +38,7 @@
 - Improve error handling in Preact UI.
 
 ## Current Status
-- **MVP + Model Selection Complete & Functional:** Core functionality, API key management, model selection UI (Vite + Preact), and webview loading are implemented and working.
+- **MVP + Model Selection + Dev Mode Complete & Functional:** Core functionality, API key management, model selection UI (Vite + Preact), and webview loading (supporting dev HMR) are implemented and working.
 - Project is in a stable, functional state meeting the extended requirements.
 
 ## Known Issues

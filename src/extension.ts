@@ -62,7 +62,8 @@ export async function activate(context: vscode.ExtensionContext) {
             }
         );
 
-        chatPanel.webview.html = getWebviewContent(chatPanel.webview, context.extensionUri);
+        // Pass extensionMode to getWebviewContent
+        chatPanel.webview.html = getWebviewContent(chatPanel.webview, context.extensionUri, context.extensionMode);
 
         // Handle messages from the webview
         chatPanel.webview.onDidReceiveMessage(
@@ -184,56 +185,78 @@ export async function activate(context: vscode.ExtensionContext) {
 
 } // End of activate function
 
-// --- Helper Functions (getWebviewContent, getNonce) remain the same ---
+// --- Helper Functions ---
 
-function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-    // Path to the Vite build output directory within the extension root
-    const buildPath = vscode.Uri.joinPath(extensionUri, 'dist', 'webview');
-    // Path to the index.html file within the build output
-    const htmlPath = vscode.Uri.joinPath(buildPath, 'index.html');
+function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, extensionMode: vscode.ExtensionMode): string {
     const nonce = getNonce();
+    const isDevelopment = extensionMode === vscode.ExtensionMode.Development;
+    const viteDevServerUrl = 'http://localhost:5173'; // Default Vite port for webview-ui
 
-    try {
-        // Read the index.html file from the build output
-        let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf8');
+    console.log(`Getting webview content. Development mode: ${isDevelopment}`);
 
-        // Replace asset paths with webview URIs
-        // Vite generates paths relative to index.html (e.g., /assets/index-....js)
-        // We need to convert these to webview URIs relative to the buildPath
-        // This regex handles src="/..." and href="/..."
-        htmlContent = htmlContent.replace(/(href|src)="(\/[^"]+)"/g, (match, attr, path) => {
-            // Construct the full URI for the asset within the build directory
-            const assetUriOnDisk = vscode.Uri.joinPath(buildPath, path);
-            // Convert the disk URI to a webview-accessible URI
-            const assetWebviewUri = webview.asWebviewUri(assetUriOnDisk);
-            console.log(`Mapping ${path} to ${assetWebviewUri}`); // Log mapping for debugging
-            return `${attr}="${assetWebviewUri}"`;
-        });
+    if (isDevelopment) {
+        // Development mode: Load from Vite dev server for HMR
+        console.log(`Loading webview from Vite dev server: ${viteDevServerUrl}`);
+        // CSP needs to allow connection to the dev server and inline styles (Vite might inject some)
+        return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Coder (Dev)</title>
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        style-src 'unsafe-inline' ${webview.cspSource} ${viteDevServerUrl};
+        script-src 'nonce-${nonce}' ${viteDevServerUrl};
+        connect-src ${viteDevServerUrl} ws://${viteDevServerUrl.split('//')[1]};
+        img-src ${webview.cspSource} data: ${viteDevServerUrl};
+        font-src ${webview.cspSource} ${viteDevServerUrl};
+    ">
+    <script type="module" nonce="${nonce}" src="${viteDevServerUrl}/@vite/client"></script>
+    <script type="module" nonce="${nonce}" src="${viteDevServerUrl}/src/main.tsx"></script>
+</head>
+<body>
+    <div id="root">Loading UI from Dev Server...</div>
+</body>
+</html>`;
 
-        // Inject CSP meta tag and nonce into script tags
-        // Find the main script tag (assuming type="module") and add nonce
-        // Make the regex less greedy and more specific
-        htmlContent = htmlContent.replace(
-            /(<script type="module" crossorigin src="[^"]+")>/, // Match the specific script tag Vite generates
-            `$1 nonce="${nonce}">`
-        );
+    } else {
+        // Production mode: Load from build output
+        console.log("Loading webview from dist/webview");
+        const buildPath = vscode.Uri.joinPath(extensionUri, 'dist', 'webview');
+        const htmlPath = vscode.Uri.joinPath(buildPath, 'index.html');
 
-        // Add CSP meta tag to the head
-        // Allow styles from webview source, scripts with nonce, connect-src 'self', and img-src for potential icons/data URIs
-        htmlContent = htmlContent.replace(
-            '</head>',
-            `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; img-src ${webview.cspSource} data:;">
-             </head>`
-        );
+        try {
+            let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf8');
 
-        return htmlContent;
-    } catch (e) {
-        console.error(`Error reading or processing webview HTML from ${htmlPath.fsPath}: ${e}`);
-        // Provide more specific error message
-        return `<html><body>Error loading webview content. Failed to read or process build output. Check console and ensure 'pnpm run build:webview' has run successfully. Path: ${htmlPath.fsPath} Error: ${e}</body></html>`;
+            // Replace asset paths with webview URIs
+            htmlContent = htmlContent.replace(/(href|src)="(\/[^"]+)"/g, (match, attr, path) => {
+                const assetUriOnDisk = vscode.Uri.joinPath(buildPath, path);
+                const assetWebviewUri = webview.asWebviewUri(assetUriOnDisk);
+                return `${attr}="${assetWebviewUri}"`;
+            });
+
+            // Inject nonce into the main script tag
+            htmlContent = htmlContent.replace(
+                /(<script type="module" crossorigin src="[^"]+")>/,
+                `$1 nonce="${nonce}">`
+            );
+
+            // Inject CSP meta tag
+            htmlContent = htmlContent.replace(
+                '</head>',
+                // CSP for production: allow styles/images/fonts from webview source, scripts with nonce, self connections
+                `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; img-src ${webview.cspSource} data:; font-src ${webview.cspSource};">
+                 </head>`
+            );
+
+            return htmlContent;
+        } catch (e) {
+            console.error(`Error reading or processing production webview HTML from ${htmlPath.fsPath}: ${e}`);
+            return `<html><body>Error loading webview content. Failed to read or process build output. Check console and ensure 'pnpm run build:webview' has run successfully. Path: ${htmlPath.fsPath} Error: ${e}</body></html>`;
+        }
     }
 }
-
 function getNonce() {
     let text = '';
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
