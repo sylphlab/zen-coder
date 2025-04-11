@@ -23,5 +23,15 @@ export default defineConfig({
         assetFileNames: `assets/[name].[ext]`
       }
     }
+  },
+  // Configure the dev server
+  server: {
+    // Enable CORS for all origins during development
+    // This allows the VS Code webview (vscode-webview://) to fetch resources
+    cors: true,
+    // Specify the port if needed (default is 5173)
+    // port: 5173,
+    // Make the server accessible over the network if needed
+    // host: true,
   }
 })
