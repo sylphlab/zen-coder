@@ -15,6 +15,7 @@
 - **pnpm:** Package management (v10.8.0 used for initial install).
 - **esbuild:** Bundler (as indicated by `esbuild.js` in the project root).
 - **eslint:** Linter (as indicated by `eslint.config.mjs`).
+- **Modular Tools:** Tool logic refactored into `src/tools/` with categories (filesystem, utils, system, vscode).
 
 ## Development Setup
 - Standard VS Code extension development environment.
@@ -36,6 +37,8 @@
 - `@ai-sdk/deepseek`: 0.2.9
 - `zod`: 3.24.2
 - `@vscode/webview-ui-toolkit`: 1.4.0 (Deprecated)
+- `node-fetch`: ^3.3.2 (Used for fetchUrlTool, getPublicIpTool - dynamic import used for CJS compat)
+- `@types/node-fetch`: ^2.6.12
 - *(Plus transitive dependencies)*
 
 ## Guideline Checksums

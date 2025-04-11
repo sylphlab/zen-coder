@@ -6,7 +6,8 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { createDeepSeek } from '@ai-sdk/deepseek';
-import { z } from 'zod';
+// Import the consolidated tools and types
+import { allTools, ToolName } from '../tools';
 
 // Define keys for SecretStorage
 const SECRET_KEYS = {
@@ -30,15 +31,7 @@ type ModelId = typeof availableModelIds[number];
 // Define the expected structure for the MCP tool executor function
 type McpToolExecutor = (serverName: string, toolName: string, args: any) => Promise<any>;
 
-// Define the known tool names manually for robust typing outside the class
-const ALL_TOOL_NAMES = [
-    'readFile', 'writeFile', 'listFiles', 'runCommand', 'search',
-    'fetch', 'getOpenTabs', 'getActiveTerminals', 'getCurrentTime'
-] as const; // Use const assertion
-
-// Derive the union type from the constant array
-type ToolName = typeof ALL_TOOL_NAMES[number];
-
+// ToolName type is now imported from '../tools'
 
 export class AiService {
     private currentModelId: ModelId = 'claude-3-5-sonnet'; // Default model
@@ -117,10 +110,11 @@ export class AiService {
         const config = vscode.workspace.getConfiguration('zencoder.tools');
         const activeToolNames: ToolName[] = [];
 
-        // Iterate over the predefined tool names
-        for (const toolName of ALL_TOOL_NAMES) {
+        // Iterate over the keys of the imported allTools object
+        for (const toolName of Object.keys(allTools) as ToolName[]) {
+            // Ensure the config key matches the tool name exactly
             if (config.get<boolean>(`${toolName}.enabled`, true)) { // Default to true if not set
-                activeToolNames.push(toolName);
+                activeToolNames.push(toolName); // toolName is already of type ToolName
             }
         }
         console.log("Active tools based on configuration:", activeToolNames);
@@ -138,7 +132,7 @@ export class AiService {
         // Add user prompt to history
         this.conversationHistory.push({ role: 'user', content: prompt });
 
-        const allTools = this._getAllToolDefinitions();
+        // Use the imported allTools directly
         const activeToolNames = this._getActiveToolNames();
 
         // Only proceed if there are active tools or if tools are not required by the model implicitly
@@ -149,7 +143,7 @@ export class AiService {
             const result = await streamText({
                 model: modelInstance,
                 messages: this.conversationHistory,
-                tools: allTools, // Provide all tool definitions
+                tools: allTools, // Provide the imported tool definitions
                 experimental_activeTools: activeToolNames.length > 0 ? activeToolNames : undefined, // Activate only enabled tools
                 maxSteps: 5, // Allow multiple steps for tool results processing
                 // onFinish: (result) => { ... } // Keep existing onFinish logic if needed
@@ -173,8 +167,8 @@ export class AiService {
                                     content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: `Error executing tool: ${error.message}. Please try again with corrected arguments.` }]
                                 }
                             ],
-                            tools: allTools, // Provide tools again
-                            experimental_activeTools: activeToolNames.length > 0 ? activeToolNames : undefined,
+                            tools: allTools, // Provide the imported tool definitions again
+                            experimental_activeTools: activeToolNames.length > 0 ? activeToolNames : undefined, // Use the active names
                         });
 
                         // Find the potentially repaired tool call in the new response
@@ -233,221 +227,10 @@ export class AiService {
         }
     }
 
-    // --- Tool Definitions ---
-    // Returns all tool definitions, used internally and for getting active tools
-    private _getAllToolDefinitions() {
-        return {
-            readFile: tool({
-                description: 'Reads the content of a file specified by its workspace path.',
-                parameters: z.object({ path: z.string().describe('Workspace relative path to the file') }),
-                execute: async ({ path }) => this.executeReadFile(path),
-            }),
-            writeFile: tool({
-                description: 'Writes content to a file specified by its workspace path. Confirms overwrite.',
-                parameters: z.object({
-                    path: z.string().describe('Workspace relative path to the file'),
-                    content: z.string().describe('Content to write to the file'),
-                }),
-                execute: async ({ path, content }) => this.executeWriteFile(path, content),
-            }),
-            listFiles: tool({
-                description: 'Lists files and directories at a given path within the workspace.',
-                parameters: z.object({ path: z.string().describe('Workspace relative path to list') }),
-                execute: async ({ path }) => this.executeListFiles(path),
-            }),
-            runCommand: tool({
-                description: 'Executes a shell command in the integrated terminal after user confirmation.',
-                parameters: z.object({ command: z.string().describe('The shell command to execute') }),
-                execute: async ({ command }) => this.executeRunCommand(command),
-            }),
-            search: tool({
-                description: 'Performs a web search and returns results.',
-                parameters: z.object({ query: z.string().describe('The search query') }),
-                execute: async ({ query }) => this.executeSearch(query),
-            }),
-            fetch: tool({
-                description: 'Fetches content from a URL.',
-                parameters: z.object({ url: z.string().url().describe('The URL to fetch') }),
-                execute: async ({ url }) => this.executeFetch(url),
-            }),
-            getOpenTabs: tool({
-                description: 'Returns a list of currently open file paths in the VS Code editor.',
-                parameters: z.object({}),
-                execute: async () => this.executeGetOpenTabs(),
-            }),
-            getActiveTerminals: tool({
-                description: 'Returns a list of active VS Code terminal instances (ID, name).',
-                parameters: z.object({}),
-                execute: async () => this.executeGetActiveTerminals(),
-            }),
-            getCurrentTime: tool({
-                description: 'Returns the current date and time.',
-                parameters: z.object({}),
-                execute: async () => new Date().toISOString(),
-            }),
-        };
-    }
-
-    // --- Tool Execution Implementations (Placeholders) ---
-
-    private async executeReadFile(filePath: string): Promise<string> {
-        try {
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (!workspaceFolders) throw new Error('No workspace open.');
-            const rootUri = workspaceFolders[0].uri;
-            const fileUri = vscode.Uri.joinPath(rootUri, filePath);
-
-            // Basic path safety check (prevent traversing up)
-            if (!fileUri.fsPath.startsWith(rootUri.fsPath)) {
-                throw new Error('Access denied: Path is outside the workspace.');
-            }
-
-            const contentBytes = await vscode.workspace.fs.readFile(fileUri);
-            return new TextDecoder().decode(contentBytes);
-        } catch (error: any) {
-            console.error(`Error reading file ${filePath}:`, error);
-            return `Error reading file: ${error.message}`;
-        }
-    }
-
-    private async executeWriteFile(filePath: string, content: string): Promise<string> {
-         try {
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (!workspaceFolders) throw new Error('No workspace open.');
-            const rootUri = workspaceFolders[0].uri;
-            const fileUri = vscode.Uri.joinPath(rootUri, filePath);
-
-            // Basic path safety check
-            if (!fileUri.fsPath.startsWith(rootUri.fsPath)) {
-                throw new Error('Access denied: Path is outside the workspace.');
-            }
-
-            // Check if file exists and confirm overwrite
-            let fileExists = false;
-            try {
-                await vscode.workspace.fs.stat(fileUri);
-                fileExists = true;
-            } catch (e) {
-                // File doesn't exist, proceed to write
-            }
-
-            if (fileExists) {
-                const confirmation = await vscode.window.showWarningMessage(
-                    `File "${filePath}" already exists. Overwrite?`,
-                    { modal: true },
-                    'Overwrite'
-                );
-                if (confirmation !== 'Overwrite') {
-                    return 'File write cancelled by user.';
-                }
-            }
-
-            await vscode.workspace.fs.writeFile(fileUri, new TextEncoder().encode(content));
-            return `File ${filePath} written successfully.`;
-        } catch (error: any) {
-            console.error(`Error writing file ${filePath}:`, error);
-            return `Error writing file: ${error.message}`;
-        }
-    }
-
-     private async executeListFiles(dirPath: string): Promise<string> {
-        try {
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (!workspaceFolders) throw new Error('No workspace open.');
-            const rootUri = workspaceFolders[0].uri;
-            const targetUri = vscode.Uri.joinPath(rootUri, dirPath);
-
-            // Basic path safety check
-            if (!targetUri.fsPath.startsWith(rootUri.fsPath)) {
-                throw new Error('Access denied: Path is outside the workspace.');
-            }
-
-            const entries = await vscode.workspace.fs.readDirectory(targetUri);
-            // entries is [name, type] tuple array
-            const formattedEntries = entries.map(([name, type]) => {
-                return `${name}${type === vscode.FileType.Directory ? '/' : ''}`;
-            });
-            return `Files in ${dirPath}:\n${formattedEntries.join('\n')}`;
-        } catch (error: any) {
-            console.error(`Error listing files in ${dirPath}:`, error);
-            return `Error listing files: ${error.message}`;
-        }
-    }
-
-    private async executeRunCommand(command: string): Promise<string> {
-        // CRUCIAL: User Confirmation
-        const confirmation = await vscode.window.showWarningMessage(
-            `Allow AI to run the following command?\n\n${command}`,
-            { modal: true },
-            'Allow'
-        );
-        if (confirmation !== 'Allow') {
-            return 'Command execution cancelled by user.';
-        }
-
-        try {
-            // Create a new terminal or use an existing one if specified (optional enhancement)
-            const terminal = vscode.window.createTerminal(`AI Task: ${command.substring(0, 20)}...`);
-            terminal.show();
-            terminal.sendText(command); // Executes the command
-            // Note: We don't easily get the output here. We just confirm execution.
-            return `Command "${command}" sent to terminal for execution.`;
-        } catch (error: any) {
-            console.error(`Error running command "${command}":`, error);
-            return `Error running command: ${error.message}`;
-        }
-    }
-
-    private async executeSearch(query: string): Promise<string> {
-        console.log(`Executing search tool with query: ${query}`);
-        // Placeholder implementation - Requires actual MCP client integration
-        console.warn(`Search tool called with query: ${query}. MCP integration is required for actual search.`);
-        return Promise.resolve(`Search tool execution requires MCP integration. Query was: "${query}"`);
-        // Or throw an error:
-        // return Promise.reject(new Error('Search tool requires MCP integration.'));
-    }
-
-    private async executeFetch(url: string): Promise<string> {
-        try {
-            // Use Node's fetch API (available in modern Node versions used by VS Code extensions)
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const text = await response.text();
-            // Truncate long responses for safety/performance
-            const maxLength = 2000;
-            return text.length > maxLength ? text.substring(0, maxLength) + '... [truncated]' : text;
-        } catch (error: any) {
-            console.error(`Error fetching URL ${url}:`, error);
-            return `Error fetching URL: ${error.message}`;
-        }
-    }
-
-     private executeGetOpenTabs(): string {
-        const openEditorPaths = vscode.window.tabGroups.all
-            .flatMap(tabGroup => tabGroup.tabs)
-            .map(tab => tab.input)
-            .filter((input): input is vscode.TabInputText => input instanceof vscode.TabInputText) // Only text editors
-            .map(input => vscode.workspace.asRelativePath(input.uri, false)); // Get relative path
-
-        if (openEditorPaths.length === 0) {
-            return "No files are currently open in the editor.";
-        }
-        return `Currently open files:\n${openEditorPaths.join('\n')}`;
-    }
-
-    private executeGetActiveTerminals(): string {
-        const activeTerminals = vscode.window.terminals.map((t, index) => ({
-            id: index + 1, // Simple 1-based ID for reference
-            name: t.name
-        }));
-
-        if (activeTerminals.length === 0) {
-            return "No active terminals found.";
-        }
-        return `Active terminals:\n${activeTerminals.map(t => `${t.id}: ${t.name}`).join('\n')}`;
-    }
+    // --- Tool Definitions and Execution Implementations Removed ---
+    // Tool definitions and execution logic are now handled by the imported 'allTools'
+    // from '../tools'. The Vercel AI SDK's `streamText` function will automatically
+    // call the `execute` method within each tool definition in `allTools`.
 
     // Method to add assistant response to history (called after streaming)
     // Simplify content type to string for basic text responses

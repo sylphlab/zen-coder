@@ -30,28 +30,28 @@
 - **TypeScript DOM Type Errors (TS2304) Fixed:** Added `"DOM"` to `compilerOptions.lib` in main `tsconfig.json` to resolve type issues from `@ai-sdk/ui-utils`.
 - **Vite Dev Server CORS Issue Fixed:** Updated `webview-ui/vite.config.ts` with `server: { cors: true }` to allow webview access.
 - **Project Renamed to "Zen Coder":** All relevant files (`package.json`, `src/extension.ts`, `README.md`, Memory Bank files, `webview-ui/index.html`, `aiService.ts` secret keys) updated.
-- **Tool Functionality Enhanced:**
-    - Added VS Code settings (`zencoder.tools.*.enabled`) to enable/disable tools.
-    - `AiService` now reads settings and uses `experimental_activeTools` in `streamText`.
-    - `streamText` call updated with `maxSteps: 5` for multi-step tool use.
-    - Added experimental tool error handling and repair (`experimental_repairToolCall`) in `AiService`.
-
+- **Tool Refactoring & Expansion Completed:**
+    - All tool logic moved from `AiService` to modular files under `src/tools/`.
+    - Tools standardized using Vercel AI SDK `tool` helper and `zod`.
+    - **New/Enhanced Tools:** `readFileTool`, `writeFileTool`, `listFilesTool` (w/ stats), `createFolderTool`, `getStatTool`, `deleteFileTool`, `deleteFolderTool`, `moveRenameTool`, `fetchUrlTool`, `base64EncodeTool`, `base64DecodeTool`, `md5HashTool`, `getOsInfoTool`, `getCurrentTimeTool`, `getTimezoneTool`, `getPublicIpTool`, `getOpenTabsTool`, `getActiveTerminalsTool`, `runCommandTool`.
+    - `AiService` refactored to use the new tool structure.
+    - `package.json` configuration updated for new tool names.
+    - Dependencies (`node-fetch`, types) added and import issues resolved.
+    - Previous enhancements (multi-step, error handling, repair, activation) remain integrated.
 ## What's Left (Potential Future Enhancements)
-- Refine Preact component structure.
-- Refine tool execution logic (error handling, robustness, e.g., `fetch`).
 - Implement conversation history persistence.
-- Thorough testing and debugging.
+- Thorough testing and debugging of new tools.
 - Remove unused `@vscode/webview-ui-toolkit` dependency.
-- Implement actual MCP client integration for tools like `search`.
+- Implement actual MCP client integration for tools like `search` (currently placeholder/disabled).
+- Refine Preact component structure.
 - Improve Markdown rendering in Preact UI.
 - Improve error handling in Preact UI.
 
 ## Current Status
-- **Core Functionality Enhanced:** Project renamed to Zen Coder. Tool functionality improved with activation controls, multi-step capability, and experimental error handling/repair. Core chat, API key management, model selection, and dev/prod webview loading remain functional.
-- Project is stable with enhanced tool features based on Vercel AI SDK.
+- **Toolset Refactored & Expanded:** All requested tools implemented in a modular structure under `src/tools/`. `AiService` and configuration updated accordingly. Project remains functional with the enhanced toolset.
+- Project is stable.
 
 ## Known Issues
-- `@vscode/webview-ui-toolkit` dependency is unused after refactor but still listed in `package.json`.
-- Search tool requires MCP integration to function.
-- Other tool implementations might need more robust error handling.
+- `@vscode/webview-ui-toolkit` dependency is unused but still listed.
+- Search tool functionality requires future MCP integration.
 - Conversation history is not persisted.

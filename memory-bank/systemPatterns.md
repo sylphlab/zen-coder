@@ -12,7 +12,7 @@
 
 ## Key Technical Decisions
 - **Vercel AI SDK:** Central library for AI model interaction, streaming, and tool definition/execution.
-- **Tool Implementation:** Tools defined using the `ai` package's `tool` function, leveraging `zod` for parameter validation. Tool execution logic will use the `vscode` API for workspace interactions (file system, terminals, etc.).
+- **Tool Implementation:** Tools are defined using the `ai` package's `tool` function with `zod` schemas. They are organized modularly under `src/tools/` (filesystem, utils, system, vscode). Execution logic uses `vscode` API or Node.js modules as appropriate.
 - **Security:** Prioritize security by using `SecretStorage` and requiring explicit user confirmation for potentially harmful actions like `runCommand`. File operations confined to the workspace.
 - **UI Choice:** Start with the VS Code Webview UI Toolkit for simplicity and native feel, unless specific needs dictate a minimal framework like Preact later.
 
