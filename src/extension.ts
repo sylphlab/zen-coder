@@ -99,33 +99,37 @@ export async function activate(context: vscode.ExtensionContext) {
                                         const contentData = match[2]; // Renamed from jsonData as it might be raw text
 
                                         if (prefix >= '0' && prefix <= '9') {
-                                            // Handle numbered prefixes (potentially raw text or JSON)
-                                            if (contentData.trim().startsWith('{')) {
-                                                // Looks like JSON, try parsing
-                                                try {
-                                                    const part = JSON.parse(contentData);
+                                            // Handle numbered prefixes (should always be JSON: string or object)
+                                            try {
+                                                const part = JSON.parse(contentData);
+
+                                                if (typeof part === 'string') {
+                                                    // Handle JSON-encoded string content
+                                                    chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part });
+                                                } else if (typeof part === 'object' && part !== null) {
+                                                    // Handle JSON object content
                                                     switch (part.type) {
                                                         case 'text-delta':
+                                                            // This might be redundant if text comes as strings, but handle just in case
                                                             chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
                                                             break;
                                                         case 'error':
-                                                            console.error('Error received in numbered data stream:', part.error);
+                                                            console.error('Error object received in numbered data stream:', part.error);
                                                             vscode.window.showErrorMessage(`Stream Error: ${part.error}`);
                                                             chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
                                                             break;
-                                                        // Handle other JSON types if they appear with numbered prefixes
+                                                        // Handle other potential object types if they appear with numbered prefixes
                                                         default:
-                                                            console.log(`Received unhandled JSON type '${part.type}' with prefix '${prefix}':`, part);
+                                                            console.log(`Received unhandled JSON object type '${part.type}' with prefix '${prefix}':`, part);
                                                     }
-                                                } catch (e) {
-                                                    console.error(`Failed to parse potential JSON with prefix '${prefix}':`, contentData, e);
-                                                    // Fallback: If JSON parsing fails on '0:', treat as raw text? Let's try sending it.
-                                                    chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: contentData });
-                                                    console.warn(`Sent content with prefix '${prefix}' as raw text after JSON parse failed.`);
+                                                } else {
+                                                    // Handle other primitive types if necessary (e.g., numbers, booleans)
+                                                    console.log(`Received unexpected primitive type '${typeof part}' with prefix '${prefix}':`, part);
                                                 }
-                                            } else {
-                                                // Does not look like JSON, treat as raw text chunk
-                                                chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: contentData });
+                                            } catch (e) {
+                                                // This should ideally not happen if the stream format is consistent
+                                                console.error(`Failed to parse expected JSON with prefix '${prefix}':`, contentData, e);
+                                                // Do not send raw contentData to UI as it likely includes quotes
                                             }
                                         } else if (prefix === 'd') {
                                             // Handle 'd:' prefix (seems to be JSON data/metadata)
