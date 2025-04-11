@@ -57,7 +57,10 @@ export async function activate(context: vscode.ExtensionContext) {
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'webview-ui')]
+                localResourceRoots: [
+                    vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview'), // Allow access to build output
+                    vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview', 'assets') // Allow access to assets
+                ]
             }
         );
 
@@ -84,7 +87,8 @@ export async function activate(context: vscode.ExtensionContext) {
                             let toolCalls: any[] = [];
                             let toolResults: any[] = [];
 
-                            chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: '' });
+                            // Send a message to start the assistant message container in the webview
+                            chatPanel?.webview.postMessage({ type: 'startAssistantMessage', sender: 'assistant' });
 
                             for await (const part of streamResult.fullStream) {
                                 switch (part.type) {
@@ -123,6 +127,16 @@ export async function activate(context: vscode.ExtensionContext) {
                     case 'webviewReady':
                         console.log('Webview is ready');
                         // TODO: Send initial state
+                        return;
+                    case 'setModel':
+                        if (aiServiceInstance && typeof message.modelId === 'string') {
+                            // Validate modelId before setting (using AiService's internal list or a shared constant)
+                            // For now, assume AiService.setModel handles validation
+                            aiServiceInstance.setModel(message.modelId as any); // Cast needed if types don't perfectly align
+                            console.log(`Model changed to: ${message.modelId}`);
+                        } else {
+                            console.error('Failed to set model: AiService not ready or invalid modelId', message);
+                        }
                         return;
                 }
             },
@@ -175,21 +189,66 @@ export async function activate(context: vscode.ExtensionContext) {
 // --- Helper Functions (getWebviewContent, getNonce) remain the same ---
 
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri): string {
-    const webviewUiPath = vscode.Uri.joinPath(extensionUri, 'webview-ui');
-    const htmlPath = vscode.Uri.joinPath(webviewUiPath, 'index.html');
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewUiPath, 'main.js'));
-    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewUiPath, 'main.css'));
+    // Path to the Vite build output
+    const buildPath = vscode.Uri.joinPath(extensionUri, 'dist', 'webview');
+    const htmlPath = vscode.Uri.joinPath(buildPath, 'index.html');
     const nonce = getNonce();
 
+    // Get URIs for assets from the manifest (more robust than guessing paths)
+    const manifestPath = vscode.Uri.joinPath(buildPath, 'manifest.json');
+    let scriptUri: vscode.Uri | undefined;
+    let styleUri: vscode.Uri | undefined;
+
     try {
+        const manifestContent = fs.readFileSync(manifestPath.fsPath, 'utf8');
+        const manifest = JSON.parse(manifestContent);
+        // Find the entry JS and CSS files in the manifest
+        // This assumes a single entry point named 'index.html' or similar
+        const entryKey = Object.keys(manifest).find(key => manifest[key].isEntry);
+        if (entryKey && manifest[entryKey]) {
+             if (manifest[entryKey].file) {
+                 scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, manifest[entryKey].file));
+             }
+             if (manifest[entryKey].css && manifest[entryKey].css.length > 0) {
+                 styleUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, manifest[entryKey].css[0]));
+             }
+        } else {
+            console.error("Could not find entry point in manifest.json");
+            // Fallback to guessing paths (less reliable)
+            scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, 'assets', 'index.js')); // Adjust filename if needed
+            styleUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, 'assets', 'index.css')); // Adjust filename if needed
+        }
+
+    } catch (e) {
+        console.error(`Error reading manifest.json: ${e}`);
+        // Fallback to guessing paths if manifest fails
+        scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, 'assets', 'index.js')); // Adjust filename if needed
+        styleUri = webview.asWebviewUri(vscode.Uri.joinPath(buildPath, 'assets', 'index.css')); // Adjust filename if needed
+    }
+
+    if (!scriptUri || !styleUri) {
+         console.error("Failed to determine script or style URI for webview.");
+         return `<html><body>Error loading webview assets. Check console and build output.</body></html>`;
+    }
+
+    try {
+
         let htmlContent = fs.readFileSync(htmlPath.fsPath, 'utf8');
 
+        // Inject URIs and CSP nonce
+        // IMPORTANT: Adjust placeholders if your index.html structure differs
         htmlContent = htmlContent
-            .replace('main.css', styleUri.toString())
-            .replace('main.js', scriptUri.toString())
-            .replace('<head>', `<head>
-            <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">`)
-            .replace('<script src=', `<script nonce="${nonce}" src=`);
+            .replace(
+                '</head>',
+                `<link rel="stylesheet" href="${styleUri}">
+                 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}'; connect-src 'self';">
+                 </head>`
+            )
+            .replace(
+                '</body>',
+                `<script type="module" nonce="${nonce}" src="${scriptUri}"></script>
+                 </body>`
+            );
 
         return htmlContent;
     } catch (e) {

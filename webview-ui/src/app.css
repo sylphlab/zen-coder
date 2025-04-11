@@ -1,0 +1,161 @@
+/* Use VS Code variables for theming */
+:root {
+    --vscode-font-family: var(--vscode-editor-font-family, sans-serif);
+    --vscode-font-size: var(--vscode-editor-font-size, 13px);
+    --vscode-foreground: var(--vscode-editor-foreground, #333);
+    --vscode-background: var(--vscode-editor-background, #fff);
+    --vscode-input-background: var(--vscode-input-background, #fff);
+    --vscode-input-foreground: var(--vscode-input-foreground, #333);
+    --vscode-input-border: var(--vscode-input-border, #ccc);
+    --vscode-button-background: var(--vscode-button-background, #007acc);
+    --vscode-button-foreground: var(--vscode-button-foreground, #fff);
+    --vscode-button-hover-background: var(--vscode-button-hoverBackground, #005a9e);
+    --vscode-list-active-background: var(--vscode-list-activeSelectionBackground, #007acc);
+    --vscode-list-active-foreground: var(--vscode-list-activeSelectionForeground, #fff);
+    --vscode-list-inactive-background: var(--vscode-list-inactiveSelectionBackground, #e4e6f1);
+    --vscode-widget-border: var(--vscode-editorWidget-border, #ccc);
+    --vscode-code-background: var(--vscode-textBlockQuote-background, #f0f0f0);
+    --vscode-code-border: var(--vscode-textBlockQuote-border, #ddd);
+}
+
+body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-background);
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+#app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    overflow: hidden; /* Prevent container scroll */
+}
+
+h1 {
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 10px;
+    font-weight: normal; /* Use VS Code default weight */
+    font-size: calc(var(--vscode-font-size) * 1.2);
+}
+
+#model-selection-area {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 5px;
+    border: 1px solid var(--vscode-widget-border);
+    background-color: var(--vscode-input-background);
+    border-radius: 3px;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+#model-selection-area label {
+    margin-right: 10px;
+    white-space: nowrap;
+}
+
+#model-select {
+    flex-grow: 1;
+    padding: 5px;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 3px;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+}
+
+#message-list {
+    flex-grow: 1;
+    overflow-y: auto; /* Allow only message list to scroll */
+    padding: 5px;
+    border: 1px solid var(--vscode-widget-border);
+    margin-bottom: 10px;
+    background-color: var(--vscode-input-background); /* Match input background */
+}
+
+.message {
+    margin-bottom: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    white-space: pre-wrap; /* Preserve whitespace and wrap text */
+    word-wrap: break-word; /* Break long words */
+    font-size: var(--vscode-font-size);
+}
+
+.user-message {
+    background-color: var(--vscode-list-active-background);
+    color: var(--vscode-list-active-foreground);
+    text-align: right;
+    margin-left: 20%;
+}
+
+.assistant-message {
+    background-color: var(--vscode-list-inactive-background);
+    color: var(--vscode-foreground); /* Ensure readability */
+    margin-right: 20%;
+}
+
+/* Basic code block styling */
+.assistant-message pre {
+    background-color: var(--vscode-code-background);
+    border: 1px solid var(--vscode-code-border);
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    color: var(--vscode-foreground); /* Ensure code text is visible */
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.assistant-message code {
+    font-family: var(--vscode-editor-font-family); /* Use editor font for code */
+    font-size: var(--vscode-editor-font-size);
+    color: var(--vscode-foreground); /* Ensure inline code text is visible */
+}
+
+#input-area {
+    display: flex;
+    border-top: 1px solid var(--vscode-widget-border);
+    padding-top: 10px;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+#user-input {
+    flex-grow: 1;
+    margin-right: 5px;
+    padding: 8px;
+    border: 1px solid var(--vscode-input-border);
+    border-radius: 3px;
+    background-color: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    resize: none; /* Prevent manual resizing */
+    min-height: 40px; /* Start with a reasonable height */
+    box-sizing: border-box;
+}
+
+#send-button {
+    padding: 8px 15px;
+    border: 1px solid var(--vscode-button-border, transparent); /* Add default */
+    background-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: var(--vscode-font-size);
+}
+
+#send-button:hover {
+    background-color: var(--vscode-button-hover-background);
+}

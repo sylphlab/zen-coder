@@ -1,21 +1,21 @@
 # Active Context
 
 ## Current Focus
-Preparing to commit the current state of the MVP and transition to a new task based on user feedback.
+Finalizing documentation and preparing for task completion after successfully refactoring the UI and implementing model selection.
 
 ## Recent Changes
 - Completed core MVP functionality (chat loop, streaming, tools, API key storage/setting, provider instantiation).
 - Refined `search` tool to use an MCP executor bridge (placeholder).
-- Received user feedback:
-    - Clarified that the current UI uses plain JS/HTML/CSS, not a framework like React.
-    - Acknowledged the importance of implementing model selection UI.
+- **Refactored Webview UI:** Migrated from plain JS/HTML/CSS to a Vite + Preact setup within the `webview-ui` directory.
+- **Implemented Model Selection:** Added UI elements (likely a dropdown) in the Preact application to allow users to select from available AI models. This selection is communicated back to the extension host to update the `AiService`.
+- Updated relevant files (`package.json`, `src/extension.ts`, `webview-ui/*`) to support the new UI structure and build process.
 
 ## Next Steps
-- Update `memory-bank/progress.md` to reflect MVP completion and feedback.
-- Commit the current code state to Git.
-- Await new task instructions from the user (likely focusing on UI improvements like model selection).
+- Update `memory-bank/progress.md` to reflect the final state.
+- Commit the latest changes.
+- Attempt completion.
 
 ## Active Decisions
-- MVP core logic is considered complete for this phase.
-- UI framework choice (plain JS/HTML/CSS) aligns with initial MVP scope but can be revisited.
-- Model selection UI is identified as a key next feature.
+- Webview UI successfully refactored to Vite + Preact.
+- Model selection functionality implemented as requested.
+- Core logic remains stable.
