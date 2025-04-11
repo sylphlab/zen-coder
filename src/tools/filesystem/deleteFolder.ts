@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { tool } from 'ai';
+import { tool, StreamData } from 'ai'; // Import StreamData
 import * as vscode from 'vscode';
 import { Uri } from 'vscode';
 import path from 'path';
@@ -8,13 +8,15 @@ export const deleteFolderTool = tool({
   description: 'Delete a folder and all its contents recursively at the specified path within the workspace. Use relative paths from the workspace root. This action is irreversible.',
   parameters: z.object({
     folderPath: z.string().describe('The relative path to the folder to delete within the workspace.'),
-    // Optional: Add confirmation flag if needed
-    // confirm: z.boolean().optional().default(false).describe('Set to true to confirm deletion.')
+    useTrash: z.boolean().optional().default(true).describe('If true (default), move the folder and its contents to the trash/recycle bin. If false, delete permanently.'),
   }),
-  execute: async ({ folderPath /*, confirm */ }) => {
-    // if (!confirm) {
-    //   return { success: false, error: 'Deletion not confirmed. Set confirm: true to proceed.' };
-    // }
+  // Modify execute signature
+  execute: async ({ folderPath, useTrash = true }, { data, toolCallId }: { data?: StreamData, toolCallId?: string }) => {
+    const deleteType = useTrash ? 'Moving to trash' : 'Permanently deleting';
+    // Send initial status
+    if (data && toolCallId) {
+        data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'deleteFolderTool', status: 'processing', message: `${deleteType} folder: ${folderPath}` });
+    }
     try {
       if (!vscode.workspace.workspaceFolders) {
         throw new Error('No workspace is open.');
@@ -53,9 +55,9 @@ export const deleteFolderTool = tool({
       }
 
       // Delete the folder recursively
-      await vscode.workspace.fs.delete(folderUri, { recursive: true, useTrash: false }); // useTrash: false for permanent delete
+      await vscode.workspace.fs.delete(folderUri, { recursive: true, useTrash: useTrash }); // Pass useTrash option
 
-      return { success: true, message: `Folder '${folderPath}' and its contents deleted successfully.` };
+      return { success: true, message: `Folder '${folderPath}' and its contents ${useTrash ? 'moved to trash' : 'deleted permanently'} successfully.` };
 
     } catch (error: any) {
       let errorMessage = `Failed to delete folder '${folderPath}'.`;
@@ -67,6 +69,10 @@ export const deleteFolderTool = tool({
         errorMessage += ` Unknown error: ${String(error)}`;
       }
       console.error(`deleteFolderTool Error: ${error}`);
+      // Send error status via stream if possible
+      if (data && toolCallId) {
+          data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'deleteFolderTool', status: 'error', message: errorMessage });
+      }
       return { success: false, error: errorMessage };
     }
   },

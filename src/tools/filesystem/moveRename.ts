@@ -1,16 +1,24 @@
 import { z } from 'zod';
-import { tool } from 'ai';
+import { tool, StreamData } from 'ai'; // Import StreamData
 import * as vscode from 'vscode';
 import { Uri } from 'vscode';
 import path from 'path';
 
 export const moveRenameTool = tool({
-  description: 'Move or rename a file or folder within the workspace. Use relative paths from the workspace root. This operation fails if the destination path already exists.',
+  description: 'Move or rename a file or folder within the workspace. Use relative paths from the workspace root.',
   parameters: z.object({
     sourcePath: z.string().describe('The current relative path of the file or folder to move/rename.'),
     destinationPath: z.string().describe('The new relative path for the file or folder.'),
+    overwrite: z.boolean().optional().default(false).describe('If true, overwrite the destination path if it already exists. Use with caution! Defaults to false.'),
   }),
-  execute: async ({ sourcePath, destinationPath }) => {
+  // Modify execute signature
+  execute: async ({ sourcePath, destinationPath, overwrite = false }, { data, toolCallId }: { data?: StreamData, toolCallId?: string }) => {
+    const operation = `Moving/Renaming '${sourcePath}' to '${destinationPath}' (Overwrite: ${overwrite})`;
+    // Send initial status
+    if (data && toolCallId) {
+        data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'moveRenameTool', status: 'processing', message: operation });
+    }
+
     try {
       if (!vscode.workspace.workspaceFolders) {
         throw new Error('No workspace is open.');
@@ -52,9 +60,10 @@ export const moveRenameTool = tool({
       }
 
       // Perform the rename/move operation. Fails if destination exists.
-      await vscode.workspace.fs.rename(sourceUri, destinationUri, { overwrite: false });
+      // Perform the rename/move operation
+      await vscode.workspace.fs.rename(sourceUri, destinationUri, { overwrite: overwrite });
 
-      return { success: true, message: `Successfully moved/renamed '${sourcePath}' to '${destinationPath}'.` };
+      return { success: true, message: `Successfully moved/renamed '${sourcePath}' to '${destinationPath}'${overwrite ? ' (destination overwritten)' : ''}.` };
 
     } catch (error: any) {
       let errorMessage = `Failed to move/rename '${sourcePath}' to '${destinationPath}'.`;
@@ -68,6 +77,10 @@ export const moveRenameTool = tool({
         errorMessage += ` Unknown error: ${String(error)}`;
       }
       console.error(`moveRenameTool Error: ${error}`);
+      // Send error status via stream if possible
+      if (data && toolCallId) {
+          data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'moveRenameTool', status: 'error', message: errorMessage });
+      }
       return { success: false, error: errorMessage };
     }
   },

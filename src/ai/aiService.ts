@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText } from 'ai';
+import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, StreamData, Tool, StepResult, ToolCallPart, ToolResultPart } from 'ai'; // Use Tool, add StepResult types
 // Import the factory function as per documentation
 import { createAnthropic } from '@ai-sdk/anthropic';
 // Import the correct factory function for Google
@@ -139,65 +139,109 @@ export class AiService {
         // Note: Some models might error if tools are provided but none are active.
         // Consider adding logic here or using toolChoice: 'none' if activeToolNames is empty.
 
+        // Create a StreamData instance for this call
+        const data = new StreamData();
+
+        // Wrap tools to inject StreamData and toolCallId into execute context
+        const toolsWithStreaming: Record<string, Tool<any, any>> = {}; // Use Tool type
+        for (const [name, toolDef] of Object.entries(allTools)) {
+            if (activeToolNames.includes(name as ToolName)) { // Only wrap active tools
+                toolsWithStreaming[name] = {
+                    ...toolDef,
+                    execute: async (args: any, executionContext: any) => {
+                        // The SDK provides toolCallId in the second arg (executionContext)
+                        const toolCallId = executionContext?.toolCallId;
+                        if (!toolCallId) {
+                            console.error(`Tool ${name} execution context missing toolCallId.`);
+                            // Proceed without streaming if ID is missing, or throw error?
+                        } else {
+                             // Send 'in-progress' status immediately
+                             data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: name, status: 'in-progress' });
+                        }
+
+                        try {
+                            // Call the original execute function, passing the StreamData instance and toolCallId
+                            // Modify the context passed to the original execute if needed
+                            const result = await toolDef.execute(args, { ...executionContext, data, toolCallId }); // Pass data and toolCallId
+
+                            // Send 'complete' status if execution finishes without error (before returning)
+                            // Note: The actual tool result is handled by the SDK stream
+                            if (toolCallId) {
+                                // Check if result indicates success before sending 'complete'
+                                const isSuccess = typeof result === 'object' && result !== null && result.success === true;
+                                const status = isSuccess ? 'complete' : 'error'; // Infer status if possible
+                                // Safely access message or error
+                                const message = isSuccess
+                                    ? (result as any).message ?? 'Success'
+                                    : (result as any).error ?? 'Error';
+                                data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: name, status: status, message: String(message).substring(0, 100) }); // Limit message length
+                            }
+                            return result;
+                        } catch (error: any) {
+                            // Send 'error' status if the execute function throws
+                            if (toolCallId) {
+                                data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: name, status: 'error', message: error.message?.substring(0, 100) });
+                            }
+                            throw error; // Re-throw the error for SDK handling
+                        }
+                    },
+                };
+            }
+        }
+
         try {
             const result = await streamText({
                 model: modelInstance,
                 messages: this.conversationHistory,
-                tools: allTools, // Provide the imported tool definitions
-                experimental_activeTools: activeToolNames.length > 0 ? activeToolNames : undefined, // Activate only enabled tools
+                tools: toolsWithStreaming, // Use the wrapped tools
+                // experimental_activeTools: activeToolNames.length > 0 ? activeToolNames : undefined, // No longer needed as we filter when wrapping
                 maxSteps: 5, // Allow multiple steps for tool results processing
-                // onFinish: (result) => { ... } // Keep existing onFinish logic if needed
+                onFinish: async (event) => {
+                    // Add assistant message and tool results to history after the stream finishes
+                    if (event.finishReason === 'stop' || event.finishReason === 'tool-calls') {
+                        this.addAssistantResponseToHistory(event.text ?? ''); // Add final text if any
+                        // Process tool calls and results from the *entire* multi-step process
+                        // Use event.steps and add explicit types
+                        event.steps?.forEach((step: StepResult<any>) => {
+                            step.toolCalls?.forEach((tc: ToolCallPart) => this.addToolCallToHistory(tc));
+                            step.toolResults?.forEach((tr: ToolResultPart) => this.addToolResultToHistory(tr));
+                        });
+                    }
+                    // Close the StreamData instance
+                    data.close();
+                    console.log("Stream finished, StreamData closed.");
+                },
 
-                // Experimental Tool Repair (Re-ask Strategy)
+                // Experimental Tool Repair (Re-ask Strategy) - Keep this logic
                 experimental_repairToolCall: async ({ toolCall, error, messages, system }) => {
                     console.warn(`Attempting to repair tool call for ${toolCall.toolName} due to error: ${error.message}`);
+                    // ... (Keep existing repair logic, ensuring it uses 'allTools' for re-ask)
                     try {
-                        // Re-ask the model with the error message included in the history
                         const repairResult = await generateText({
-                            model: modelInstance, // Use the same model instance
-                            system: system, // Pass the original system prompt if available
+                            model: modelInstance,
+                            system: system,
                             messages: [
-                                ...messages, // Original messages leading to the failed call
-                                {
-                                    role: 'assistant',
-                                    content: [{ type: 'tool-call', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: toolCall.args }]
-                                },
-                                {
-                                    role: 'tool',
-                                    content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: `Error executing tool: ${error.message}. Please try again with corrected arguments.` }]
-                                }
+                                ...messages,
+                                { role: 'assistant', content: [{ type: 'tool-call', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: toolCall.args }] },
+                                { role: 'tool', content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: `Error executing tool: ${error.message}. Please try again with corrected arguments.` }] }
                             ],
-                            tools: allTools, // Provide the imported tool definitions again
-                            experimental_activeTools: activeToolNames.length > 0 ? activeToolNames : undefined, // Use the active names
+                            tools: allTools, // Use original allTools for repair attempt definition
+                            // No need for activeTools here, let the model choose from all for repair
                         });
-
-                        // Find the potentially repaired tool call in the new response
-                        const newToolCall = repairResult.toolCalls.find(
-                            newTc => newTc.toolName === toolCall.toolName
-                        );
-
+                        const newToolCall = repairResult.toolCalls.find(newTc => newTc.toolName === toolCall.toolName);
                         if (newToolCall) {
                             console.log(`Tool call ${toolCall.toolName} successfully repaired.`);
-                            // Return the repaired tool call structure expected by the SDK
-                            // Add toolCallType and ensure args are structured correctly (stringified if needed by SDK)
-                            // The SDK likely expects args as an object, not stringified here unless generateText returns it that way.
-                            return {
-                                toolCallType: 'function', // Required property
-                                toolCallId: toolCall.toolCallId, // Keep the original ID
-                                toolName: newToolCall.toolName,
-                                args: JSON.stringify(newToolCall.args), // Use the repaired arguments, stringified
-                            };
+                            return { toolCallType: 'function', toolCallId: toolCall.toolCallId, toolName: newToolCall.toolName, args: JSON.stringify(newToolCall.args) };
                         } else {
-                            console.error(`Tool call repair failed for ${toolCall.toolName}: Model did not generate a new call.`);
-                            return null; // Indicate repair failed
+                            console.error(`Tool call repair failed for ${toolCall.toolName}: Model did not generate a new call.`); return null;
                         }
                     } catch (repairError: any) {
-                         console.error(`Error during tool call repair attempt for ${toolCall.toolName}:`, repairError);
-                         return null; // Indicate repair failed
+                        console.error(`Error during tool call repair attempt for ${toolCall.toolName}:`, repairError); return null;
                     }
                 }
             });
-            return result;
+            // Return the response stream along with the StreamData
+            return result.toDataStreamResponse({ data });
         } catch (error: any) {
             // Handle specific tool errors
             if (NoSuchToolError.isInstance(error)) {
@@ -221,8 +265,9 @@ export class AiService {
             }
             console.error('Error calling AI SDK:', error);
             vscode.window.showErrorMessage(`Error interacting with AI: ${error.message}`);
-            // Remove the last user message if the call failed
+            // Remove the last user message if the initial streamText call failed entirely
             this.conversationHistory.pop();
+            data.close(); // Ensure data stream is closed on error too
             return null;
         }
     }
@@ -234,8 +279,11 @@ export class AiService {
 
     // Method to add assistant response to history (called after streaming)
     // Simplify content type to string for basic text responses
-    public addAssistantResponseToHistory(content: string) {
-        this.conversationHistory.push({ role: 'assistant', content });
+    // Add assistant text response (can be empty if only tools were called)
+    public addAssistantResponseToHistory(content: string | undefined) {
+        if (content) { // Only add if there's text content
+            this.conversationHistory.push({ role: 'assistant', content });
+        }
         // TODO: Persist conversation history
     }
 

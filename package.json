@@ -50,17 +50,17 @@
         "zencoder.tools.readFileTool.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable the 'readFileTool' (reads file content)."
+          "description": "Enable the 'readFileTool' (reads file content, supports multiple files and encodings)."
         },
         "zencoder.tools.writeFileTool.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable the 'writeFileTool' (writes file content)."
+          "description": "Enable the 'writeFileTool' (writes/appends file content with encoding)."
         },
         "zencoder.tools.listFilesTool.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable the 'listFilesTool' (lists directory contents with stats)."
+          "description": "Enable the 'listFilesTool' (lists directory contents with stats, supports recursion)."
         },
         "zencoder.tools.createFolderTool.enabled": {
           "type": "boolean",
@@ -75,17 +75,27 @@
         "zencoder.tools.deleteFileTool.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable the 'deleteFileTool' (deletes files)."
+          "description": "Enable the 'deleteFileTool' (deletes files, supports trash)."
         },
         "zencoder.tools.deleteFolderTool.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable the 'deleteFolderTool' (deletes folders recursively)."
+          "description": "Enable the 'deleteFolderTool' (deletes folders recursively, supports trash)."
         },
         "zencoder.tools.moveRenameTool.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable the 'moveRenameTool' (moves/renames files/folders)."
+          "description": "Enable the 'moveRenameTool' (moves/renames files/folders, supports overwrite)."
+        },
+         "zencoder.tools.copyFileTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'copyFileTool' (copies files, supports overwrite)."
+        },
+         "zencoder.tools.copyFolderTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'copyFolderTool' (copies folders recursively, supports overwrite)."
         },
         "zencoder.tools.fetchUrlTool.enabled": {
           "type": "boolean",
@@ -106,6 +116,26 @@
           "type": "boolean",
           "default": true,
           "description": "Enable the 'md5HashTool' (calculates MD5 hash)."
+        },
+         "zencoder.tools.sha256HashTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'sha256HashTool' (calculates SHA-256 hash)."
+        },
+         "zencoder.tools.uuidGenerateTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'uuidGenerateTool' (generates a v4 UUID)."
+        },
+         "zencoder.tools.jsonParseTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'jsonParseTool' (parses a JSON string)."
+        },
+         "zencoder.tools.jsonStringifyTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'jsonStringifyTool' (stringifies a JS object/array)."
         },
         "zencoder.tools.getOsInfoTool.enabled": {
           "type": "boolean",
@@ -140,7 +170,62 @@
         "zencoder.tools.runCommandTool.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Enable the 'runCommandTool' (runs command in terminal after confirmation)."
+          "description": "Enable the 'runCommandTool' (runs command with options after confirmation)."
+        },
+         "zencoder.tools.getActiveEditorContextTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'getActiveEditorContextTool' (gets active editor path, language, selection)."
+        },
+         "zencoder.tools.replaceInActiveEditorTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'replaceInActiveEditorTool' (replaces selected text)."
+        },
+         "zencoder.tools.showInformationMessageTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'showInformationMessageTool' (shows an info notification)."
+        },
+         "zencoder.tools.showWarningMessageTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'showWarningMessageTool' (shows a warning notification)."
+        },
+         "zencoder.tools.showErrorMessageTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'showErrorMessageTool' (shows an error notification)."
+        },
+         "zencoder.tools.showInputBoxTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'showInputBoxTool' (prompts user for text input)."
+        },
+         "zencoder.tools.showQuickPickTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'showQuickPickTool' (shows a selection list to the user)."
+        },
+         "zencoder.tools.formatDocumentTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'formatDocumentTool' (formats the active document)."
+        },
+         "zencoder.tools.saveActiveFileTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'saveActiveFileTool' (saves the active file)."
+        },
+         "zencoder.tools.closeActiveFileTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'closeActiveFileTool' (closes the active file)."
+        },
+         "zencoder.tools.openFileTool.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the 'openFileTool' (opens a specified file)."
         }
       }
     }

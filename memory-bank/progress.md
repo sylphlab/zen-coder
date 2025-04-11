@@ -33,11 +33,16 @@
 - **Tool Refactoring & Expansion Completed:**
     - All tool logic moved from `AiService` to modular files under `src/tools/`.
     - Tools standardized using Vercel AI SDK `tool` helper and `zod`.
-    - **New/Enhanced Tools:** `readFileTool`, `writeFileTool`, `listFilesTool` (w/ stats), `createFolderTool`, `getStatTool`, `deleteFileTool`, `deleteFolderTool`, `moveRenameTool`, `fetchUrlTool`, `base64EncodeTool`, `base64DecodeTool`, `md5HashTool`, `getOsInfoTool`, `getCurrentTimeTool`, `getTimezoneTool`, `getPublicIpTool`, `getOpenTabsTool`, `getActiveTerminalsTool`, `runCommandTool`.
+    - **New/Enhanced Tools:**
+        - Filesystem: `readFileTool` (multi-file, encoding), `writeFileTool` (encoding, append), `listFilesTool` (recursive, depth, stats), `createFolderTool`, `getStatTool`, `deleteFileTool` (useTrash), `deleteFolderTool` (useTrash), `moveRenameTool` (overwrite), `copyFileTool`, `copyFolderTool`. (Internal `searchFiles` removed).
+        - Utils: `fetchUrlTool`, `base64EncodeTool`, `base64DecodeTool`, `md5HashTool`.
+        - System: `getOsInfoTool`, `getCurrentTimeTool`, `getTimezoneTool`, `getPublicIpTool`.
+        - VSCode: `getOpenTabsTool`, `getActiveTerminalsTool`, `runCommandTool` (cwd, env).
     - `AiService` refactored to use the new tool structure.
-    - `package.json` configuration updated for new tool names.
+    - `package.json` configuration updated for new/enhanced tool names.
     - Dependencies (`node-fetch`, types) added and import issues resolved.
     - Previous enhancements (multi-step, error handling, repair, activation) remain integrated.
+    - Basic streaming status updates implemented via `StreamData` (demonstrated in `listFilesTool`, `readFileTool`, etc.).
 ## What's Left (Potential Future Enhancements)
 - Implement conversation history persistence.
 - Thorough testing and debugging of new tools.
@@ -53,5 +58,5 @@
 
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
-- Search tool functionality requires future MCP integration.
+- Search tool functionality relies on the external `search_files` tool (requires environment support).
 - Conversation history is not persisted.

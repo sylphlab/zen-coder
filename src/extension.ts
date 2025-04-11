@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { AiService } from './ai/aiService'; // Import AiService
+// Removed incorrect readDataStream import
 // Type definition for the keys used in AiService SECRET_KEYS
 type ApiProviderKey = 'ANTHROPIC' | 'GOOGLE' | 'OPENROUTER' | 'DEEPSEEK';
 
@@ -67,38 +68,86 @@ export async function activate(context: vscode.ExtensionContext) {
                                 return; // Error handled in AiService
                             }
 
-                            let fullResponse = "";
-                            let toolCalls: any[] = [];
-                            let toolResults: any[] = [];
-
                             // Send a message to start the assistant message container in the webview
                             chatPanel?.webview.postMessage({ type: 'startAssistantMessage', sender: 'assistant' });
 
-                            for await (const part of streamResult.fullStream) {
-                                switch (part.type) {
-                                    case 'text-delta':
-                                        fullResponse += part.textDelta;
-                                        chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
-                                        break;
-                                    case 'tool-call':
-                                        console.log('Tool call:', part);
-                                        toolCalls.push(part);
-                                        chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: `\n*Calling tool: ${part.toolName}...*\n` });
-                                        break;
-                                    case 'tool-result':
-                                        console.log('Tool result:', part);
-                                        toolResults.push(part);
-                                         chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: `\n*Tool ${part.toolName} result received.*\n` });
-                                        break;
+                            // Process the stream using Web Streams API
+                            if (!streamResult.body) {
+                                throw new Error("Response body is null");
+                            }
+                            const reader = streamResult.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buffer = '';
+                            let isDone = false;
+
+                            while (!isDone) {
+                                const { done, value } = await reader.read();
+                                isDone = done;
+                                buffer += decoder.decode(value, { stream: !isDone }); // Decode chunk
+
+                                // Process complete lines (JSON objects separated by newline)
+                                const lines = buffer.split('\n');
+                                buffer = lines.pop() ?? ''; // Keep the last potentially incomplete line
+
+                                for (const line of lines) {
+                                    if (line.trim() === '') continue;
+                                    try {
+                                        const part = JSON.parse(line); // Parse the JSON line
+
+                                        // Process the parsed part based on its type
+                                        switch (part.type) {
+                                            case 'text-delta':
+                                                chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
+                                                break;
+                                            case 'tool-call':
+                                                console.log('Tool call received in stream:', part);
+                                                // UI update for tool call start can be handled via message-annotation
+                                                break;
+                                            case 'tool-result':
+                                                console.log('Tool result received in stream:', part);
+                                                // UI update for tool result can be handled via message-annotation
+                                                break;
+                                            case 'message-annotation':
+                                                console.log('Message annotation (tool status):', part);
+                                                chatPanel?.webview.postMessage({
+                                                    type: 'toolStatusUpdate',
+                                                    toolCallId: part.toolCallId,
+                                                    toolName: part.toolName,
+                                                    status: part.status,
+                                                    message: part.message
+                                                });
+                                                break;
+                                            case 'error':
+                                                console.error('Error received in stream:', part.error);
+                                                vscode.window.showErrorMessage(`Stream Error: ${part.error}`);
+                                                chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
+                                                break;
+                                            // Other types like 'finish' are implicitly handled by the loop ending
+                                        }
+                                    } catch (e) {
+                                        console.error('Failed to parse stream chunk line:', line, e);
+                                        // Handle parsing error, maybe log it or show a generic error
+                                    }
+                                }
+                            }
+                            // Process any remaining buffer content (should ideally be empty if stream terminates correctly)
+                            if (buffer.trim() !== '') {
+                                console.warn('Processing remaining stream buffer:', buffer);
+                                try {
+                                    const part = JSON.parse(buffer);
+                                    // Process the final part (repeat switch logic if necessary)
+                                     switch (part.type) {
+                                            case 'text-delta': chatPanel?.webview.postMessage({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta }); break;
+                                            case 'message-annotation': chatPanel?.webview.postMessage({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, toolName: part.toolName, status: part.status, message: part.message }); break;
+                                            case 'error': vscode.window.showErrorMessage(`Stream Error: ${part.error}`); chatPanel?.webview.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` }); break;
+                                            default: console.log("Final buffer part:", part); // Log other types
+                                        }
+                                } catch (e) {
+                                    console.error('Failed to parse final stream buffer:', buffer, e);
                                 }
                             }
 
-                            // After stream finishes
-                            if (fullResponse) {
-                                aiServiceInstance.addAssistantResponseToHistory(fullResponse);
-                            }
-                            toolCalls.forEach(tc => aiServiceInstance?.addToolCallToHistory(tc));
-                            toolResults.forEach(tr => aiServiceInstance?.addToolResultToHistory(tr));
+                            // History updates are handled by the onFinish callback in AiService
                             // TODO: Persist history
 
                         } catch (error: any) {
