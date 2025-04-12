@@ -1,11 +1,13 @@
 import { defineConfig } from 'vite'
 import preact from '@preact/preset-vite';
+import UnoCSS from '@unocss/vite'; // Import UnoCSS
 import { resolve } from 'path';
 import { writeFileSync } from 'fs';
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    UnoCSS(), // Add UnoCSS plugin
     preact(),
     {
       name: 'write-port',
