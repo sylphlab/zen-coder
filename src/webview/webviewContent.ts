@@ -88,7 +88,7 @@ export function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.
             htmlContent = htmlContent.replace(
                 '</head>',
                 `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; img-src ${webview.cspSource} data:; font-src ${webview.cspSource};">
-                 </head>`
+                  </head>`
             );
 
             return htmlContent;

@@ -19,13 +19,9 @@ export interface Message { // Renamed from UiMessage to avoid conflict, but stru
 // --- End UI Message Structure Definition ---
 
 
-// Define structure for resolved models from AiService
-type ResolvedModel = {
-    id: string;
-    label: string;
-    provider: ApiProviderKey; // Use the type from AiService if possible, or string
-    source: string;
-};
+// Use the shared AvailableModel type from common/types.ts
+import { AvailableModel } from '../../src/common/types'; // Import the shared type
+// Remove the local ResolvedModel definition
 
 // Define ApiProviderKey here for UI use (or import if shared)
 export type ApiProviderKey = 'ANTHROPIC' | 'GOOGLE' | 'OPENROUTER' | 'DEEPSEEK'; // Export type
@@ -112,24 +108,25 @@ export function App() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isStreaming, setIsStreaming] = useState(false);
-    const [availableModels, setAvailableModels] = useState<ResolvedModel[]>([]);
+    const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]); // Use imported type
     const [selectedProvider, setSelectedProvider] = useState<ApiProviderKey | null>(null);
     const [currentModelInput, setCurrentModelInput] = useState<string>('');
     const [providerStatus, setProviderStatus] = useState<AllProviderStatus>([]);
     const [location, setLocation] = useLocation(); // Hook for navigation state
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const currentAssistantMessageId = useRef<string | null>(null); // To track the ID of the message being streamed
+    const [showClearConfirm, setShowClearConfirm] = useState(false); // State for custom confirmation
 
     // --- Derived State ---
     const uniqueProviders = useMemo(() => {
         const providers = new Set<ApiProviderKey>();
-        availableModels.forEach(model => providers.add(model.provider));
+        availableModels.forEach(model => providers.add(model.providerId as ApiProviderKey)); // Use providerId
         return Array.from(providers);
     }, [availableModels]);
 
     const filteredModels = useMemo(() => {
         if (!selectedProvider) return [];
-        return availableModels.filter(model => model.provider === selectedProvider);
+        return availableModels.filter(model => model.providerId === selectedProvider); // Use providerId
     }, [availableModels, selectedProvider]);
 
     // --- Effects ---
@@ -179,13 +176,23 @@ export function App() {
                      setIsStreaming(true);
                      // Use the messageId directly from the payload sent by the backend
                      if (message.messageId) {
-                         currentAssistantMessageId.current = message.messageId;
-                         console.log(`Set currentAssistantMessageId to: ${message.messageId}`);
+                         const newAssistantMessageId = message.messageId;
+                         currentAssistantMessageId.current = newAssistantMessageId;
+                         console.log(`Set currentAssistantMessageId to: ${newAssistantMessageId}`);
+                         // Add the empty message frame to the state immediately
+                         setMessages(prev => [
+                             ...prev,
+                             {
+                                 id: newAssistantMessageId,
+                                 sender: 'assistant',
+                                 content: [], // Start with empty content
+                                 timestamp: Date.now()
+                             }
+                         ]);
                      } else {
                          console.error("startAssistantMessage received without a messageId in payload!");
                          currentAssistantMessageId.current = null; // Reset if ID is missing
                      }
-                     // No need to call setMessages here, just setting the ref
                      break;
                 case 'appendMessageChunk': // Append text chunk to the current assistant message
                     if (currentAssistantMessageId.current) {
@@ -272,15 +279,17 @@ export function App() {
                 // Remove uuidProgressUpdate as it's handled by generic toolStatusUpdate
                 case 'availableModels':
                     if (Array.isArray(message.payload)) {
-                        setAvailableModels(message.payload);
+                        const models = message.payload as AvailableModel[]; // Use correct type
+                        setAvailableModels(models);
                         // Set initial provider and model ONLY if not restored from saved state
-                        if (!restoredState && message.payload.length > 0) {
-                            const firstModel = message.payload[0];
-                            console.log("Setting initial provider and model (no saved state):", firstModel.provider, firstModel.id);
-                            setSelectedProvider(firstModel.provider);
+                        if (!restoredState && models.length > 0) {
+                            const firstModel = models[0];
+                            const initialProviderId = firstModel.providerId as ApiProviderKey; // Use providerId
+                            console.log("Setting initial provider and model (no saved state):", initialProviderId, firstModel.id);
+                            setSelectedProvider(initialProviderId);
                             setCurrentModelInput(firstModel.id);
                             // Save the initial state (both provider and model)
-                            vscode?.setState({ selectedProvider: firstModel.provider, selectedModelId: firstModel.id });
+                            vscode?.setState({ selectedProvider: initialProviderId, selectedModelId: firstModel.id });
                         }
                     }
                     break;
@@ -380,7 +389,7 @@ export function App() {
             vscode?.setState({ selectedProvider: null, selectedModelId: undefined }); // Clear saved state
         } else {
             setSelectedProvider(newProvider);
-            const defaultModel = availableModels.find(m => m.provider === newProvider);
+            const defaultModel = availableModels.find(m => m.providerId === newProvider); // Use providerId
             const newModelId = defaultModel ? defaultModel.id : '';
             setCurrentModelInput(newModelId);
             // Save state when provider changes
@@ -409,11 +418,18 @@ export function App() {
      }, []);
 
      const handleClearChat = useCallback(() => {
-         if (confirm("Are you sure you want to clear the chat history? This cannot be undone.")) {
-             setMessages([]); // Clear local state immediately
-             postMessage({ type: 'clearChatHistory' }); // Tell backend to clear persistent state
-             console.log("Clear chat requested.");
-         }
+         setShowClearConfirm(true); // Show custom confirmation instead of using confirm()
+     }, []);
+
+     const confirmClearChat = useCallback(() => {
+         setMessages([]); // Clear local state immediately
+         postMessage({ type: 'clearChatHistory' }); // Tell backend to clear persistent state
+         console.log("Clear chat confirmed and requested.");
+         setShowClearConfirm(false); // Hide confirmation
+     }, []);
+
+     const cancelClearChat = useCallback(() => {
+         setShowClearConfirm(false); // Hide confirmation
      }, []);
 
 
@@ -485,8 +501,9 @@ export function App() {
                                         class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm"
                                     >
                                         <option value="">-- Select --</option>
-                                        {uniqueProviders.map(provider => (
-                                            <option key={provider} value={provider}>{provider}</option>
+                                        {/* Ensure uniqueProviders are derived correctly using providerId */}
+                                        {uniqueProviders.map(providerId => (
+                                            <option key={providerId} value={providerId}>{providerId}</option> // Use providerId
                                         ))}
                                     </select>
 
@@ -503,12 +520,14 @@ export function App() {
                                     />
                                     <datalist id="models-datalist">
                                         {filteredModels.map(model => (
+                                            // Use model.name which comes from ModelDefinition
                                             <option key={model.id} value={model.id}>
-                                                {model.label} ({model.id}) {/* Show ID in option */}
+                                                {model.name} ({model.id}) {/* Use model.name for label */}
                                             </option>
                                         ))}
                                     </datalist>
                                 </div>
+                                {/* Clear Chat Button */}
                                 <button
                                     onClick={handleClearChat}
                                     class="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm disabled:opacity-50"
@@ -516,6 +535,7 @@ export function App() {
                                 >
                                     Clear Chat
                                 </button>
+                                {/* Custom Confirmation Dialog moved outside this div */}
                             </div>
                             {/* Messages Area */}
                             <div class="messages-area flex-1 overflow-y-auto p-4 space-y-4">
@@ -565,6 +585,23 @@ export function App() {
                         />
                     </Route>
                 </main>
+                {/* Custom Confirmation Dialog - Moved here */}
+                {showClearConfirm && (
+                    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm mx-auto">
+                            <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">Confirm Clear History</h3>
+                            <p class="mb-6 text-gray-700 dark:text-gray-300">Are you sure you want to clear the chat history? This cannot be undone.</p>
+                            <div class="flex justify-end space-x-3">
+                                <button onClick={cancelClearChat} class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-500">
+                                    Cancel
+                                </button>
+                                <button onClick={confirmClearChat} class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                                    Confirm Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </Router>
     );

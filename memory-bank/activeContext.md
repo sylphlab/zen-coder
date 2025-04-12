@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Refactoring complete. Ready for next task (e.g., UnoCSS styling or feature work).
+Fixed UI bugs: Provider list display, Clear Chat confirmation, and AI response rendering. Ready for next task.
 
 ## Recent Changes
 +- **Comprehensive Refactoring (Extension Host):**
@@ -134,86 +134,55 @@ Refactoring complete. Ready for next task (e.g., UnoCSS styling or feature work)
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Refactoring complete.
-- **Next:** Apply UnoCSS styling to UI components (as previously planned).
+- **Current Task:** Fixed UI bugs (Provider list, Clear Chat, AI response).
+- **Next:** Write test cases for tools and refactor tools for multiple operations (as requested by user).
 - **Previous:** Implement Provider/Model persistence and Clear Chat button.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **Provider/Model Persistence Implemented:** UI now saves and restores both selections.
-- **Clear Chat Implemented:** Button added to UI, backend handler added.
-- **UI Stream Update Fixed (Attempt 3):** Applied stricter immutability pattern for state updates in `appendMessageChunk`.
-- **UI Stream Update Fixed (Attempt 2):** Implemented deep cloning for state updates in `appendMessageChunk` handler.
-- **UI Stream Update Fixed:** Frontend now correctly updates the UI immediately as message chunks arrive by ensuring new state array references are created.
-- **AI Response Display Fixed:** Frontend now correctly handles the `startAssistantMessage` signal using the provided `messageId` and appends response chunks.
-- **Immediate Message Display Fixed:** User messages now appear instantly in the chat UI.
-- **UI State Persistence Implemented:** Backend now persists history in UI format (`UiMessage[]`), including partial messages and tool statuses. Frontend loads this state directly.
-- **Model Selection Fixed:** Frontend now sends the selected `modelId` with the `sendMessage` request. Backend (`extension.ts` and `aiService.ts`) now correctly uses the provided `modelId` to instantiate the AI model, resolving the issue where the wrong provider/key was being used.
-- **UI Rendering Fixed:** Correctly handles different `CoreMessage` content types (string/array). Navigation should work again.
-- **UI Styled:** Applied basic UnoCSS styling to Chat and Settings pages. Fixed JSX errors caused by diff application.
-- **Tool Results Saved to History:** Added logic in `extension.ts` to persist `role: 'tool'` messages.
-- **History Format Corrected:** Ensured `_chatHistory` in `extension.ts` uses `CoreMessage` format, fixing SDK errors.
-- **UI Loop Fixed:** Changed `useEffect` dependencies in `App.tsx` to prevent infinite state requests.
-- **Chat History Persists:** History is loaded from and saved to global state by the extension host.
-- **Model Selection Persists:** Last selected model is now saved and restored using webview state API.
-- **Streaming Indicator Fixed:** Added explicit `streamFinished` message handling to ensure UI stops indicating streaming reliably.
-- **Model List Refresh Fixed:** Chat UI model list now updates automatically after API keys are set/deleted in Settings.
-- **Settings UI Corrected:** Uses backend data for provider details (Previous).
-- **Backend Communication Updated:** Sends richer provider info list (Previous). Handles delete key message (Previous).
-- **AI Provider Logic Further Refactored:** `AiService` delegates key/status management (Previous).
-- **OpenRouter Models Fetched Dynamically:** Logic in `openRouterProvider.ts` (Previous).
-- **Settings Provider Search Added:** Users can now filter the provider list in the settings page (Previous).
-- **API Key Input Added:** Settings page allows setting API keys (Previous).
-- **Settings Page Restored:** Moved rendering logic and passed necessary props (Previous).
-- **Nanostores Added:** Installed the library and Preact integration (Previous).
-- **GSAP Added:** Installed the library (Previous).
-- **Integrated UnoCSS:** Added dependencies, Vite plugin, config, and imports (Previous).
-- **Routing Implemented:** Added `wouter` and page components (Previous).
-- **Relaxed Dev CSP:** Added `'unsafe-eval'` to `script-src` for testing HMR compatibility (Previous).
-- **Fixed Vite Port File Path:** Corrected path in `src/extension.ts`.
-- **Fixed "No data provider registered" Error:** Resolved by correcting `package.json`.
-- **Fixed Vite 504 Error (Chat UI):** (Resolved previously)
-- **Fixed Chat UI Hang:** (Resolved previously)
-- **Fixed `getCurrentModelId` Return Type:** (Resolved previously)
-- **Added Debug Logs (API Keys):** (Kept)
-- **Verified Model Resolver Logic:** (Kept)
-- **Corrected `_getProviderInstance` Logic:** (Kept)
-- **Activity Bar Entry:** Changed to direct Webview View.
-- **Verified Chat UI Code:** (Kept)
+- **Fixed Provider List Display:** Corrected data structure mismatch (`providerId` vs `provider`) in `app.tsx` when handling `availableModels` message. Fixed JSX syntax error in `<datalist>`.
+- **Fixed Clear Chat Button:** Reverted incorrect CSP change (`sandbox allow-modals`) in `webviewContent.ts`. Implemented custom confirmation dialog in `app.tsx` to replace native `confirm()`.
+- **Fixed AI Response Rendering:** Modified `app.tsx` to immediately add an empty assistant message frame to state upon receiving `startAssistantMessage`, ensuring `appendMessageChunk` can find the target message.
+- **Previous Fixes:** (Includes all items from the original list below this point)
+- Provider/Model Persistence Implemented.
+- UI Stream Update Fixed (Multiple Attempts).
+- Immediate Message Display Fixed.
+- UI State Persistence Implemented.
+- Model Selection Fixed.
+- UI Rendering Fixed (CoreMessage types).
+- UI Styled (UnoCSS).
+- Tool Results Saved to History.
+- History Format Corrected.
+- UI Loop Fixed.
+- Chat History Persists.
+- Model Selection Persists.
+- Streaming Indicator Fixed.
+- Model List Refresh Fixed.
+- Settings UI Corrected (Data Source).
+- Backend Communication Updated (Provider Info).
+- AI Provider Logic Refactored (Delegation).
+- OpenRouter Models Fetched Dynamically.
+- Settings Provider Search Added.
+- API Key Input Added.
+- Settings Page Restored.
+- Nanostores Added.
+- GSAP Added.
+- Integrated UnoCSS.
+- Routing Implemented.
+- Fixed Vite Port File Path.
+- Fixed "No data provider registered" Error.
+- Activity Bar Entry Changed.
 
 ## Active Decisions
-+- **Architecture:** Adopted handler registration pattern for webview messages and further modularized backend services (`AiService`, `ProviderStatusManager`, `ModelResolver`, `HistoryManager`, `StreamProcessor`).
-+ - Changed storage strategy: Persist UI state (`UiMessage[]`) directly and translate to `CoreMessage[]` on demand for AI interaction. Removed separate `CoreMessage` history persistence.
-+ - Ensured `modelId` is passed from frontend through backend to `AiService` for correct model instantiation.
-+ - Prioritized fixing core stream parsing and removing deprecated API usage.
-+ - Standardized on documented Vercel AI SDK APIs.
-- **New Principle:** Tools should support batch operations.
-- Prioritized human-readable, inline tool status summaries.
-- Confirmed tool results are passed back to the AI.
-- Standardized internal history representation in `extension.ts` to `CoreMessage[]`.
-- Changed `App.tsx` `useEffect` dependencies to `[]` to fix initialization loop.
-- Implemented history persistence using `context.globalState` managed by the extension host.
-- Refactored `AiService` to return final assistant message via promise to enable history saving.
-- Used `vscode.getState/setState` for simple webview state persistence (model selection).
-- Added explicit `streamFinished` message from backend to UI to fix streaming indicator persistence.
-- Added logic to `App.tsx` to re-fetch models when provider status changes.
-- Corrected `SettingPage.tsx` to use backend data structure (Previous).
-- Updated `AiService` and `extension.ts` for combined provider info (Previous).
-- Updated `App.tsx` state management (Previous).
-- Updated Settings UI (`SettingPage.tsx`) to add delete/URL features (Previous).
-- Updated backend message handling (`extension.ts`) for UI changes (Previous).
-- Delegated API key and status management to provider modules (Previous).
-- Refactored AI provider handling into modular components (Initial refactor).
-- Added search functionality to the Settings page Provider list (Previous).
-- Implemented dynamic fetching of OpenRouter models (Moved to provider module).
-- Implemented API Key input and setting mechanism in the Settings page (Previous).
-- Restored Settings page functionality after routing refactor (Previous).
-- Added Nanostores for state management (Previous).
-- Added GSAP for animations (Previous).
-- Integrated UnoCSS for utility-first styling (Previous).
-- Replaced Settings modal with a dedicated `/settings` route using `wouter` (Previous).
-- Refactored activation to use `WebviewViewProvider` (Previous).
-- Implemented Vite port discovery (Previous).
-- Corrected `package.json` contributions (Previous).
-- Corrected Vite port file path (Previous).
-- Relaxed development CSP for testing (Previous).
+- **UI Fixes:**
+    - Corrected `app.tsx` to use `providerId` from `AvailableModel` type.
+    - Reverted invalid `sandbox allow-modals` CSP directive in `webviewContent.ts`.
+    - Implemented custom confirmation dialog in `app.tsx` for Clear Chat.
+    - Ensured `app.tsx` adds assistant message frame on `startAssistantMessage`.
+- **Architecture:** Adopted handler registration pattern, modularized backend services.
+- **State/History:** Persist UI state (`UiMessage[]`), translate to `CoreMessage[]` on demand.
+- **Model Handling:** Pass `modelId` correctly; delegate provider logic.
+- **Tooling:** Prioritize inline status; confirm results passed to AI.
+- **Persistence:** Use `globalState` for history, `vscode.getState/setState` for webview state.
+- **Dependencies/Setup:** Integrated Vite, Preact, UnoCSS, wouter, etc.
+- **Previous Decisions:** (Includes items like routing, dynamic OpenRouter fetch, API key handling, etc.)
