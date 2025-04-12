@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { CoreMessage } from 'ai'; // Keep CoreMessage if needed elsewhere, maybe not
-import { AiService, ApiProviderKey, AiServiceResponse } from './ai/aiService'; // Import AiServiceResponse
+import { AiService, ApiProviderKey } from './ai/aiService'; // Removed AiServiceResponse import
 import { providerMap } from './ai/providers';
 import { UiMessage } from './common/types'; // Import shared UI types
 import { getWebviewContent } from './webview/webviewContent'; // Import webview content generator
@@ -20,6 +20,7 @@ import { SetProviderEnabledHandler } from './webview/handlers/SetProviderEnabled
 import { SetApiKeyHandler } from './webview/handlers/SetApiKeyHandler';
 import { DeleteApiKeyHandler } from './webview/handlers/DeleteApiKeyHandler';
 import { ClearChatHistoryHandler } from './webview/handlers/ClearChatHistoryHandler';
+import { ExecuteToolActionHandler } from './webview/handlers/ExecuteToolActionHandler'; // Import the new handler
 
 let aiServiceInstance: AiService | undefined = undefined;
 
@@ -128,6 +129,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new SetApiKeyHandler(),
             new DeleteApiKeyHandler(),
             new ClearChatHistoryHandler(),
+            new ExecuteToolActionHandler(this._aiService), // Register the new handler
             // Add other handlers here
         ];
 

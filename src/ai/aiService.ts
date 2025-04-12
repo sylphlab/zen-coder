@@ -1,9 +1,13 @@
 import * as vscode from 'vscode';
-import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel } from 'ai'; // Added LanguageModel
+// Import Output and the new schema
+// Import necessary types, remove non-exported ones
+import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel, Output, TextStreamPart } from 'ai';
+import { structuredAiResponseSchema, StructuredAiResponse } from '../common/types';
 import { allTools, ToolName } from '../tools';
 import { allProviders, providerMap, AiProvider, ModelDefinition } from './providers'; // Import new provider structure
 // Import the specific execution logic, callback type, AND the standard tool definition
 import { executeUuidGenerateWithProgress, UuidUpdateCallback, uuidGenerateTool as uuidGenerateToolDefinition } from '../tools/utils/uuidGenerate';
+import z from 'zod';
 
 // SECRET_KEYS constant removed - managed by individual providers now.
 // ProviderInfoAndStatus moved to common/types.ts
@@ -23,14 +27,12 @@ export type ApiProviderKey = typeof allProviders[number]['id'];
 // Define the expected structure for the MCP tool executor function
 type McpToolExecutor = (serverName: string, toolName: string, args: any) => Promise<any>;
 
-/**
- * Represents the successful return value of getAiResponseStream.
- */
-export type AiServiceResponse = {
-    stream: ReadableStream;
-    finalMessagePromise: Promise<CoreMessage | null>;
-};
- 
+// Remove duplicate imports
+
+// Remove AiServiceResponse definition
+
+// HistoryManager import is not needed here
+
 export class AiService {
     // currentModelId is still used for setModel, but not directly by getAiResponseStream
     private currentModelId: string = 'claude-3-5-sonnet';
@@ -155,8 +157,12 @@ export class AiService {
 
     // --- Core AI Interaction ---
     // Modified signature to accept modelId
-    public async getAiResponseStream(prompt: string, history: CoreMessage[] = [], modelId: string): Promise<AiServiceResponse | null> {
-        // Get model instance asynchronously, passing the specific modelId
+    // Return StreamTextResult directly
+    public async getAiResponseStream(
+        prompt: string,
+        history: CoreMessage[] = [],
+        modelId: string
+    ): Promise<any | null> { // Change return type to any
         const modelInstance = await this._getProviderInstance(modelId); // Pass modelId
 
         if (!modelInstance) {
@@ -181,7 +187,9 @@ export class AiService {
         // --- Build activeTools, wrapping uuidGenerateTool ---
         for (const toolName of activeToolNames) {
             const originalToolDefinition = allTools[toolName];
-            if (!originalToolDefinition) continue;
+            if (!originalToolDefinition) {
+                continue;
+            }
 
             if (toolName === 'uuidGenerateTool') {
                 activeTools[toolName] = {
@@ -220,68 +228,65 @@ export class AiService {
 
         // --- Call streamText ---
         try {
-            let resolveFinalMessagePromise: (value: CoreMessage | null) => void;
-            const finalMessagePromise = new Promise<CoreMessage | null>((resolve) => {
-                resolveFinalMessagePromise = resolve;
-            });
+            // finalMessagePromise is removed. Caller will use streamTextResult.final()
 
+            // Provide correct generic types for tools and the structured output schema
+            // Use streamText without explicit generics for output schema due to type issues
+            // Remove the first generic (tools), explicitly provide the second (output schema)
+            // Remove all generics from streamText call
             const streamTextResult = await streamText({
                 model: modelInstance,
                 messages: messagesForApi,
                 tools: activeTools,
+                // Add experimental_output to request structured data
+                experimental_output: Output.object({ schema: structuredAiResponseSchema }),
                 maxSteps: 5,
-                onFinish: async (event) => {
-                    const assistantContent: (ToolCallPart | { type: 'text'; text: string })[] = [];
-                    if (event.text) { assistantContent.push({ type: 'text', text: event.text }); }
-                    if (event.toolCalls) { assistantContent.push(...event.toolCalls); }
-                    let finalAssistantMessage: CoreMessage | null = null;
-                    if (assistantContent.length > 0) {
-                         finalAssistantMessage = { role: 'assistant', content: assistantContent };
-                    }
-                    console.log("[AiService] Stream finished processing. Final assistant message:", finalAssistantMessage);
-                    resolveFinalMessagePromise(finalAssistantMessage);
-                },
+                // Use 'any' for event type temporarily to bypass complex type checking issues with experimental_output
+                // We will use optional chaining and safeParse inside
+                // onFinish callback removed
                 experimental_repairToolCall: async ({ toolCall, error, messages, system }) => {
-                    console.warn(`Attempting to repair tool call for ${toolCall.toolName} due to error: ${error.message}`);
-                    try {
-                        const repairResult = await generateText({
-                            model: modelInstance, system, messages: [
-                                ...messages,
-                                { role: 'assistant', content: [{ type: 'tool-call', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: toolCall.args }] },
-                                { role: 'tool', content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: `Error executing tool: ${error.message}. Please try again.` }] }
-                            ],
-                            tools: allTools,
-                        });
-                        const newToolCall = repairResult.toolCalls.find(newTc => newTc.toolName === toolCall.toolName);
-                        if (newToolCall) {
-                            console.log(`Tool call ${toolCall.toolName} successfully repaired.`);
-                            return { toolCallType: 'function', toolCallId: toolCall.toolCallId, toolName: newToolCall.toolName, args: JSON.stringify(newToolCall.args) };
-                        }
-                        console.error(`Tool call repair failed for ${toolCall.toolName}: Model did not generate a new call.`); return null;
-                    } catch (repairError: any) {
-                        console.error(`Error during tool call repair attempt for ${toolCall.toolName}:`, repairError); return null;
-                    }
+                    // ... (repair logic remains the same)
+                     console.warn(`Attempting to repair tool call for ${toolCall.toolName} due to error: ${error.message}`);
+                     try {
+                         const repairResult = await generateText({
+                             model: modelInstance, system, messages: [
+                                 ...messages,
+                                 { role: 'assistant', content: [{ type: 'tool-call', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: toolCall.args }] },
+                                 { role: 'tool', content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: `Error executing tool: ${error.message}. Please try again.` }] }
+                             ],
+                             tools: activeTools, // Ensure activeTools is used
+                         });
+                         const newToolCall = repairResult.toolCalls.find(newTc => newTc.toolName === toolCall.toolName);
+                         if (newToolCall) {
+                             console.log(`Tool call ${toolCall.toolName} successfully repaired.`);
+                             return { toolCallType: 'function', toolCallId: toolCall.toolCallId, toolName: newToolCall.toolName, args: JSON.stringify(newToolCall.args) };
+                         }
+                         console.error(`Tool call repair failed for ${toolCall.toolName}: Model did not generate a new call.`); return null;
+                     } catch (repairError: any) {
+                         console.error(`Error during tool call repair attempt for ${toolCall.toolName}:`, repairError); return null;
+                     }
                 }
             });
 
-            return { stream: streamTextResult.toDataStream(), finalMessagePromise };
+            // Return the StreamTextResult object directly
+            return streamTextResult;
         } catch (error: any) {
-            if (NoSuchToolError.isInstance(error)) {
-                 console.error("Tool Error: Unknown tool:", error.toolName);
-                 vscode.window.showErrorMessage(`Error: Unknown tool: ${error.toolName}`);
-            } else if (InvalidToolArgumentsError.isInstance(error)) {
-                 console.error("Tool Error: Invalid arguments:", error.toolName, error.message);
-                 vscode.window.showErrorMessage(`Error: Invalid arguments for tool: ${error.toolName}`);
-            } else if (ToolExecutionError.isInstance(error)) {
-                 console.error("Tool Error: Execution error:", error.toolName, error.cause);
-                 const causeMessage = (error.cause instanceof Error) ? error.cause.message : 'Unknown execution error';
-                 vscode.window.showErrorMessage(`Error executing tool ${error.toolName}: ${causeMessage}`);
-            } else {
-                 console.error('Error calling AI SDK:', error);
-                 vscode.window.showErrorMessage(`Error interacting with AI: ${error.message}`);
-            }
-            // History is managed by the caller (extension.ts)
-            return null;
+            // ... (error handling remains the same)
+             if (NoSuchToolError.isInstance(error)) {
+                  console.error("Tool Error: Unknown tool:", error.toolName);
+                  vscode.window.showErrorMessage(`Error: Unknown tool: ${error.toolName}`);
+             } else if (InvalidToolArgumentsError.isInstance(error)) {
+                  console.error("Tool Error: Invalid arguments:", error.toolName, error.message);
+                  vscode.window.showErrorMessage(`Error: Invalid arguments for tool: ${error.toolName}`);
+             } else if (ToolExecutionError.isInstance(error)) {
+                  console.error("Tool Error: Execution error:", error.toolName, error.cause);
+                  const causeMessage = (error.cause instanceof Error) ? error.cause.message : 'Unknown execution error';
+                  vscode.window.showErrorMessage(`Error executing tool ${error.toolName}: ${causeMessage}`);
+             } else {
+                  console.error('Error calling AI SDK:', error);
+                  vscode.window.showErrorMessage(`Error interacting with AI: ${error.message}`);
+             }
+             return null;
         }
     }
 

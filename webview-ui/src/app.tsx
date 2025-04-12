@@ -20,7 +20,7 @@ export interface Message { // Renamed from UiMessage to avoid conflict, but stru
 
 
 // Use the shared AvailableModel type from common/types.ts
-import { AvailableModel } from '../../src/common/types'; // Import the shared type
+import { AvailableModel, SuggestedAction } from '../../src/common/types'; // Import SuggestedAction type
 // Remove the local ResolvedModel definition
 
 // Define ApiProviderKey here for UI use (or import if shared)
@@ -116,6 +116,7 @@ export function App() {
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const currentAssistantMessageId = useRef<string | null>(null); // To track the ID of the message being streamed
     const [showClearConfirm, setShowClearConfirm] = useState(false); // State for custom confirmation
+    const [suggestedActionsMap, setSuggestedActionsMap] = useState<Record<string, SuggestedAction[]>>({}); // State for suggested actions
 
     // --- Derived State ---
     const uniqueProviders = useMemo(() => {
@@ -333,6 +334,17 @@ export function App() {
                     setIsStreaming(false);
                     currentAssistantMessageId.current = null;
                     break;
+                case 'addSuggestedActions': // Handle suggested actions from backend
+                    if (message.payload && message.payload.messageId && Array.isArray(message.payload.actions)) {
+                        console.log(`Adding suggested actions for message ${message.payload.messageId}`, message.payload.actions);
+                        setSuggestedActionsMap(prev => ({
+                            ...prev,
+                            [message.payload.messageId]: message.payload.actions
+                        }));
+                    } else {
+                        console.warn("Received addSuggestedActions with invalid payload:", message.payload);
+                    }
+                    break;
             }
         };
 
@@ -432,7 +444,46 @@ export function App() {
          setShowClearConfirm(false); // Hide confirmation
      }, []);
 
-
+    const handleSuggestedActionClick = useCallback((action: SuggestedAction) => {
+        console.log("Suggested action clicked:", action);
+        switch (action.action_type) {
+            case 'send_message':
+                if (typeof action.value === 'string') {
+                    // Add user message to UI immediately (optional, could just send)
+                    // const newUserMessage: Message = { id: generateUniqueId(), sender: 'user', content: [{ type: 'text', text: action.value }], timestamp: Date.now() };
+                    // setMessages(prev => [...prev, newUserMessage]);
+                    // Send message to backend
+                    postMessage({ type: 'sendMessage', text: action.value, modelId: currentModelInput });
+                    setIsStreaming(true); // Assume assistant will respond
+                    currentAssistantMessageId.current = null;
+                } else {
+                    console.warn("Invalid value for send_message action:", action.value);
+                }
+                break;
+            case 'run_tool':
+                if (typeof action.value === 'object' && action.value?.toolName && action.value?.args) {
+                    // TODO: Need a way to trigger tool execution from frontend?
+                    // This might require a new message type like 'executeToolAction'
+                    // For now, maybe just log it or send a message indicating the intent
+                    console.warn("run_tool action type not fully implemented yet. Payload:", action.value);
+                    postMessage({ type: 'logAction', message: `User wants to run tool: ${action.value.toolName}` }); // Example log message
+                } else {
+                     console.warn("Invalid value for run_tool action:", action.value);
+                }
+                break;
+            case 'fill_input':
+                 if (typeof action.value === 'string') {
+                     setInputValue(action.value); // Set the main input field value
+                 } else {
+                     console.warn("Invalid value for fill_input action:", action.value);
+                 }
+                break;
+            default:
+                console.warn("Unknown suggested action type:", action.action_type);
+        }
+        // Optionally clear suggestions after click?
+        // setSuggestedActionsMap(prev => ({ ...prev })); // Or remove specific messageId entry
+    }, [currentModelInput]); // Include dependencies
     // --- Rendering Helpers ---
     const renderContentPart = (part: UiMessageContentPart, index: number) => { // Use UiMessageContentPart
         switch (part.type) {
@@ -544,6 +595,21 @@ export function App() {
                                         <div class={`message-content p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
                                             {/* Render content parts */}
                                             {Array.isArray(msg.content) ? msg.content.map(renderContentPart) : null}
+                                            {/* Render Suggested Actions if they exist for this message */}
+                                            {suggestedActionsMap[msg.id] && msg.sender === 'assistant' && (
+                                                <div class="suggested-actions mt-2 flex flex-wrap gap-2">
+                                                    {suggestedActionsMap[msg.id].map((action, actionIndex) => (
+                                                        <button
+                                                            key={actionIndex}
+                                                            onClick={() => handleSuggestedActionClick(action)}
+                                                            disabled={isStreaming} // Disable buttons while streaming
+                                                            class="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            {action.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}

@@ -257,7 +257,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "20.x",
+    "@types/node": "~20.17.30",
     "@types/vscode": "^1.99.0",
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
@@ -266,7 +266,8 @@
     "esbuild": "^0.25.1",
     "eslint": "^9.23.0",
     "npm-run-all": "^4.1.5",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^3.1.1"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.9",

@@ -1,9 +1,18 @@
 # Active Context
 
 ## Current Focus
-Fixed UI bugs: Provider list display, Clear Chat confirmation, and AI response rendering. Ready for next task.
+Completed cleanup of redundant interaction tools and updated memory banks. Ready for next implementation step or further tool discussion.
 
 ## Recent Changes
+- **Fixed Streaming TypeError & Final Message Handling (Attempt 6 - User Guided):** Corrected previous incorrect fixes based on user feedback.
+    - Reverted `aiService.ts` to return `Promise<any | null>` and call `streamText` without generics.
+    - Corrected `streamProcessor.ts` based on user input:
+        - Fixed `allTools` import path to `./tools`.
+        - Simplified `textStream` iteration, directly using the iterated `part` as `textDelta`.
+        - Kept runtime checks for stream properties due to using `any` type for `streamResult`.
+- **Cleaned Up Redundant Tools:** Deleted unused interaction tool files (`showInformationMessage.ts`, `showWarningMessage.ts`, `showErrorMessage.ts`, `showInputBox.ts`, `showQuickPick.ts`) from `src/tools/vscode/` and updated `src/tools/vscode/index.ts` accordingly. Confirmed `src/tools/index.ts` requires no changes.
+- **Finalized Suggested Actions Design:** Agreed to abandon tool-based approach (`presentOptionsTool`, `show...Tool`) for AI-suggested actions. Will instead use **Structured Output** from the AI model. The AI response schema will include `main_content` (string) and an optional `suggested_actions` array. This leverages Vercel AI SDK's structured data generation capabilities (`streamObject` or `streamText` with `experimental_output`).
+- **Corrected Toolset Understanding:** Focused analysis on core VS Code interaction tools, excluding filesystem tools from this specific discussion and clarifying the role of existing interaction tools before deciding on the structured output approach.
 +- **Filesystem Tool Refactoring (Complete):**
 +    - Finalized design based on feedback: Prioritized consistency, Glob support (except for write/edit), and clear separation of concerns (`replaceContent` vs `editFile`).
 +    - Implemented unified `lineRange` schema (using `start_line`/`end_line` with negative indexing) for `readFiles`, `searchContent`, `replaceContent`.
@@ -140,11 +149,11 @@ Fixed UI bugs: Provider list display, Clear Chat confirmation, and AI response r
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Completed the refactoring and enhancement of the internal filesystem toolset according to the finalized design.
-- **Next:** Commit the changes related to the filesystem tool refactoring.
-- **Previous:** Implement Provider/Model persistence and Clear Chat button.
-- **Future:** Consider applying progress update pattern to other tools.
-- **Future:** Consider refining UI display for complex tool results.
+- **Current Task:** The streaming bug is fixed. Next step is likely testing the structured output and suggested actions flow, or implementing the tool execution logic within `ExecuteToolActionHandler`.
+- **Future:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, `renameSymbol`, `getConfiguration`, debugging tools, `runCommandTool` exit code).
+- **Future:** Confirm `replaceInActiveEditorTool` insertion capability.
+- **Future:** Test structured output and suggested actions thoroughly.
+
 ## Debugging Notes
 - **Filesystem Test (`filesystem.test.ts`):** Added tests for `readFileTool`. Fixed TS errors related to `StreamData` mock and missing `encoding` parameter in tool calls.
     - **Persistent Linter Issue:** TypeScript continues to report an overload error for `Buffer.from(content, 'utf8')` in the `createFile` helper function, even though the logic correctly handles `string | Buffer` input. Ignoring for now as the code functions correctly.
@@ -182,6 +191,9 @@ Fixed UI bugs: Provider list display, Clear Chat confirmation, and AI response r
 - Activity Bar Entry Changed.
 
 ## Active Decisions
+- **Suggested Actions Implementation:** Use **Structured Output** from AI (defining a schema with `main_content` and optional `suggested_actions` array) instead of dedicated interaction tools. Leverage Vercel AI SDK's structured data capabilities.
+- **VS Code Tool Enhancements (Future):** Plan to add `goToDefinitionTool`, `findReferencesTool`, `renameSymbolTool`, `getConfigurationTool`, debugging tools, and enhance `runCommandTool` (exit code).
+- **VS Code Tool Confirmation:** Need to verify `replaceInActiveEditorTool` insertion capability.
 - **UI Fixes:**
     - Corrected `app.tsx` to use `providerId` from `AvailableModel` type.
     - Reverted invalid `sandbox allow-modals` CSP directive in `webviewContent.ts`.
@@ -190,7 +202,7 @@ Fixed UI bugs: Provider list display, Clear Chat confirmation, and AI response r
 - **Architecture:** Adopted handler registration pattern, modularized backend services.
 - **State/History:** Persist UI state (`UiMessage[]`), translate to `CoreMessage[]` on demand.
 - **Model Handling:** Pass `modelId` correctly; delegate provider logic.
-- **Tooling:**
+- **Tooling (Filesystem - Background):**
    - Filesystem tools refactored for consistency (Glob paths, unified `lineRange`, clear separation of `replaceContent`/`editFile`).
    - Prioritize inline status; confirm results passed to AI.
 - **Persistence:** Use `globalState` for history, `vscode.getState/setState` for webview state.

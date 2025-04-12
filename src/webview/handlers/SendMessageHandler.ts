@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { CoreMessage, Tool, StreamTextResult } from 'ai'; // Import necessary types
 import { MessageHandler, HandlerContext } from './MessageHandler';
 import { StreamProcessor } from '../../streamProcessor'; // Import StreamProcessor
 
@@ -37,7 +38,15 @@ export class SendMessageHandler implements MessageHandler {
             console.log(`[SendMessageHandler] Translated ${context.historyManager.getHistory().length} UI messages to ${coreMessagesForAi.length} CoreMessages.`);
 
             // Get AI response stream
-            const streamResult = await context.aiService.getAiResponseStream(userMessageText, coreMessagesForAi, modelId);
+            // Add assistant message frame *before* calling AI to get the ID
+            const assistantUiMsgId = await context.historyManager.addAssistantMessageFrame();
+
+            // Call getAiResponseStream without historyManager/assistantUiMsgId
+            const streamResult = await context.aiService.getAiResponseStream(
+                userMessageText,
+                coreMessagesForAi,
+                modelId
+            );
 
             if (!streamResult) {
                 console.log("[SendMessageHandler] getAiResponseStream returned null, AI service likely handled error.");
@@ -46,13 +55,46 @@ export class SendMessageHandler implements MessageHandler {
             }
 
             // Add assistant message frame via HistoryManager
-            const assistantUiMsgId = await context.historyManager.addAssistantMessageFrame();
+            // assistantUiMsgId is already created above
 
             // Send start signal to UI
             context.postMessage({ type: 'startAssistantMessage', sender: 'assistant', messageId: assistantUiMsgId });
 
             // Process the stream using the StreamProcessor instance
-            await this._streamProcessor.process(streamResult, assistantUiMsgId);
+            // Pass the StreamTextResult object to the processor and get the final structured object
+            const finalStructuredResponse = await this._streamProcessor.process(streamResult, assistantUiMsgId);
+
+            // --- Final AI History Update & Suggested Actions ---
+            try {
+                console.log(`[SendMessageHandler] Received final StructuredResponse from processor:`, finalStructuredResponse);
+
+                let finalCoreMessage: CoreMessage | null = null;
+                if (finalStructuredResponse) {
+                    // Create a CoreMessage containing only the main_content for history
+                    finalCoreMessage = {
+                        role: 'assistant',
+                        content: finalStructuredResponse.main_content || '', // Use main_content, fallback to empty string
+                    };
+                    // Handle suggested_actions - send them to the UI separately
+                    if (finalStructuredResponse.suggested_actions && finalStructuredResponse.suggested_actions.length > 0) {
+                         console.log("[SendMessageHandler] Received suggested actions:", finalStructuredResponse.suggested_actions);
+                         context.postMessage({ type: 'addSuggestedActions', payload: { messageId: assistantUiMsgId, actions: finalStructuredResponse.suggested_actions } });
+                    }
+                } else {
+                     console.warn(`[SendMessageHandler] Stream processor returned null final structured response for ID: ${assistantUiMsgId}`);
+                }
+
+                await context.historyManager.reconcileFinalAssistantMessage(assistantUiMsgId, finalCoreMessage);
+
+                // Optionally await the final promise from AiServiceResponse for usage/finishReason
+                // const finalDetails = await streamResult.finalPromise;
+                // console.log("[SendMessageHandler] Final stream details:", finalDetails);
+
+            } catch (finalMsgError) {
+                console.error(`[SendMessageHandler] Error processing final message or suggested actions for ID ${assistantUiMsgId}:`, finalMsgError);
+            }
+
+            // Final message handling is now done within AiService's onFinish callback
 
         } catch (error: any) {
             console.error("[SendMessageHandler] Error processing AI stream:", error);

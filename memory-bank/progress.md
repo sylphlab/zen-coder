@@ -79,6 +79,7 @@
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
 - **Tool Execution:** Tools execute and return results to the AI.
+- **Streaming & Structured Output:** Corrected stream handling logic in `streamProcessor.ts` based on user feedback, simplifying `textStream` iteration and fixing import paths. Using `any` type for `streamResult` as a workaround for SDK type complexities.
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
 - **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
 - **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from the correct file path.
@@ -87,7 +88,7 @@
 - **Styling:** UnoCSS is set up but not yet applied to components. Existing CSS (`app.css`, `index.css`) might conflict or be redundant.
 
 ## Known Issues
-// - Saving tool results to chat history is not yet implemented in `extension.ts`. // Addressed in latest extension.ts write
+// - Saving tool results to chat history is not yet implemented in `extension.ts`. // Addressed
 - Search tool functionality relies on the external `search_files` tool (requires environment support).
 // - `@vscode/webview-ui-toolkit` dependency is unused but still listed. // Removed
 - **AI Response Behavior:** AI models might not always explicitly list tool results (e.g., all generated UUIDs) in their text response, even though they receive the results. This depends on the model and prompt.

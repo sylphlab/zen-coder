@@ -3,11 +3,7 @@ export * from './getActiveTerminals';
 export * from './runCommand';
 export * from './getActiveEditorContext';
 export * from './replaceInActiveEditor';
-export * from './showInformationMessage';
-export * from './showWarningMessage';
-export * from './showErrorMessage';
-export * from './showInputBox';
-export * from './showQuickPick';
+// Removed exports for deleted interaction tools
 export * from './formatDocument';
 export * from './saveActiveFile';
 export * from './closeActiveFile';

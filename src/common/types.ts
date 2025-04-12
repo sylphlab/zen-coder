@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 // Shared type definitions for communication between Extension Host and Webview UI
 
 /**
@@ -49,3 +51,29 @@ export interface AvailableModel {
     providerId: string; // ID of the provider (e.g., 'anthropic')
     providerName: string; // Name of the provider (e.g., 'Anthropic')
 }
+
+// --- Schemas for Structured AI Response ---
+
+/**
+ * Defines the structure for a single suggested action presented to the user.
+ */
+export const suggestedActionSchema = z.object({
+  label: z.string().describe('The text displayed on the button/option for the user.'),
+  action_type: z.enum(['send_message', 'run_tool', 'fill_input'])
+    .describe('The type of action to perform when the user selects this option.'),
+  value: z.any().describe('The data associated with the action. E.g., the message text for send_message, tool name and args for run_tool, or the text template for fill_input.')
+});
+
+export type SuggestedAction = z.infer<typeof suggestedActionSchema>;
+
+/**
+ * Defines the structured response expected from the AI, including the main
+ * text content and optional suggested actions.
+ */
+export const structuredAiResponseSchema = z.object({
+  main_content: z.string().describe('The primary text response from the AI.'),
+  suggested_actions: z.array(suggestedActionSchema).optional()
+    .describe('An optional list of actions the user can take next, to be rendered as interactive elements (e.g., buttons).')
+});
+
+export type StructuredAiResponse = z.infer<typeof structuredAiResponseSchema>;
