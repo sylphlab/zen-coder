@@ -1,9 +1,10 @@
 # Active Context
 
 ## Current Focus
-Commit fixes for history persistence errors and prepare for next task (UnoCSS styling).
+Commit UI styling changes and prepare for next task (e.g., remove deprecated toolkit).
 
 ## Recent Changes
+- **Applied UnoCSS Styling:** Added utility classes to `App.tsx` (layout, chat elements) and `SettingPage.tsx` for basic styling and dark mode support. Fixed related JSX errors.
 - **Fixed History Format Error:** Corrected `_chatHistory` type in `extension.ts` to `CoreMessage[]` and ensured user messages are converted to the correct format before being added, resolving `AI_InvalidPromptError`.
 - **Fixed UI Infinite Loop:** Adjusted `useEffect` dependencies and removed automatic model re-fetch on status update in `App.tsx` to prevent loop.
 - **Implemented Chat History Persistence:**
@@ -112,8 +113,8 @@ Commit fixes for history persistence errors and prepare for next task (UnoCSS st
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit history persistence fixes.
-- **Next:** Apply UnoCSS styling to UI components.
+- **Current Task:** Update Memory Bank and commit UI styling changes.
+- **Next:** Remove deprecated `@vscode/webview-ui-toolkit` dependency.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
@@ -121,6 +122,7 @@ Commit fixes for history persistence errors and prepare for next task (UnoCSS st
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
+- **UI Styled:** Applied basic UnoCSS styling to Chat and Settings pages. Fixed JSX errors caused by diff application.
 - **History Format Corrected:** Ensured `_chatHistory` in `extension.ts` uses `CoreMessage` format, fixing SDK errors.
 - **UI Loop Fixed:** Changed `useEffect` dependencies in `App.tsx` to prevent infinite state requests.
 - **Chat History Persists:** History is loaded from and saved to global state by the extension host.

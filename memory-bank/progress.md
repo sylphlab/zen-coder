@@ -2,6 +2,7 @@
 
 ## What Works
 - **UI Initialization Loop Fixed:** Corrected `useEffect` dependencies in `App.tsx` to prevent infinite requests on startup.
+- **UI Styling (UnoCSS):** Basic styling applied to main layout, navigation, chat elements (header, messages, input), and settings page using UnoCSS utility classes. Dark mode support included.
 - **Chat History Persistence:** History is loaded/saved using `CoreMessage` format in `context.globalState`. User/Assistant messages are saved; Tool results saving is incomplete.
 - **Model Selection Persistence:** Last selected model ID is now saved/restored using webview state API (`vscode.getState`/`setState`).
 - **Stream End Handling Fixed:** Backend now sends an explicit `streamFinished` message, and the UI handles it to reliably stop the streaming indicator.
@@ -57,6 +58,7 @@
 - Define and use Nanostores stores for managing shared state (e.g., settings, chat history).
 
 ## Current Status
+- **UI:** Basic layout and component styling applied using UnoCSS. Dark mode supported.
 - **Initialization:** Webview initializes correctly without infinite loops, loads history and model state.
 - **History Persistence:** User/Assistant messages saved to global state and loaded on init. Tool result saving needs implementation.
 - **Model Selection:** Selection persists across webview reloads.

@@ -431,7 +431,7 @@ export function App() {
                 } else if (part.status === 'running') {
                      statusText = `[${part.toolName} ${part.progress ?? ''} running... ]`;
                 }
-                return <span key={part.toolCallId || index} class="tool-call-summary">{statusText}</span>;
+                return <span key={part.toolCallId || index} class="tool-call-summary inline-block bg-gray-300 dark:bg-gray-600 px-2 py-1 rounded text-xs font-mono">{statusText}</span>;
             default:
                 return null;
         }
@@ -512,21 +512,27 @@ export function App() {
                                      </div>
                                  )}
                                 <div ref={messagesEndRef} />
-                            </div>
-                            <div class="input-area">
+                            </div> {/* Closing tag for messages-area */}
+                            {/* Style input area */}
+                            <div class="input-area p-2 border-t border-gray-300 dark:border-gray-700 flex items-center">
                                 <textarea
                                     value={inputValue}
                                     onInput={(e) => setInputValue((e.target as HTMLTextAreaElement).value)}
                                     onKeyDown={handleKeyDown}
                                     placeholder="Type your message..."
                                     rows={3}
-                                    disabled={isStreaming || !currentModelInput} // Also disable if no model selected
+                                    disabled={isStreaming || !currentModelInput}
+                                    class="flex-1 p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 resize-none mr-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 />
-                                <button onClick={handleSend} disabled={isStreaming || !inputValue.trim() || !currentModelInput}>
+                                <button
+                                    onClick={handleSend}
+                                    disabled={isStreaming || !inputValue.trim() || !currentModelInput}
+                                    class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
                                     Send
                                 </button>
                             </div>
-                        </div>
+                        {/* Closing tag for chat-container moved slightly by previous diff */}
                     </Route>
                     <Route path="/settings">
                         {/* Pass necessary props and handlers to SettingPage */}
