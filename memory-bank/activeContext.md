@@ -1,10 +1,17 @@
 # Active Context
 
 ## Current Focus
-Prepare for next task (UnoCSS styling).
+Refactoring complete. Ready for next task (e.g., UnoCSS styling or feature work).
 
 ## Recent Changes
-- **Implemented Provider Selection Persistence:** Modified `app.tsx` to save/restore both selected provider and model ID using `vscode.getState`/`setState`.
++- **Comprehensive Refactoring (Extension Host):**
++    - Implemented handler registration pattern in `extension.ts` (`ZenCoderChatViewProvider`). Message logic moved to dedicated handlers in `src/webview/handlers/`.
++    - Refactored `AiService` (`src/ai/aiService.ts`): Extracted provider status logic to `ProviderStatusManager` (`src/ai/providerStatusManager.ts`) and model resolution logic to `ModelResolver` (`src/ai/modelResolver.ts`). `AiService` now focuses on core AI interaction and API key storage.
++    - Created shared types file `src/common/types.ts`.
++    - Extracted webview HTML generation to `src/webview/webviewContent.ts`.
++    - History management remains in `src/historyManager.ts`.
++    - Stream processing remains in `src/streamProcessor.ts`.
++ - **Implemented Provider Selection Persistence:** Modified `app.tsx` to save/restore both selected provider and model ID using `vscode.getState`/`setState`.
 - **Added Clear Chat Button:** Implemented button and handler in `app.tsx` and backend message handling in `extension.ts` to clear chat history.
 - **Fixed UI Update on Stream (Attempt 3):** Implemented stricter immutability in `appendMessageChunk` handler (`app.tsx`) by creating new objects/arrays for all modified levels of the state.
 - **Fixed UI Update on Stream (Attempt 2):** Further refined frontend logic (`app.tsx`) for `appendMessageChunk` using deep cloning to ensure state updates trigger immediate UI re-renders.
@@ -127,8 +134,8 @@ Prepare for next task (UnoCSS styling).
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Debug persistent UI update issue where AI responses don't render immediately.
-- **Next:** Apply UnoCSS styling to UI components.
+- **Current Task:** Refactoring complete.
+- **Next:** Apply UnoCSS styling to UI components (as previously planned).
 - **Previous:** Implement Provider/Model persistence and Clear Chat button.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
@@ -175,10 +182,11 @@ Prepare for next task (UnoCSS styling).
 - **Verified Chat UI Code:** (Kept)
 
 ## Active Decisions
-- Changed storage strategy: Persist UI state (`UiMessage[]`) directly and translate to `CoreMessage[]` on demand for AI interaction. Removed separate `CoreMessage` history persistence.
-- Ensured `modelId` is passed from frontend through backend to `AiService` for correct model instantiation.
-- Prioritized fixing core stream parsing and removing deprecated API usage.
-- Standardized on documented Vercel AI SDK APIs.
++- **Architecture:** Adopted handler registration pattern for webview messages and further modularized backend services (`AiService`, `ProviderStatusManager`, `ModelResolver`, `HistoryManager`, `StreamProcessor`).
++ - Changed storage strategy: Persist UI state (`UiMessage[]`) directly and translate to `CoreMessage[]` on demand for AI interaction. Removed separate `CoreMessage` history persistence.
++ - Ensured `modelId` is passed from frontend through backend to `AiService` for correct model instantiation.
++ - Prioritized fixing core stream parsing and removing deprecated API usage.
++ - Standardized on documented Vercel AI SDK APIs.
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.

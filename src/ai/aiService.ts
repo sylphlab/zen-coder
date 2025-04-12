@@ -6,20 +6,8 @@ import { allProviders, providerMap, AiProvider, ModelDefinition } from './provid
 import { executeUuidGenerateWithProgress, UuidUpdateCallback, uuidGenerateTool as uuidGenerateToolDefinition } from '../tools/utils/uuidGenerate';
 
 // SECRET_KEYS constant removed - managed by individual providers now.
- // Type combining static provider info and dynamic status
- export type ProviderInfoAndStatus = {
-     id: string;
-     name: string;
-     apiKeyUrl?: string;
-     requiresApiKey: boolean;
-     enabled: boolean;
-     apiKeySet: boolean;
- };
- // Keep original ProviderStatus type if needed elsewhere, or remove if fully replaced
- export type ProviderStatus = {
-      enabled: boolean;
-      apiKeySet: boolean;
-  };
+// ProviderInfoAndStatus moved to common/types.ts
+// ProviderStatus type removed as ProviderInfoAndStatus is used.
 
 // Define ApiProviderKey based on provider IDs
 // This assumes provider IDs match the keys previously used in SECRET_KEYS
@@ -31,17 +19,18 @@ export type ApiProviderKey = typeof allProviders[number]['id'];
 
 // type ModelId = typeof availableModelIds[number]; // Keep this for known IDs (Removed)
 
-// Define structure for resolved models
-type ResolvedModel = {
-    id: string; // The actual ID to use in API calls
-    label: string; // User-friendly label
-    provider: ApiProviderKey; // Associated provider
-    source: 'api' | 'web-scrape' | 'hardcoded'; // Where the model info came from
-};
-
+// ResolvedModel type removed, AvailableModel from common/types.ts is used by ModelResolver.
 // Define the expected structure for the MCP tool executor function
 type McpToolExecutor = (serverName: string, toolName: string, args: any) => Promise<any>;
 
+/**
+ * Represents the successful return value of getAiResponseStream.
+ */
+export type AiServiceResponse = {
+    stream: ReadableStream;
+    finalMessagePromise: Promise<CoreMessage | null>;
+};
+ 
 export class AiService {
     // currentModelId is still used for setModel, but not directly by getAiResponseStream
     private currentModelId: string = 'claude-3-5-sonnet';
@@ -166,7 +155,7 @@ export class AiService {
 
     // --- Core AI Interaction ---
     // Modified signature to accept modelId
-    public async getAiResponseStream(prompt: string, history: CoreMessage[] = [], modelId: string): Promise<{ stream: ReadableStream; finalMessagePromise: Promise<CoreMessage | null> } | null> {
+    public async getAiResponseStream(prompt: string, history: CoreMessage[] = [], modelId: string): Promise<AiServiceResponse | null> {
         // Get model instance asynchronously, passing the specific modelId
         const modelInstance = await this._getProviderInstance(modelId); // Pass modelId
 
@@ -341,91 +330,6 @@ export class AiService {
          }
      }
 
-    // --- API Key Status ---
-     public async getApiKeyStatus(): Promise<Record<string, boolean>> {
-         const status: Record<string, boolean> = {};
-         for (const provider of allProviders) {
-             if (provider.requiresApiKey) {
-                 try {
-                     const key = await provider.getApiKey(this.context.secrets);
-                     status[provider.id] = !!key;
-                 } catch (error) {
-                     console.error(`[AiService] Error checking API key status for ${provider.name}:`, error);
-                     status[provider.id] = false;
-                 }
-             } else {
-                 status[provider.id] = true;
-             }
-         }
-         console.log("[AiService] Calculated API Key Status:", status);
-         return status;
-     }
-
-    // --- Provider Status ---
-    public async getProviderStatus(): Promise<ProviderInfoAndStatus[]> {
-        const apiKeyStatusMap = await this.getApiKeyStatus();
-        const combinedStatusList: ProviderInfoAndStatus[] = [];
-
-        for (const provider of allProviders) {
-            const isEnabled = provider.isEnabled();
-            const hasApiKey = apiKeyStatusMap[provider.id] ?? false;
-
-            combinedStatusList.push({
-                id: provider.id,
-                name: provider.name,
-                apiKeyUrl: provider.apiKeyUrl,
-                requiresApiKey: provider.requiresApiKey,
-                enabled: isEnabled,
-                apiKeySet: hasApiKey,
-            });
-        }
-        combinedStatusList.sort((a, b) => a.name.localeCompare(b.name));
-        console.log("[AiService] Calculated Combined Provider Status List:", combinedStatusList);
-        return combinedStatusList;
-    }
-
-    // --- Model Resolver ---
-    public async resolveAvailableModels(): Promise<ResolvedModel[]> {
-        const allResolvedModels: ResolvedModel[] = [];
-        const providerInfoList = await this.getProviderStatus();
-
-        for (const providerInfo of providerInfoList) {
-            const status = { enabled: providerInfo.enabled, apiKeySet: providerInfo.apiKeySet };
-            const provider = providerMap.get(providerInfo.id);
-
-            if (!provider) {
-                 console.warn(`[AiService] Provider implementation not found for ID '${providerInfo.id}' during model resolution. Skipping.`);
-                 continue;
-            }
-
-            if (status?.enabled && (status.apiKeySet || !provider.requiresApiKey)) {
-                try {
-                    console.log(`[AiService] Fetching models for provider: ${provider.name}`);
-                    let apiKey: string | undefined;
-                    if (provider.requiresApiKey) {
-                        apiKey = await provider.getApiKey(this.context.secrets);
-                    }
-                    const modelsFromProvider: ModelDefinition[] = await provider.getAvailableModels(apiKey);
-                    const resolvedPortion: ResolvedModel[] = modelsFromProvider.map(m => ({
-                        id: m.id,
-                        label: m.name,
-                        provider: provider.id as ApiProviderKey,
-                        source: provider.id === 'openrouter' ? 'api' : 'hardcoded',
-                    }));
-                    allResolvedModels.push(...resolvedPortion);
-                    console.log(`[AiService] Successfully fetched/retrieved ${resolvedPortion.length} models from ${provider.name}.`);
-                } catch (error) {
-                    console.error(`[AiService] Failed to fetch models for provider ${provider.name}:`, error);
-                    vscode.window.showWarningMessage(`無法從 ${provider.name} 獲取模型列表。`);
-                }
-            } else {
-                 console.log(`[AiService] Skipping model fetch for disabled/keyless provider: ${provider.name}`);
-            }
-        }
-
-        const uniqueModels = Array.from(new Map(allResolvedModels.map(m => [m.id, m])).values());
-        uniqueModels.sort((a, b) => a.label.localeCompare(b.label));
-        console.log("[AiService] Final resolved available models:", uniqueModels.length);
-        return uniqueModels;
-    }
+    // --- API Key Status, Provider Status, and Model Resolver methods removed ---
+    // These responsibilities are now handled by ProviderStatusManager and ModelResolver
 } // End of AiService class
