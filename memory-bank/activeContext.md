@@ -1,9 +1,13 @@
 # Active Context
 
 ## Current Focus
-Commit fix for UI rendering error (`msg.content.map`) and prepare for next task (UnoCSS styling).
+Commit final fix for UI state persistence (including partial messages and tool status) and prepare for next task (UnoCSS styling).
 
 ## Recent Changes
+- **Implemented UI State Persistence:** Refactored history management to use a single persistent store (`UiMessage[]` format mirroring frontend state) saved in `globalState` (`zenCoderUiHistory`).
+    - Backend (`extension.ts`) now incrementally updates this UI history during streaming (text chunks, tool calls, tool status updates) and saves frequently.
+    - Backend translates `UiMessage[]` to `CoreMessage[]` on demand before calling the AI SDK.
+    - Frontend (`app.tsx`) now receives and directly uses the persisted `UiMessage[]` history via `loadUiHistory` message, ensuring partial messages and tool statuses are restored correctly on reload.
 - **Removed Deprecated Dependency:** Removed `@vscode/webview-ui-toolkit` from root `package.json`.
 - **Applied UnoCSS Styling:** Added utility classes to `App.tsx` (layout, chat elements) and `SettingPage.tsx` for basic styling and dark mode support. Fixed related JSX errors.
 - **Fixed UI Rendering Error:** Corrected message rendering logic in `App.tsx` to handle both string and array types for `msg.content`, resolving `msg.content.map is not a function` error.
@@ -116,7 +120,7 @@ Commit fix for UI rendering error (`msg.content.map`) and prepare for next task 
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit UI rendering fix.
+- **Current Task:** Update Memory Bank and commit UI state persistence fix.
 - **Next:** Apply UnoCSS styling to UI components.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
@@ -125,6 +129,7 @@ Commit fix for UI rendering error (`msg.content.map`) and prepare for next task 
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
+- **UI State Persistence Implemented:** Backend now persists history in UI format (`UiMessage[]`), including partial messages and tool statuses. Frontend loads this state directly.
 - **UI Rendering Fixed:** Correctly handles different `CoreMessage` content types (string/array). Navigation should work again.
 - **UI Styled:** Applied basic UnoCSS styling to Chat and Settings pages. Fixed JSX errors caused by diff application.
 - **Tool Results Saved to History:** Added logic in `extension.ts` to persist `role: 'tool'` messages.
@@ -158,6 +163,7 @@ Commit fix for UI rendering error (`msg.content.map`) and prepare for next task 
 - **Verified Chat UI Code:** (Kept)
 
 ## Active Decisions
+- Changed storage strategy: Persist UI state (`UiMessage[]`) directly and translate to `CoreMessage[]` on demand for AI interaction. Removed separate `CoreMessage` history persistence.
 - Prioritized fixing core stream parsing and removing deprecated API usage.
 - Standardized on documented Vercel AI SDK APIs.
 - **New Principle:** Tools should support batch operations.
