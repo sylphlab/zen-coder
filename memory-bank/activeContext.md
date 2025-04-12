@@ -1,9 +1,10 @@
 # Active Context
 
 ## Current Focus
-Commit state sync fix and prepare for next task (Model selection persistence).
+Fixing issue where UI streaming indicator doesn't stop after AI response completes.
 
 ## Recent Changes
+- **Fixed Stream End Handling:** Added explicit `streamFinished` message from backend (`extension.ts`) to frontend (`App.tsx`) to reliably stop the UI streaming indicator.
 - **Fixed State Synchronization:** Ensured Chat UI model list updates correctly after API key changes in Settings UI. (Triggered model re-fetch on provider status change in `App.tsx`).
 - **Fixed Model List Refresh (`App.tsx`):**
     - Modified `useEffect` hook in `App.tsx` to re-trigger `getAvailableModels` message when `providerStatus` is updated (e.g., after setting/deleting an API key), ensuring the chat UI's model list reflects newly available providers.
@@ -104,7 +105,8 @@ Commit state sync fix and prepare for next task (Model selection persistence).
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Implement model selection persistence in Chat UI.
+- **Current Task:** Update Memory Bank and commit stream end fix.
+- **Next:** Implement model selection persistence in Chat UI.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
@@ -112,6 +114,7 @@ Commit state sync fix and prepare for next task (Model selection persistence).
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
+- **Streaming Indicator Fixed:** Added explicit `streamFinished` message handling to ensure UI stops indicating streaming reliably.
 - **Model List Refresh Fixed:** Chat UI model list now updates automatically after API keys are set/deleted in Settings.
 - **Settings UI Corrected:** Uses backend data for provider details (Previous).
 - **Backend Communication Updated:** Sends richer provider info list (Previous). Handles delete key message (Previous).
@@ -142,6 +145,7 @@ Commit state sync fix and prepare for next task (Model selection persistence).
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
+- Added explicit `streamFinished` message from backend to UI to fix streaming indicator persistence.
 - Added logic to `App.tsx` to re-fetch models when provider status changes.
 - Corrected `SettingPage.tsx` to use backend data structure (Previous).
 - Updated `AiService` and `extension.ts` for combined provider info (Previous).

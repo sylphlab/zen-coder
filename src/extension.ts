@@ -164,6 +164,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                  // Add other final part handling if needed
                              } catch (e) { /* ignore */ }
                         }
+                        console.log("[Extension] Stream finished.");
+                        this.postMessageToWebview({ type: 'streamFinished' });
 
                     } catch (error: any) {
                         console.error("Error processing AI stream:", error);

@@ -289,6 +289,11 @@ export function App() {
                 case 'showSettings': // Handle command from extension to show settings page
                     setLocation('/settings');
                     break;
+                case 'streamFinished': // Handle explicit stream end signal
+                    console.log("Stream finished.");
+                    setIsStreaming(false);
+                    currentAssistantMessageId.current = null;
+                    break;
             }
         };
 
