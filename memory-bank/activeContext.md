@@ -4,6 +4,7 @@
 Completed cleanup of redundant interaction tools and updated memory banks. Ready for next implementation step or further tool discussion.
 
 ## Recent Changes
+- **Fixed UI Streaming (Attempt 4 - `write_to_file`):** After `apply_diff` failed repeatedly, used `write_to_file` to apply a simplified state update logic in `webview-ui/src/app.tsx`'s `appendMessageChunk` handler. This version uses `.map()` to create a new messages array and new message/content objects, aiming for more reliable change detection by Preact.
 - **Removed `main_content` from Structured Output:** Based on user feedback regarding redundancy and potential token cost increase, completely removed the `main_content` field from `structuredAiResponseSchema` in `src/common/types.ts`. The schema now only defines `suggested_actions`.
 - **Corrected Final Text Handling (User Guided):** Implemented the robust approach based on user feedback, prioritizing accumulated text for history.
     - `src/webview/handlers/SendMessageHandler.ts` no longer awaits `streamResult.text`. It passes `null` for the text argument to `reconcileFinalAssistantMessage`.
@@ -171,7 +172,7 @@ Completed cleanup of redundant interaction tools and updated memory banks. Ready
 - **Fixed AI Response Rendering:** Modified `app.tsx` to immediately add an empty assistant message frame to state upon receiving `startAssistantMessage`, ensuring `appendMessageChunk` can find the target message.
 - **Previous Fixes:** (Includes all items from the original list below this point)
 - Provider/Model Persistence Implemented.
-- UI Stream Update Fixed (Multiple Attempts).
+- UI Stream Update Fixed (Attempt 4 - `write_to_file` with `.map()`).
 - Immediate Message Display Fixed.
 - UI State Persistence Implemented.
 - Model Selection Fixed.
@@ -208,6 +209,7 @@ Completed cleanup of redundant interaction tools and updated memory banks. Ready
     - Reverted invalid `sandbox allow-modals` CSP directive in `webviewContent.ts`.
     - Implemented custom confirmation dialog in `app.tsx` for Clear Chat.
     - Ensured `app.tsx` adds assistant message frame on `startAssistantMessage`.
+    - Refactored `appendMessageChunk` handler in `app.tsx` using `.map()` for potentially more robust state updates (via `write_to_file` after `apply_diff` failures).
 - **Architecture:** Adopted handler registration pattern, modularized backend services.
 - **State/History:** Persist UI state (`UiMessage[]`), translate to `CoreMessage[]` on demand.
 - **Model Handling:** Pass `modelId` correctly; delegate provider logic.

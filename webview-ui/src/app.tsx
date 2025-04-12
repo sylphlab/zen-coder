@@ -200,41 +200,40 @@ export function App() {
                         // Log the actual text delta received
                         console.log("Received textDelta:", JSON.stringify(message.textDelta));
                         setMessages(prevMessages => {
-                            const messageIndex = prevMessages.findIndex(msg => msg.id === currentAssistantMessageId.current);
-                            if (messageIndex === -1) {
-                                console.warn("Could not find message to append chunk to:", currentAssistantMessageId.current);
-                                return prevMessages; // No change
-                            }
+                            // Create a completely new array using map
+                            return prevMessages.map(msg => {
+                                // If this is not the message we're looking for, return it as is
+                                if (msg.id !== currentAssistantMessageId.current) {
+                                    return msg;
+                                }
 
-                            // Create a new array for the messages
-                            const newMessages = [...prevMessages];
+                                // If it IS the message, create a new message object
+                                // Ensure content is always an array
+                                const currentContent = Array.isArray(msg.content) ? msg.content : [];
+                                const newContent = [...currentContent]; // Copy existing content parts
 
-                            // Create a *new* message object based on the old one
-                            const oldMessage = newMessages[messageIndex];
-                            const newMessage = {
-                                ...oldMessage,
-                                // Create a *new* content array by copying existing parts
-                                content: Array.isArray(oldMessage.content) ? [...oldMessage.content] : []
-                            };
+                                // Find the last part of the content array
+                                const lastContentPartIndex = newContent.length - 1;
+                                const lastContentPart = newContent[lastContentPartIndex];
 
-                            const lastContentPartIndex = newMessage.content.length - 1;
-                            const lastContentPart = newMessage.content[lastContentPartIndex];
+                                // If the last part is text, append to it
+                                if (lastContentPart?.type === 'text') {
+                                    // Create a new text part object
+                                    newContent[lastContentPartIndex] = {
+                                        ...lastContentPart,
+                                        text: lastContentPart.text + message.textDelta
+                                    };
+                                } else {
+                                    // Otherwise, add a new text part
+                                    newContent.push({ type: 'text', text: message.textDelta });
+                                }
 
-                            if (lastContentPart?.type === 'text') {
-                                // Create a *new* text part object with updated text
-                                newMessage.content[lastContentPartIndex] = {
-                                    ...lastContentPart, // Copy properties from the old part
-                                    text: lastContentPart.text + message.textDelta // Update text
+                                // Return a new message object with the updated content
+                                return {
+                                    ...msg,
+                                    content: newContent
                                 };
-                            } else {
-                                // Add a *new* text part object
-                                newMessage.content.push({ type: 'text', text: message.textDelta });
-                            }
-
-                            // Replace the old message with the new one in the new array
-                            newMessages[messageIndex] = newMessage;
-
-                            return newMessages; // Return the new array reference
+                            });
                         });
                     } else {
                          console.warn("appendMessageChunk received but no current assistant message ID is set.");
