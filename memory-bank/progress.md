@@ -30,7 +30,8 @@
 - `uuidGenerateTool` updated with progress callback.
 - UI Tool Display refined (inline, human-readable summaries, progress).
 - **Routing Implemented:** Added `wouter` for navigation between Chat (`/`) and Settings (`/settings`) pages. Created basic `SettingPage.tsx` and `ChatPage.tsx`. Replaced settings modal with the `/settings` route. (Previous)
-- **OpenRouter Model Fetching:** Implemented dynamic fetching of models from the OpenRouter API in `AiService` when OpenRouter is enabled and has an API key. Hardcoded models are used as fallback.
+- **Settings Provider Search:** Added a search input to `SettingPage.tsx` to filter the list of providers.
+- **OpenRouter Model Fetching:** Implemented dynamic fetching of models from the OpenRouter API in `AiService` when OpenRouter is enabled and has an API key. Hardcoded models are used as fallback. (Previous)
 - **Settings Page API Key Input:** Added input fields and buttons to `SettingPage.tsx` to allow users to set API keys for each provider. Implemented message passing (`setApiKey`) to the extension host, which handles storing the key in `SecretStorage` via `AiService`. (Previous)
 - **Settings Page Restored:** Moved provider settings logic from `App.tsx` to `SettingPage.tsx` and passed necessary props (`providerStatus`, `handleProviderToggle`) to restore functionality after routing refactor. Exported required types from `App.tsx`. (Previous)
 - **Vite Port Discovery Implemented & Fixed:** Extension now reads the actual Vite dev server port from the correct file path (`.vite.port` in the project root) during development, ensuring reliable HMR connection even if the default port changes.
@@ -54,7 +55,7 @@
 ## Current Status
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
 - **Tool Execution:** Tools execute and return results to the AI.
-- **Settings Integration:** Settings UI (`/settings`) now allows enabling/disabling providers and setting API keys directly within the webview. Key status (set/not set) is displayed.
+- **Settings Integration:** Settings UI (`/settings`) now allows enabling/disabling providers, setting API keys directly, and searching/filtering the provider list. Key status (set/not set) is displayed.
 - **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
 - **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from the correct file path.
 - **View Provider Registration:** Corrected `package.json` ensures the `WebviewViewProvider` is properly registered.

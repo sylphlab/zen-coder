@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState } from 'preact/hooks'; // Import useState
+import { useState, useMemo } from 'preact/hooks'; // Import useMemo
 import { AllProviderStatus, ApiProviderKey } from '../app'; // Import types from app.tsx (adjust path if needed)
 import { postMessage } from '../app'; // Import postMessage
 
@@ -9,9 +9,19 @@ interface SettingPageProps {
   onProviderToggle: (providerKey: ApiProviderKey, enabled: boolean) => void;
 }
 
+// Define provider details for searching
+const providerDetails: { key: ApiProviderKey; name: string }[] = [
+    { key: 'ANTHROPIC', name: 'Anthropic (Claude)' },
+    { key: 'GOOGLE', name: 'Google (Gemini)' },
+    { key: 'OPENROUTER', name: 'OpenRouter' },
+    { key: 'DEEPSEEK', name: 'DeepSeek' },
+];
+
 export function SettingPage({ providerStatus, onProviderToggle }: SettingPageProps) {
   // State to hold the temporary API key input for each provider
   const [apiKeysInput, setApiKeysInput] = useState<{ [key in ApiProviderKey]?: string }>({});
+  // State for the search query
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Handle input change for API key fields
   const handleApiKeyInputChange = (providerKey: ApiProviderKey, value: string) => {
@@ -35,6 +45,23 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
         // Optionally show a warning message
     }
   };
+
+  // Handle search input change
+  const handleSearchChange = (e: Event) => {
+      setSearchQuery((e.target as HTMLInputElement).value);
+  };
+
+  // Filter providers based on search query
+  const filteredProviders = useMemo(() => {
+      if (!searchQuery) {
+          return providerDetails; // Return all if search is empty
+      }
+      const lowerCaseQuery = searchQuery.toLowerCase();
+      return providerDetails.filter(provider =>
+          provider.name.toLowerCase().includes(lowerCaseQuery) ||
+          provider.key.toLowerCase().includes(lowerCaseQuery)
+      );
+  }, [searchQuery]);
 
 
   // Re-implement the rendering logic for a single provider setting
@@ -88,12 +115,25 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
       <h1 class="text-xl font-bold mb-4">Zen Coder 設定</h1>
       <section>
         <h3 class="text-lg font-semibold mb-3">Providers</h3>
+        {/* Search Input */}
+        <div class="mb-4">
+            <input
+                type="text"
+                placeholder="搜索 Provider..."
+                value={searchQuery}
+                onInput={handleSearchChange}
+                class="w-full p-2 border border-gray-300 rounded"
+                aria-label="Search Providers"
+            />
+        </div>
+
         {providerStatus ? (
           <ul class="space-y-2"> {/* Use space-y for vertical spacing */}
-            {renderProviderSetting('ANTHROPIC', 'Anthropic (Claude)')}
-            {renderProviderSetting('GOOGLE', 'Google (Gemini)')}
-            {renderProviderSetting('OPENROUTER', 'OpenRouter')}
-            {renderProviderSetting('DEEPSEEK', 'DeepSeek')}
+            {filteredProviders.length > 0 ? (
+                 filteredProviders.map(provider => renderProviderSetting(provider.key, provider.name))
+             ) : (
+                 <li class="text-gray-500">未找到匹配嘅 Provider。</li>
+             )}
           </ul>
         ) : (
           <p>正在載入 Provider 狀態...</p>

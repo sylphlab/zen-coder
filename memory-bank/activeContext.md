@@ -1,14 +1,15 @@
 # Active Context
 
 ## Current Focus
-Implementing dynamic model resolution for OpenRouter.
+Adding Provider search functionality to the Settings page.
 
 ## Recent Changes
-- **Implemented OpenRouter Model Fetching:**
-    - Added `fetchOpenRouterModels` private async method to `AiService` using Node.js `https` module to call the OpenRouter API (`/api/v1/models`).
-    - Updated `resolveAvailableModels` in `AiService` to call `fetchOpenRouterModels` if OpenRouter is enabled and has an API key set.
-    - Fetched models are added to the `resolvedModels` list with `source: 'api'`.
-    - Hardcoded OpenRouter models are now only added as fallbacks if the API call fails.
+- **Added Settings Provider Search:**
+    - Added a search input field to `SettingPage.tsx`.
+    - Implemented state (`searchQuery`) and filtering logic (`filteredProviders`, `useMemo`) to dynamically filter the displayed provider list based on the search query (matching name or key).
+- **Implemented OpenRouter Model Fetching:** (Previous change)
+    - Added `fetchOpenRouterModels` method to `AiService`.
+    - Updated `resolveAvailableModels` to use the fetched models.
 - **Implemented Settings API Key Input:** (Previous change)
     - Added UI elements and message handling for setting API keys in `SettingPage.tsx` and `src/extension.ts`.
 - **Restored Settings Page:** (Previous change)
@@ -55,15 +56,16 @@ Implementing dynamic model resolution for OpenRouter.
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit OpenRouter model fetching implementation.
-- **Previous:** Implement OpenRouter model fetching in `AiService`.
+- **Current Task:** Update Memory Bank and commit Settings Provider search implementation.
+- **Previous:** Implement Provider search UI and logic in `SettingPage.tsx`.
 - **Future:** Implement API/Web scraping for `resolveAvailableModels`.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **OpenRouter Models Fetched:** `AiService` now attempts to fetch models dynamically from the OpenRouter API.
+- **Settings Provider Search Added:** Users can now filter the provider list in the settings page.
+- **OpenRouter Models Fetched:** `AiService` attempts to fetch models dynamically (Previous).
 - **API Key Input Added:** Settings page allows setting API keys (Previous).
 - **Settings Page Restored:** Moved rendering logic and passed necessary props (Previous).
 - **Nanostores Added:** Installed the library and Preact integration (Previous).
@@ -88,7 +90,8 @@ Implementing dynamic model resolution for OpenRouter.
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
-- Implemented dynamic fetching of OpenRouter models in `AiService`.
+- Added search functionality to the Settings page Provider list.
+- Implemented dynamic fetching of OpenRouter models in `AiService`. (Previous)
 - Implemented API Key input and setting mechanism in the Settings page. (Previous)
 - Restored Settings page functionality after routing refactor. (Previous)
 - Added Nanostores for state management. (Previous)
