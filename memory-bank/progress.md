@@ -27,7 +27,9 @@
 - `uuidGenerateTool` updated with progress callback.
 - UI Tool Display refined (inline, human-readable summaries, progress).
 - Merged Settings UI into Chat Webview.
-- **Vite Port Discovery Implemented:** Extension now reads the actual Vite dev server port from a file (`../.vite.port`) during development, ensuring reliable HMR connection even if the default port changes.
+- **Vite Port Discovery Implemented & Fixed:** Extension now reads the actual Vite dev server port from the correct file path (`.vite.port` in the project root) during development, ensuring reliable HMR connection even if the default port changes.
+- **`package.json` Corrected:** Contributions (`activationEvents`, `views`) updated and obsolete sections (`menus`, `commands`) removed to align with `WebviewViewProvider` implementation, resolving the "No data provider registered" error.
+- **Development CSP Relaxed (Testing):** Added `'unsafe-eval'` to `script-src` in development mode CSP to test HMR compatibility.
 
 ## What's Left (Potential Future Enhancements)
 - Implement conversation history persistence.
@@ -38,13 +40,16 @@
 - Improve Markdown rendering in Preact UI.
 - Improve error handling in Preact UI.
 - Re-implement tool status updates using recommended Vercel AI SDK APIs (if desired).
+- If relaxing CSP works, investigate if a more specific CSP rule can be used instead of `'unsafe-eval'`.
 
 ## Current Status
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
 - **Tool Execution:** Tools execute and return results to the AI.
 - **Settings Integration:** Settings UI integrated into the main chat webview via a modal.
 - **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
-- **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from a file.
+- **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from the correct file path.
+- **View Provider Registration:** Corrected `package.json` ensures the `WebviewViewProvider` is properly registered.
+- **Webview Loading (Troubleshooting):** Relaxed development CSP to potentially resolve blank webview issue.
 
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
@@ -55,3 +60,4 @@
 - Model resolver logic (fetching available models dynamically) is not yet implemented.
 - Chat UI model selection persistence is not yet implemented.
 - API Key management needs reimplementation (e.g., via VS Code settings or webview input).
+- **Blank Webview (Development):** Still investigating the cause of the blank webview in development mode, currently testing relaxed CSP.

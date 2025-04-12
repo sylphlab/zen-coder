@@ -245,7 +245,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, ex
     const nonce = getNonce();
     const isDevelopment = extensionMode === vscode.ExtensionMode.Development;
     let viteDevServerPort = 5173; // Default port
-    const portFilePath = path.join(extensionUri.fsPath, '..', '.vite.port'); // Path relative to extension root
+    const portFilePath = path.join(extensionUri.fsPath, '.vite.port'); // Path relative to extension root
     try {
         if (fs.existsSync(portFilePath)) {
             const portFileContent = fs.readFileSync(portFilePath, 'utf8');
@@ -282,7 +282,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, ex
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'none';
         style-src 'unsafe-inline' ${webview.cspSource} ${viteDevServerUrl};
-        script-src 'nonce-${nonce}' ${viteDevServerUrl};
+        script-src 'unsafe-eval' 'nonce-${nonce}' ${viteDevServerUrl};
         connect-src ${viteDevServerUrl} ws://${viteDevServerUrl.split('//')[1]};
         img-src ${webview.cspSource} data: ${viteDevServerUrl};
         font-src ${webview.cspSource} ${viteDevServerUrl};
