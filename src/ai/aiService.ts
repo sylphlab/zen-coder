@@ -1,25 +1,21 @@
 import * as vscode from 'vscode';
-import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions } from 'ai';
+import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel } from 'ai'; // Added LanguageModel
 import { allTools, ToolName } from '../tools';
 import { allProviders, providerMap, AiProvider, ModelDefinition } from './providers'; // Import new provider structure
 // Import the specific execution logic, callback type, AND the standard tool definition
 import { executeUuidGenerateWithProgress, UuidUpdateCallback, uuidGenerateTool as uuidGenerateToolDefinition } from '../tools/utils/uuidGenerate';
 
-// Define keys for SecretStorage
-const SECRET_KEYS = {
-    ANTHROPIC: 'zenCoder.anthropicApiKey',
-    GOOGLE: 'zenCoder.googleApiKey',
-    OPENROUTER: 'zenCoder.openRouterApiKey',
-    DEEPSEEK: 'zenCoder.deepseekApiKey',
-};
+// SECRET_KEYS constant removed - managed by individual providers now.
  // Type for provider status (enabled + API key status)
  export type ProviderStatus = {
      enabled: boolean;
      apiKeySet: boolean;
  };
 
-// Type definition for the keys used in AiService SECRET_KEYS
-export type ApiProviderKey = keyof typeof SECRET_KEYS; // Export the type
+// Define ApiProviderKey based on provider IDs
+// This assumes provider IDs match the keys previously used in SECRET_KEYS
+// If IDs change, this might need adjustment or a different approach.
+export type ApiProviderKey = typeof allProviders[number]['id'];
 
 // Model list
 const availableModelIds = [
@@ -46,33 +42,16 @@ type McpToolExecutor = (serverName: string, toolName: string, args: any) => Prom
 export class AiService {
     private currentModelId: string = 'claude-3-5-sonnet'; // Change to string to allow custom models
     private conversationHistory: CoreMessage[] = [];
-    private anthropicApiKey: string | undefined;
-    private googleApiKey: string | undefined;
-    private openRouterApiKey: string | undefined;
-    private deepseekApiKey: string | undefined;
+    // In-memory API key properties removed - fetched JIT via provider modules.
     private postMessageCallback?: (message: any) => void;
 
     constructor(private context: vscode.ExtensionContext) {}
 
     public async initialize(): Promise<void> {
-        console.log('[AiService] Initializing...'); // Added prefix for clarity
-        try {
-            // Use Promise.all for concurrent reads
-            const [anthropicKey, googleKey, openRouterKey, deepseekKey] = await Promise.all([
-                this.context.secrets.get(SECRET_KEYS.ANTHROPIC),
-                this.context.secrets.get(SECRET_KEYS.GOOGLE),
-                this.context.secrets.get(SECRET_KEYS.OPENROUTER),
-                this.context.secrets.get(SECRET_KEYS.DEEPSEEK)
-            ]);
-            this.anthropicApiKey = anthropicKey;
-            this.googleApiKey = googleKey;
-            this.openRouterApiKey = openRouterKey;
-            this.deepseekApiKey = deepseekKey;
-            console.log(`[AiService] API Keys loaded from SecretStorage: Anthropic=${!!this.anthropicApiKey}, Google=${!!this.googleApiKey}, OpenRouter=${!!this.openRouterApiKey}, DeepSeek=${!!this.deepseekApiKey}`);
-        } catch (error) {
-            console.error('[AiService] Error loading API keys from SecretStorage:', error);
-            vscode.window.showErrorMessage('Failed to load API keys securely.');
-        }
+        // Initialization no longer needs to pre-load API keys into memory.
+        // Keys will be fetched Just-In-Time (JIT) by the provider modules when needed.
+        console.log('[AiService] Initializing... (API keys will be loaded on demand)');
+        // Potential future initialization steps could go here (e.g., warming up caches)
         console.log('[AiService] Initialization complete.');
     }
 
@@ -96,85 +75,80 @@ export class AiService {
     }
 
     // --- Private Helpers ---
-    private _isProviderEnabled(providerKey: ApiProviderKey): boolean {
-        const config = vscode.workspace.getConfiguration('zencoder.provider');
-        const keyMap: Record<ApiProviderKey, string> = {
-            ANTHROPIC: 'anthropic.enabled',
-            GOOGLE: 'google.enabled',
-            OPENROUTER: 'openrouter.enabled',
-            DEEPSEEK: 'deepseek.enabled',
-        };
-        return config.get<boolean>(keyMap[providerKey], true); // Default to true if setting not found
-    }
+    // _isProviderEnabled removed - handled by provider.isEnabled() now.
  
-    private _getProviderInstance() {
-        console.log(`[AiService] _getProviderInstance called for model: ${this.currentModelId}`); // Log entry
+    // Now returns a Promise as it needs to fetch the API key asynchronously
+    private async _getProviderInstance(): Promise<LanguageModel | null> {
+        console.log(`[AiService] _getProviderInstance called for model: ${this.currentModelId}`);
         const modelId = this.currentModelId;
-        let providerKey: ApiProviderKey | null = null;
-        let actualModelId = modelId; // ID to pass to the provider SDK
+        let providerId: string | null = null; // Use provider ID (string)
+        let actualModelId = modelId;
 
-        // 1. Determine Provider based on modelId pattern
+        // 1. Determine Provider ID based on modelId pattern
+        //    This logic remains largely the same, but assigns to providerId (string)
         if (modelId.startsWith('claude-')) {
-            providerKey = 'ANTHROPIC';
-            // Use the specific ID provided by the user for Anthropic
+            providerId = 'anthropic';
         } else if (modelId.startsWith('models/')) {
-            providerKey = 'GOOGLE';
-            // Use the specific ID provided by the user for Google
+            providerId = 'google';
         } else if (modelId.startsWith('deepseek-')) {
-            providerKey = 'DEEPSEEK';
-            // Use the specific ID provided by the user for DeepSeek
+            providerId = 'deepseek';
         } else if (modelId.includes('/')) { // Assume OpenRouter if it contains a slash
-            providerKey = 'OPENROUTER';
-            // Use the specific ID provided by the user for OpenRouter
+            providerId = 'openrouter';
+            // OpenRouter model IDs often include the original provider, e.g., 'anthropic/claude-3.5-sonnet'
+            // We pass the full ID to the OpenRouter provider.
         } else {
-            // Cannot determine provider from ID pattern
-             console.warn(`[AiService] Could not determine provider for model ID: ${modelId}. Attempting fallback checks.`);
-             // Fallback logic is removed as hardcodedModels is gone.
-             // If pattern matching fails, we cannot determine the provider.
-             console.error(`[AiService] Cannot determine provider for model ID: ${modelId} using pattern matching.`);
+            console.error(`[AiService] Cannot determine provider for model ID: ${modelId} using pattern matching.`);
+            // Consider trying to find the provider by checking which provider lists this model ID?
+            // This would require calling getAvailableModels on all enabled providers first.
+            // For now, fail if pattern doesn't match.
         }
-        console.log(`[AiService] Determined provider key: ${providerKey}`); // Log determined provider
-        if (!providerKey) {
+
+        console.log(`[AiService] Determined provider ID: ${providerId}`);
+        if (!providerId) {
             vscode.window.showErrorMessage(`無法從模型 ID "${modelId}" 判斷 Provider.`);
             return null;
         }
 
-        // 2. Check if the determined provider is enabled
-        const isEnabled = this._isProviderEnabled(providerKey);
-        console.log(`[AiService] Provider ${providerKey} enabled status from config: ${isEnabled}`); // Log enabled status
-        if (!isEnabled) {
-            vscode.window.showErrorMessage(`Provider ${providerKey} 已在 Settings 頁面停用.`);
-            return null;
-        }
-
-        // 3. Check API Key for the determined provider
-        console.log(`[AiService] Checking API key for ${providerKey}. In-memory keys: Anthropic=${!!this.anthropicApiKey}, Google=${!!this.googleApiKey}, OpenRouter=${!!this.openRouterApiKey}, DeepSeek=${!!this.deepseekApiKey}`); // Log keys before check
-        let apiKey: string | undefined;
-        switch (providerKey) {
-            case 'ANTHROPIC': apiKey = this.anthropicApiKey; break;
-            case 'GOOGLE': apiKey = this.googleApiKey; break;
-            case 'OPENROUTER': apiKey = this.openRouterApiKey; break;
-            case 'DEEPSEEK': apiKey = this.deepseekApiKey; break;
-        }
-
-        console.log(`[AiService] API key found for ${providerKey}: ${!!apiKey}. Actual value (DeepSeek check): ${providerKey === 'DEEPSEEK' ? this.deepseekApiKey : 'N/A'}`); // Log key found status + actual value for DeepSeek
-        if (!apiKey) {
-            vscode.window.showErrorMessage(`Provider ${providerKey} 缺少 API Key.`);
-            return null;
-        }
-
-        // 4. Get Provider from Map and Create Model Instance
-        const provider = providerMap.get(providerKey);
+        // 2. Get Provider Implementation from Map
+        const provider = providerMap.get(providerId);
         if (!provider) {
-             // Should not happen if providerKey logic is correct
-             console.error(`[AiService] Internal error: Provider implementation not found in map for key: ${providerKey}`);
-             vscode.window.showErrorMessage(`內部錯誤：找不到 Provider ${providerKey} 的實作。`);
-             return null;
+            console.error(`[AiService] Internal error: Provider implementation not found in map for ID: ${providerId}`);
+            vscode.window.showErrorMessage(`內部錯誤：找不到 Provider ${providerId} 的實作。`);
+            return null;
         }
 
+        // 3. Check if the provider is enabled (using the provider's own method)
+        const isEnabled = provider.isEnabled();
+        console.log(`[AiService] Provider ${provider.name} enabled status from provider.isEnabled(): ${isEnabled}`);
+        if (!isEnabled) {
+            vscode.window.showErrorMessage(`Provider ${provider.name} 已在 Settings 頁面停用.`);
+            return null;
+        }
+
+        // 4. Get API Key if required (using the provider's own method)
+        let apiKey: string | undefined;
+        if (provider.requiresApiKey) {
+            try {
+                apiKey = await provider.getApiKey(this.context.secrets);
+                console.log(`[AiService] API key fetched for ${provider.name}: ${!!apiKey}`);
+                if (!apiKey) {
+                    vscode.window.showErrorMessage(`Provider ${provider.name} 缺少 API Key.`);
+                    return null;
+                }
+            } catch (error: any) {
+                 console.error(`[AiService] Error fetching API key for ${provider.name}:`, error);
+                 vscode.window.showErrorMessage(`獲取 Provider ${provider.name} 的 API Key 時出錯: ${error.message}`);
+                 return null;
+            }
+        } else {
+             console.log(`[AiService] Provider ${provider.name} does not require an API key.`);
+        }
+
+
+        // 5. Create Model Instance
         try {
             console.log(`[AiService] Creating model instance using provider '${provider.id}' for model '${actualModelId}'`);
-            // Use the createModel method from the specific provider module
+            // Pass the potentially undefined apiKey (provider handles the check if required)
             const modelInstance = provider.createModel(apiKey, actualModelId);
             console.log(`[AiService] Successfully created model instance for ${provider.id}/${actualModelId}`);
             return modelInstance;
@@ -200,13 +174,15 @@ export class AiService {
 
     // --- Core AI Interaction ---
     public async getAiResponseStream(prompt: string): Promise<ReadableStream | null> {
-        const modelInstance = this._getProviderInstance();
+        // Get model instance asynchronously
+        const modelInstance = await this._getProviderInstance(); // Added await
+
         if (!modelInstance) {
-            // Explicitly send error back to UI if model instance fails
-            const errorMessage = `無法為模型 '${this.currentModelId}' 初始化 Provider. 請檢查 Settings 頁面嘅 Provider 啟用狀態同 API Key.`;
-            this.postMessageCallback?.({ type: 'addMessage', sender: 'assistant', text: errorMessage });
-            // Also ensure history is cleaned up if needed and streaming state is reset in UI
-            this.conversationHistory.pop(); // Remove last user message
+            // Error handling remains the same, message already sent by _getProviderInstance if needed
+            // Ensure history is cleaned up if needed and streaming state is reset in UI
+             if (this.conversationHistory[this.conversationHistory.length - 1]?.role === 'user') {
+                 this.conversationHistory.pop(); // Remove last user message if it exists
+             }
             return null;
         }
 
@@ -360,78 +336,90 @@ export class AiService {
          this.conversationHistory.push({ role: 'tool', content: [toolResult] });
     }
 
-    // --- API Key Management ---
-    public async setApiKey(providerKeyConstant: ApiProviderKey, apiKey: string): Promise<void> { // Use ApiProviderKey type
-        const secretKey = SECRET_KEYS[providerKeyConstant];
-        if (!secretKey) {
-             console.error(`[AiService] Invalid provider key constant used in setApiKey: ${providerKeyConstant}`);
-             throw new Error(`Invalid provider key: ${providerKeyConstant}`);
+    // --- API Key Management (Delegated to Providers) ---
+    public async setApiKey(providerId: string, apiKey: string): Promise<void> {
+        const provider = providerMap.get(providerId);
+        if (!provider) {
+            const errorMsg = `[AiService] Cannot set API key: Unknown provider ID '${providerId}'.`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
         }
-        console.log(`[AiService] Attempting to store API Key for ${providerKeyConstant} in SecretStorage (key: ${secretKey}).`);
+        if (!provider.requiresApiKey) {
+             console.warn(`[AiService] Attempted to set API key for provider '${providerId}' which does not require one.`);
+             // Optionally show a message or just ignore
+             return;
+        }
         try {
-            await this.context.secrets.store(secretKey, apiKey);
-            console.log(`[AiService] Successfully stored API Key for ${providerKeyConstant}. Updating in-memory cache.`);
-            // Update in-memory cache after successful storage
-            switch (providerKeyConstant) {
-                case 'ANTHROPIC': this.anthropicApiKey = apiKey; break;
-                case 'GOOGLE': this.googleApiKey = apiKey; break;
-                case 'OPENROUTER': this.openRouterApiKey = apiKey; break;
-                case 'DEEPSEEK': this.deepseekApiKey = apiKey; break;
-            }
-            vscode.window.showInformationMessage(`API Key for ${providerKeyConstant} updated.`);
-        } catch (error) {
-            console.error(`[AiService] Error storing API Key for ${providerKeyConstant}:`, error);
-            vscode.window.showErrorMessage(`Failed to store API key for ${providerKeyConstant} securely.`); // More specific error
-            // Do NOT update in-memory cache if storage failed
+            console.log(`[AiService] Delegating setApiKey for '${providerId}' to provider module.`);
+            await provider.setApiKey(this.context.secrets, apiKey);
+            console.log(`[AiService] API Key for ${provider.name} updated successfully.`);
+            vscode.window.showInformationMessage(`API Key for ${provider.name} updated.`);
+        } catch (error: any) {
+            console.error(`[AiService] Error setting API Key for ${provider.name}:`, error);
+            vscode.window.showErrorMessage(`Failed to store API key for ${provider.name} securely: ${error.message}`);
         }
     }
 
-    public async getApiKey(providerKeyConstant: keyof typeof SECRET_KEYS): Promise<string | undefined> {
-         const secretKey = SECRET_KEYS[providerKeyConstant];
-         if (!secretKey) throw new Error(`Invalid provider key: ${providerKeyConstant}`);
-        return await this.context.secrets.get(secretKey);
-    }
+    // getApiKey is no longer needed here, as keys are fetched JIT by _getProviderInstance
 
-     public async deleteApiKey(providerKeyConstant: keyof typeof SECRET_KEYS): Promise<void> {
-         const secretKey = SECRET_KEYS[providerKeyConstant];
-         if (!secretKey) throw new Error(`Invalid provider key: ${providerKeyConstant}`);
-         await this.context.secrets.delete(secretKey);
-         switch (providerKeyConstant) {
-             case 'ANTHROPIC': this.anthropicApiKey = undefined; break;
-             case 'GOOGLE': this.googleApiKey = undefined; break;
-             case 'OPENROUTER': this.openRouterApiKey = undefined; break;
-             case 'DEEPSEEK': this.deepseekApiKey = undefined; break;
+    public async deleteApiKey(providerId: string): Promise<void> {
+         const provider = providerMap.get(providerId);
+         if (!provider) {
+             const errorMsg = `[AiService] Cannot delete API key: Unknown provider ID '${providerId}'.`;
+             console.error(errorMsg);
+             throw new Error(errorMsg);
          }
-         console.log(`API Key for ${providerKeyConstant} deleted.`);
-         vscode.window.showInformationMessage(`API Key for ${providerKeyConstant} deleted.`);
+         if (!provider.requiresApiKey) {
+              console.warn(`[AiService] Attempted to delete API key for provider '${providerId}' which does not require one.`);
+              return;
+         }
+         try {
+             console.log(`[AiService] Delegating deleteApiKey for '${providerId}' to provider module.`);
+             await provider.deleteApiKey(this.context.secrets);
+             console.log(`[AiService] API Key for ${provider.name} deleted successfully.`);
+             vscode.window.showInformationMessage(`API Key for ${provider.name} deleted.`);
+         } catch (error: any) {
+             console.error(`[AiService] Error deleting API Key for ${provider.name}:`, error);
+             vscode.window.showErrorMessage(`Failed to delete API key for ${provider.name}: ${error.message}`);
+         }
      }
 
     // --- API Key Status ---
-    public async getApiKeyStatus(): Promise<Record<ApiProviderKey, boolean>> {
-        // Ensure keys are loaded (initialize should have been called)
-        if (this.anthropicApiKey === undefined && this.googleApiKey === undefined && this.openRouterApiKey === undefined && this.deepseekApiKey === undefined) {
-            // Attempt to load keys if they seem missing, although initialize should handle this.
-            // This is a safeguard, might indicate an issue if hit frequently.
-            console.warn("API keys accessed before initialization or were cleared. Re-initializing.");
-            await this.initialize();
-        }
-        return {
-            ANTHROPIC: !!this.anthropicApiKey,
-            GOOGLE: !!this.googleApiKey,
-            OPENROUTER: !!this.openRouterApiKey,
-            DEEPSEEK: !!this.deepseekApiKey,
-        };
-    }
+     // This method now needs to iterate through providers and call their getApiKey method
+     public async getApiKeyStatus(): Promise<Record<string, boolean>> {
+         const status: Record<string, boolean> = {};
+         for (const provider of allProviders) {
+             if (provider.requiresApiKey) {
+                 try {
+                     const key = await provider.getApiKey(this.context.secrets);
+                     status[provider.id] = !!key; // Store boolean indicating if key is set
+                 } catch (error) {
+                     console.error(`[AiService] Error checking API key status for ${provider.name}:`, error);
+                     status[provider.id] = false; // Assume not set if error occurs
+                 }
+             } else {
+                 status[provider.id] = true; // Always true if no key is required
+             }
+         }
+         console.log("[AiService] Calculated API Key Status:", status);
+         return status;
+     }
 
     // --- Provider Status ---
-    public async getProviderStatus(): Promise<Record<ApiProviderKey, ProviderStatus>> {
-        const apiKeyStatus = await this.getApiKeyStatus();
-        const providerStatus: Record<ApiProviderKey, ProviderStatus> = {
-            ANTHROPIC: { enabled: this._isProviderEnabled('ANTHROPIC'), apiKeySet: apiKeyStatus.ANTHROPIC },
-            GOOGLE: { enabled: this._isProviderEnabled('GOOGLE'), apiKeySet: apiKeyStatus.GOOGLE },
-            OPENROUTER: { enabled: this._isProviderEnabled('OPENROUTER'), apiKeySet: apiKeyStatus.OPENROUTER },
-            DEEPSEEK: { enabled: this._isProviderEnabled('DEEPSEEK'), apiKeySet: apiKeyStatus.DEEPSEEK },
-        };
+    public async getProviderStatus(): Promise<Record<string, ProviderStatus>> {
+        const apiKeyStatus = await this.getApiKeyStatus(); // Fetches current key status
+        const providerStatus: Record<string, ProviderStatus> = {};
+
+        for (const provider of allProviders) {
+            const isEnabled = provider.isEnabled(); // Use provider's own method
+            const hasApiKey = apiKeyStatus[provider.id] ?? false; // Get status from fetched map
+
+            providerStatus[provider.id] = {
+                enabled: isEnabled,
+                apiKeySet: hasApiKey, // Use the result from getApiKeyStatus
+            };
+        }
+        console.log("[AiService] Calculated Provider Status:", providerStatus);
         return providerStatus;
     }
 
@@ -452,14 +440,13 @@ export class AiService {
             if (status?.enabled && (status.apiKeySet || !provider.requiresApiKey)) {
                 try {
                     console.log(`[AiService] Fetching models for provider: ${provider.name}`);
-                    // Get the API key for this provider (will be undefined if not set or not required)
+                    // Get the API key for this provider using its own method
                     let apiKey: string | undefined;
-                     switch (provider.id) {
-                         case 'anthropic': apiKey = this.anthropicApiKey; break;
-                         case 'google': apiKey = this.googleApiKey; break;
-                         case 'openrouter': apiKey = this.openRouterApiKey; break;
-                         case 'deepseek': apiKey = this.deepseekApiKey; break;
-                     }
+                    if (provider.requiresApiKey) {
+                        // Fetch the key only if required
+                        apiKey = await provider.getApiKey(this.context.secrets);
+                        // No need to check if apiKey is set here, as getAvailableModels handles it
+                    }
 
                     // Call the provider's method to get models
                     const modelsFromProvider: ModelDefinition[] = await provider.getAvailableModels(apiKey);

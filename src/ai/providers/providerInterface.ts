@@ -1,4 +1,5 @@
 import { LanguageModel } from 'ai';
+import * as vscode from 'vscode';
 
 /**
  * Defines the structure for representing an available AI model.
@@ -58,6 +59,45 @@ export interface AiProvider {
    * Displayed in the settings UI to help users.
    */
   readonly apiKeyUrl?: string;
+
+  /**
+   * The key used to store this provider's API key in vscode.SecretStorage.
+   */
+  readonly secretStorageKey: string;
+
+  /**
+   * The key used in vscode settings (e.g., 'zencoder.provider.anthropic.enabled')
+   * to control whether this provider is enabled.
+   */
+  readonly settingsEnabledKey: string;
+
+  /**
+   * Retrieves the API key for this provider from vscode.SecretStorage.
+   * @param secretStorage - The vscode.SecretStorage instance.
+   * @returns A promise resolving to the API key string or undefined if not set.
+   */
+  getApiKey(secretStorage: vscode.SecretStorage): Promise<string | undefined>;
+
+  /**
+   * Stores the API key for this provider in vscode.SecretStorage.
+   * @param secretStorage - The vscode.SecretStorage instance.
+   * @param apiKey - The API key string to store.
+   * @returns A promise that resolves when the key is stored.
+   */
+  setApiKey(secretStorage: vscode.SecretStorage, apiKey: string): Promise<void>;
+
+  /**
+   * Deletes the API key for this provider from vscode.SecretStorage.
+   * @param secretStorage - The vscode.SecretStorage instance.
+   * @returns A promise that resolves when the key is deleted.
+   */
+  deleteApiKey(secretStorage: vscode.SecretStorage): Promise<void>;
+
+  /**
+   * Checks if the provider is enabled in the VS Code settings.
+   * @returns True if enabled, false otherwise. Defaults to true if setting not found.
+   */
+  isEnabled(): boolean;
 
   // Optional future enhancement:
   // /**

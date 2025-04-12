@@ -1,7 +1,8 @@
+import * as vscode from 'vscode';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { LanguageModel } from 'ai';
 import { AiProvider, ModelDefinition } from './providerInterface';
-import { dynamicImport } from '../../utils/dynamicImport'; // Helper for CJS/ESM interop
+import { dynamicImport } from '../../utils/dynamicImport'; // Reverting to original relative path
 
 // Define a type for the expected structure of the OpenRouter models API response
 interface OpenRouterApiModel {
@@ -44,6 +45,8 @@ export const openRouterProvider: AiProvider = {
   name: 'OpenRouter',
   requiresApiKey: true,
   apiKeyUrl: 'https://openrouter.ai/keys',
+  secretStorageKey: 'zenCoder.openRouterApiKey',
+  settingsEnabledKey: 'zencoder.provider.openrouter.enabled',
 
   /**
    * Creates an OpenRouter language model instance.
@@ -128,5 +131,23 @@ export const openRouterProvider: AiProvider = {
       return Promise.resolve([]); // Return empty list on error
       // Or: throw error; // Re-throw the error
     }
+  },
+  // --- New methods required by interface ---
+
+  async getApiKey(secretStorage: vscode.SecretStorage): Promise<string | undefined> {
+    return await secretStorage.get(this.secretStorageKey);
+  },
+
+  async setApiKey(secretStorage: vscode.SecretStorage, apiKey: string): Promise<void> {
+    await secretStorage.store(this.secretStorageKey, apiKey);
+  },
+
+  async deleteApiKey(secretStorage: vscode.SecretStorage): Promise<void> {
+    await secretStorage.delete(this.secretStorageKey);
+  },
+
+  isEnabled(): boolean {
+    const config = vscode.workspace.getConfiguration();
+    return config.get<boolean>(this.settingsEnabledKey, true); // Default to true
   },
 };

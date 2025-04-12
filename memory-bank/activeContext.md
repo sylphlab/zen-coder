@@ -1,18 +1,25 @@
 # Active Context
 
 ## Current Focus
-Refactoring AI Provider logic in `AiService`.
+Further refactoring AI Provider logic, delegating API key and status management.
 
 ## Recent Changes
-- **Refactored AI Provider Logic:**
+- **Further Refactored AI Provider Logic:**
+    - Modified `AiProvider` interface to include methods/properties for managing API keys (`getApiKey`, `setApiKey`, `deleteApiKey`, `secretStorageKey`) and enabled status (`isEnabled`, `settingsEnabledKey`).
+    - Updated all provider modules (`anthropicProvider.ts`, `googleProvider.ts`, `openRouterProvider.ts`, `deepseekProvider.ts`) to implement the new interface requirements.
+    - Refactored `AiService` to delegate API key storage/retrieval and enabled status checks entirely to the provider modules.
+    - Removed API key properties (`anthropicApiKey`, etc.) and related management methods (`_isProviderEnabled`, old `getApiKeyStatus`, etc.) from `AiService`.
+    - Updated `_getProviderInstance`, `getProviderStatus`, `resolveAvailableModels`, `setApiKey`, `deleteApiKey` in `AiService` to use the new provider methods.
+    - Fixed import path issues for `dynamicImport` in `openRouterProvider.ts`.
+- **Refactored AI Provider Logic (Initial):** (Previous change)
     - Created `src/ai/providers` directory.
-    - Defined `AiProvider` interface in `src/ai/providers/providerInterface.ts`.
-    - Created individual provider modules (`anthropicProvider.ts`, `googleProvider.ts`, `openRouterProvider.ts`, `deepseekProvider.ts`) implementing the interface.
-    - Implemented dynamic model fetching for OpenRouter in `openRouterProvider.ts`.
-    - Created `src/ai/providers/index.ts` to export all providers and a lookup map.
-    - Refactored `AiService` (`_getProviderInstance`, `resolveAvailableModels`) to use the new provider structure.
-    - Removed old SDK imports and helper methods (`fetchOpenRouterModels`, `hardcodedModels`) from `AiService`.
-    - Created `src/utils/dynamicImport.ts` helper for `node-fetch` in OpenRouter provider.
+    - Defined initial `AiProvider` interface.
+    - Created individual provider modules implementing the initial interface.
+    - Implemented dynamic model fetching for OpenRouter.
+    - Created `src/ai/providers/index.ts`.
+    - Initial refactor of `AiService` (`_getProviderInstance`, `resolveAvailableModels`).
+    - Removed old SDK imports and helpers.
+    - Created `src/utils/dynamicImport.ts`.
 - **Added Settings Provider Search:** (Previous change)
     - Added a search input field to `SettingPage.tsx`.
     - Implemented state (`searchQuery`) and filtering logic (`filteredProviders`, `useMemo`) to dynamically filter the displayed provider list based on the search query (matching name or key).
@@ -65,16 +72,16 @@ Refactoring AI Provider logic in `AiService`.
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit AI Provider refactoring.
-- **Previous:** Refactor AI Provider logic in `AiService` and create provider modules.
+- **Current Task:** Update Memory Bank and commit further AI Provider refactoring.
+- **Previous:** Further refactor `AiService` and provider modules to delegate API key/status management.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **AI Provider Logic Refactored:** `AiService` now uses modular providers under `src/ai/providers`. Model creation and listing logic is delegated to individual provider modules.
-- **OpenRouter Models Fetched Dynamically:** Logic moved to `openRouterProvider.ts`.
+- **AI Provider Logic Further Refactored:** `AiService` is now significantly leaner, delegating API key management and status checks to the individual provider modules in `src/ai/providers`.
+- **OpenRouter Models Fetched Dynamically:** Logic remains in `openRouterProvider.ts`.
 - **Settings Provider Search Added:** Users can now filter the provider list in the settings page (Previous).
 - **API Key Input Added:** Settings page allows setting API keys (Previous).
 - **Settings Page Restored:** Moved rendering logic and passed necessary props (Previous).
@@ -100,7 +107,8 @@ Refactoring AI Provider logic in `AiService`.
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
-- Refactored AI provider handling into modular components for better organization and extensibility.
+- Delegated API key and status management to individual provider modules, simplifying `AiService`.
+- Refactored AI provider handling into modular components (Initial refactor).
 - Added search functionality to the Settings page Provider list (Previous).
 - Implemented dynamic fetching of OpenRouter models (Moved to provider module).
 - Implemented API Key input and setting mechanism in the Settings page (Previous).

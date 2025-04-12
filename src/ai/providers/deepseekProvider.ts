@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { createDeepSeek } from '@ai-sdk/deepseek';
 import { LanguageModel } from 'ai';
 import { AiProvider, ModelDefinition } from './providerInterface';
@@ -16,6 +17,8 @@ export const deepseekProvider: AiProvider = {
   name: 'DeepSeek',
   requiresApiKey: true,
   apiKeyUrl: 'https://platform.deepseek.com/docs/getting-started/apply-for-an-api-key',
+  secretStorageKey: 'zenCoder.deepseekApiKey',
+  settingsEnabledKey: 'zencoder.provider.deepseek.enabled',
 
   /**
    * Creates a DeepSeek language model instance.
@@ -45,5 +48,23 @@ export const deepseekProvider: AiProvider = {
     // Similar to others, return the hardcoded list for now.
     // Future enhancement: Check if DeepSeek provides a model listing API.
     return Promise.resolve(DEEPSEEK_MODELS);
+  },
+  // --- New methods required by interface ---
+
+  async getApiKey(secretStorage: vscode.SecretStorage): Promise<string | undefined> {
+    return await secretStorage.get(this.secretStorageKey);
+  },
+
+  async setApiKey(secretStorage: vscode.SecretStorage, apiKey: string): Promise<void> {
+    await secretStorage.store(this.secretStorageKey, apiKey);
+  },
+
+  async deleteApiKey(secretStorage: vscode.SecretStorage): Promise<void> {
+    await secretStorage.delete(this.secretStorageKey);
+  },
+
+  isEnabled(): boolean {
+    const config = vscode.workspace.getConfiguration();
+    return config.get<boolean>(this.settingsEnabledKey, true); // Default to true
   },
 };

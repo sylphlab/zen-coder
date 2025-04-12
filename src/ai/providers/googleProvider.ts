@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { LanguageModel } from 'ai';
 import { AiProvider, ModelDefinition } from './providerInterface';
@@ -21,6 +22,8 @@ export const googleProvider: AiProvider = {
   name: 'Google Gemini',
   requiresApiKey: true,
   apiKeyUrl: 'https://aistudio.google.com/app/apikey',
+  secretStorageKey: 'zenCoder.googleApiKey',
+  settingsEnabledKey: 'zencoder.provider.google.enabled',
 
   /**
    * Creates a Google Gemini language model instance.
@@ -51,5 +54,23 @@ export const googleProvider: AiProvider = {
     // Similar to Anthropic, return the hardcoded list.
     // A future enhancement could involve trying to list models if an API becomes available.
     return Promise.resolve(GOOGLE_MODELS);
+  },
+  // --- New methods required by interface ---
+
+  async getApiKey(secretStorage: vscode.SecretStorage): Promise<string | undefined> {
+    return await secretStorage.get(this.secretStorageKey);
+  },
+
+  async setApiKey(secretStorage: vscode.SecretStorage, apiKey: string): Promise<void> {
+    await secretStorage.store(this.secretStorageKey, apiKey);
+  },
+
+  async deleteApiKey(secretStorage: vscode.SecretStorage): Promise<void> {
+    await secretStorage.delete(this.secretStorageKey);
+  },
+
+  isEnabled(): boolean {
+    const config = vscode.workspace.getConfiguration();
+    return config.get<boolean>(this.settingsEnabledKey, true); // Default to true
   },
 };

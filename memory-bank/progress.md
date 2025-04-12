@@ -14,7 +14,7 @@
 - Extension activates on view (`onView:zencoder.views.chat`).
 - Webview panel creation logic loads correctly in both Development (Vite Dev Server for HMR) and Production (Vite build output) modes.
 - CSP nonce handling adapted for both modes.
-- `AiService` class created (`src/ai/aiService.ts`) and refactored to use modular providers. Core functionality (API keys, model instantiation, streaming, tool definitions/execution) is now managed through the provider structure.
+- `AiService` class created (`src/ai/aiService.ts`) and further refactored. API key management and status checks are now fully delegated to the modular provider implementations under `src/ai/providers/`.
 - `AiService` integrated into `src/extension.ts`.
 - Streaming logic adapted for Preact UI.
 - Vite build configuration updated.
@@ -31,7 +31,7 @@
 - UI Tool Display refined (inline, human-readable summaries, progress).
 - **Routing Implemented:** Added `wouter` for navigation between Chat (`/`) and Settings (`/settings`) pages. Created basic `SettingPage.tsx` and `ChatPage.tsx`. Replaced settings modal with the `/settings` route. (Previous)
 - **Settings Provider Search:** Added a search input to `SettingPage.tsx` to filter the list of providers.
-- **AI Provider Refactoring:** Implemented modular provider structure under `src/ai/providers`. `AiService` now delegates model creation and listing to these modules. Dynamic fetching for OpenRouter moved to its provider module.
+- **AI Provider Refactoring (Complete):** Implemented modular provider structure under `src/ai/providers`. `AiService` now fully delegates model creation, listing, API key management, and status checks to these modules.
 - **Settings Page API Key Input:** Added input fields and buttons to `SettingPage.tsx` to allow users to set API keys for each provider. Implemented message passing (`setApiKey`) to the extension host, which handles storing the key in `SecretStorage` via `AiService`. (Previous)
 - **Settings Page Restored:** Moved provider settings logic from `App.tsx` to `SettingPage.tsx` and passed necessary props (`providerStatus`, `handleProviderToggle`) to restore functionality after routing refactor. Exported required types from `App.tsx`. (Previous)
 - **Vite Port Discovery Implemented & Fixed:** Extension now reads the actual Vite dev server port from the correct file path (`.vite.port` in the project root) during development, ensuring reliable HMR connection even if the default port changes.
@@ -70,6 +70,6 @@
 - Custom tool execution status updates (beyond the inline display) are currently disabled.
 - Model resolver logic now iterates through all enabled providers using their `getAvailableModels` method. Dynamic fetching is implemented only for OpenRouter currently; others use hardcoded lists within their modules.
 - Chat UI model selection persistence is not yet implemented.
-- API Key management is now implemented via input fields in the Settings page webview.
+- API Key management is now handled by individual provider modules, interacting with `vscode.SecretStorage`. `AiService` delegates these operations. Input fields remain in the Settings page webview.
 - **Blank Webview (Development):** Still investigating the cause of the blank webview in development mode, currently testing relaxed CSP. (Previous issue)
 - **Routing CSS:** Basic navigation links added, but styling (`.app-layout`, `.navigation`, `.content-area`) needs to be implemented in `app.css`.

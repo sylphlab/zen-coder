@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { LanguageModel } from 'ai';
 import { AiProvider, ModelDefinition } from './providerInterface';
@@ -21,6 +22,8 @@ export const anthropicProvider: AiProvider = {
   name: 'Anthropic',
   requiresApiKey: true,
   apiKeyUrl: 'https://console.anthropic.com/settings/keys',
+  secretStorageKey: 'zenCoder.anthropicApiKey',
+  settingsEnabledKey: 'zencoder.provider.anthropic.enabled',
 
   /**
    * Creates an Anthropic language model instance.
@@ -68,5 +71,23 @@ export const anthropicProvider: AiProvider = {
     // For Anthropic, we return the hardcoded list as there's no public listing API.
     // An API key isn't strictly needed for *this* implementation, but the interface allows it.
     return Promise.resolve(ANTHROPIC_MODELS);
+  },
+  // --- New methods required by interface ---
+
+  async getApiKey(secretStorage: vscode.SecretStorage): Promise<string | undefined> {
+    return await secretStorage.get(this.secretStorageKey);
+  },
+
+  async setApiKey(secretStorage: vscode.SecretStorage, apiKey: string): Promise<void> {
+    await secretStorage.store(this.secretStorageKey, apiKey);
+  },
+
+  async deleteApiKey(secretStorage: vscode.SecretStorage): Promise<void> {
+    await secretStorage.delete(this.secretStorageKey);
+  },
+
+  isEnabled(): boolean {
+    const config = vscode.workspace.getConfiguration();
+    return config.get<boolean>(this.settingsEnabledKey, true); // Default to true
   },
 };
