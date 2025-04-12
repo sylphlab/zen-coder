@@ -192,15 +192,21 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                              let historyChanged = false; // Flag to check if save is needed
                                              if (prefix >= '0' && prefix <= '7') { // Text/Error Chunks
                                                  const part = JSON.parse(contentData);
+                                                 console.log(`[Extension Stream] Prefix ${prefix}, Parsed Part:`, JSON.stringify(part)); // ADD LOGGING
                                                  let textDelta = '';
                                                  if (typeof part === 'string') {
                                                      textDelta = part;
+                                                     console.log(`[Extension Stream] Sending appendMessageChunk (string part): ${JSON.stringify(textDelta)}`); // ADD LOGGING
                                                      this.postMessageToWebview({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part });
                                                  } else if (typeof part === 'object' && part?.type === 'text-delta') {
                                                      textDelta = part.textDelta;
+                                                     console.log(`[Extension Stream] Sending appendMessageChunk (text-delta part): ${JSON.stringify(textDelta)}`); // ADD LOGGING
                                                      this.postMessageToWebview({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
                                                  } else if (typeof part === 'object' && part?.type === 'error') {
+                                                      console.error(`[Extension Stream] Received stream error part: ${part.error}`); // ADD LOGGING
                                                       vscode.window.showErrorMessage(`Stream Error: ${part.error}`); this.postMessageToWebview({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
+                                                 } else {
+                                                     console.warn(`[Extension Stream] Unhandled part structure for prefix ${prefix}:`, JSON.stringify(part)); // ADD LOGGING
                                                  }
                                                  // --- Append text chunk to UI history ---
                                                  if (textDelta && this._history.length > 0) {
@@ -494,6 +500,32 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         }
                     } else {
                         console.error("[Extension] Invalid payload for deleteApiKey:", message.payload);
+                    }
+                    break;
+                case 'clearChatHistory':
+                    console.log("[Extension] Received clearChatHistory request from webview.");
+                    this._history = []; // Clear in-memory history
+                    try {
+                        await this._context.globalState.update(this.UI_HISTORY_KEY, []); // Clear persistent storage
+                        console.log("[Extension] Cleared UI history in global state.");
+                        // Optionally send confirmation back, but UI already cleared its state
+                        // this.postMessageToWebview({ type: 'historyCleared' });
+                    } catch (error: any) {
+                        console.error("[Extension] Failed to clear UI history from global state:", error);
+                        vscode.window.showErrorMessage(`Failed to clear chat history: ${error.message}`);
+                    }
+                    break;
+                case 'clearChatHistory':
+                    console.log("[Extension] Received clearChatHistory request from webview.");
+                    this._history = []; // Clear in-memory history
+                    try {
+                        await this._context.globalState.update(this.UI_HISTORY_KEY, []); // Clear persistent storage
+                        console.log("[Extension] Cleared UI history in global state.");
+                        // Optionally send confirmation back, but UI already cleared its state
+                        // this.postMessageToWebview({ type: 'historyCleared' });
+                    } catch (error: any) {
+                        console.error("[Extension] Failed to clear UI history from global state:", error);
+                        vscode.window.showErrorMessage(`Failed to clear chat history: ${error.message}`);
                     }
                     break;
                 default:

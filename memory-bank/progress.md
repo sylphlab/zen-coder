@@ -1,6 +1,13 @@
 # Project Progress
 
 ## What Works
+- **Provider Selection Persistence:** Implemented saving/restoring of selected provider and model ID in `app.tsx`.
+- **Clear Chat Button:** Added button to UI and backend handler to clear history.
+- **UI Stream Update (Attempt 3):** Applied stricter immutability pattern for state updates in `appendMessageChunk` handler (`app.tsx`).
+- **UI Stream Update (Attempt 2):** Refined state update logic (`app.tsx`) using deep cloning to force UI re-renders for message chunks.
+- **UI Stream Update:** Fixed frontend state update logic (`app.tsx`) for `appendMessageChunk` to ensure message chunks render immediately by creating new array references.
+- **AI Response Display:** Fixed frontend logic (`app.tsx`) to correctly handle the `startAssistantMessage` signal using the provided `messageId`, ensuring streaming AI responses are displayed properly.
+- **Immediate User Message Display:** User messages now appear instantly in the chat UI after sending.
 - **UI Rendering Fixed:** Corrected message rendering logic in `App.tsx` to handle both string and array content types, resolving `msg.content.map is not a function` error.
 - **UI Initialization Loop Fixed:** Corrected `useEffect` dependencies in `App.tsx` to prevent infinite requests on startup.
 - **UI Styling (UnoCSS):** Basic styling applied to main layout, navigation, chat elements (header, messages, input), and settings page using UnoCSS utility classes. Dark mode support included.
@@ -60,8 +67,8 @@
 ## Current Status
 - **UI:** Basic layout and component styling applied using UnoCSS. Dark mode supported. Rendering errors fixed. Navigation functional.
 - **Initialization:** Webview initializes correctly without infinite loops, loads history and model state.
-- **History Persistence:** User/Assistant messages saved to global state and loaded on init. Tool result saving needs implementation.
-- **Model Selection:** Selection persists across webview reloads.
+- **History Persistence:** User/Assistant messages saved to global state and loaded on init. Tool result saving needs implementation. Clear history function added.
+- **Model Selection:** Provider and Model ID selection now persists across webview reloads.
 - **Stream Handling:** Explicit end-of-stream signaling implemented between backend and frontend.
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
@@ -80,7 +87,7 @@
 - **AI Response Behavior:** AI models might not always explicitly list tool results (e.g., all generated UUIDs) in their text response, even though they receive the results. This depends on the model and prompt.
 - Custom tool execution status updates (beyond the inline display) are currently disabled.
 - Model resolver logic now iterates through all enabled providers using their `getAvailableModels` method. Dynamic fetching is implemented only for OpenRouter currently; others use hardcoded lists within their modules.
-// - Conversation history is not persisted. // Implemented
+// - Conversation history is not persisted. // Implemented (Persistence works, Clear button added)
 - API Key management is now handled by individual provider modules, interacting with `vscode.SecretStorage`. `AiService` delegates these operations. Input fields remain in the Settings page webview.
 - **Blank Webview (Development):** Still investigating the cause of the blank webview in development mode, currently testing relaxed CSP. (Previous issue)
 - **Routing CSS:** Basic navigation links added, but styling (`.app-layout`, `.navigation`, `.content-area`) needs to be implemented in `app.css`.

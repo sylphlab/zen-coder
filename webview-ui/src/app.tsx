@@ -138,20 +138,30 @@ export function App() {
     }, [messages]); // Scroll when messages change
 
     useEffect(() => {
-        // Restore saved model ID state when the webview loads
+        // Restore saved state (provider and model ID) when the webview loads
         const savedState = vscode?.getState();
         const initialModelId = savedState?.selectedModelId;
-        let restoredModel = false;
+        const initialProvider = savedState?.selectedProvider; // Restore provider too
+        let restoredState = false;
 
-        if (initialModelId) {
-            console.log("Restoring saved model ID:", initialModelId);
-            setCurrentModelInput(initialModelId);
-            const restoredProvider = getProviderFromModelId(initialModelId);
-            if (restoredProvider) {
-                setSelectedProvider(restoredProvider);
+        if (initialProvider) {
+            console.log("Restoring saved provider:", initialProvider);
+            setSelectedProvider(initialProvider);
+            if (initialModelId) {
+                console.log("Restoring saved model ID:", initialModelId);
+                setCurrentModelInput(initialModelId);
             }
-            // No need to post 'setModel' here, backend doesn't need it on init
-            restoredModel = true;
+            restoredState = true;
+        } else if (initialModelId) { // Fallback if only model ID was saved previously
+             console.log("Restoring saved model ID (fallback):", initialModelId);
+             setCurrentModelInput(initialModelId);
+             const restoredProvider = getProviderFromModelId(initialModelId);
+             if (restoredProvider) {
+                 setSelectedProvider(restoredProvider);
+                 // Save the provider now that we've derived it
+                 vscode?.setState({ ...savedState, selectedProvider: restoredProvider });
+             }
+             restoredState = true;
         }
 
         // --- Message Handling Logic ---
@@ -167,41 +177,57 @@ export function App() {
                     break;
                 case 'startAssistantMessage': // Signal to start a new assistant message block
                      setIsStreaming(true);
-                     // Backend now manages the persistent UI history frame,
-                     // Frontend just needs to know the ID to append to.
-                     // We find the ID from the latest message added by the backend.
-                     // This assumes the backend adds the frame *before* sending this signal.
-                     // A more robust way might be for the backend to send the ID with this signal.
-                     // For now, let's assume the last message IS the frame.
-                     setMessages(prev => {
-                         const lastMsg = prev[prev.length - 1];
-                         if (lastMsg?.sender === 'assistant') {
-                             currentAssistantMessageId.current = lastMsg.id;
-                         } else {
-                             // This case should ideally not happen if backend sends frame first
-                             console.warn("startAssistantMessage received but last message wasn't assistant frame.");
-                             currentAssistantMessageId.current = null; // Reset
-                         }
-                         return prev; // No state change needed here, just setting the ref
-                     });
+                     // Use the messageId directly from the payload sent by the backend
+                     if (message.messageId) {
+                         currentAssistantMessageId.current = message.messageId;
+                         console.log(`Set currentAssistantMessageId to: ${message.messageId}`);
+                     } else {
+                         console.error("startAssistantMessage received without a messageId in payload!");
+                         currentAssistantMessageId.current = null; // Reset if ID is missing
+                     }
+                     // No need to call setMessages here, just setting the ref
                      break;
                 case 'appendMessageChunk': // Append text chunk to the current assistant message
                     if (currentAssistantMessageId.current) {
-                        setMessages(prev => prev.map(msg => {
-                            if (msg.id === currentAssistantMessageId.current) {
-                                // Ensure content is an array
-                                const contentArray = Array.isArray(msg.content) ? msg.content : [];
-                                const lastContent = contentArray[contentArray.length - 1];
-                                if (lastContent?.type === 'text') {
-                                    // Append to existing text part
-                                    return { ...msg, content: [...contentArray.slice(0, -1), { ...lastContent, text: lastContent.text + message.textDelta }] };
-                                } else {
-                                    // Add new text part
-                                    return { ...msg, content: [...contentArray, { type: 'text', text: message.textDelta }] };
-                                }
+                        // Log the actual text delta received
+                        console.log("Received textDelta:", JSON.stringify(message.textDelta));
+                        setMessages(prevMessages => {
+                            const messageIndex = prevMessages.findIndex(msg => msg.id === currentAssistantMessageId.current);
+                            if (messageIndex === -1) {
+                                console.warn("Could not find message to append chunk to:", currentAssistantMessageId.current);
+                                return prevMessages; // No change
                             }
-                            return msg;
-                        }));
+
+                            // Create a new array for the messages
+                            const newMessages = [...prevMessages];
+
+                            // Create a *new* message object based on the old one
+                            const oldMessage = newMessages[messageIndex];
+                            const newMessage = {
+                                ...oldMessage,
+                                // Create a *new* content array by copying existing parts
+                                content: Array.isArray(oldMessage.content) ? [...oldMessage.content] : []
+                            };
+
+                            const lastContentPartIndex = newMessage.content.length - 1;
+                            const lastContentPart = newMessage.content[lastContentPartIndex];
+
+                            if (lastContentPart?.type === 'text') {
+                                // Create a *new* text part object with updated text
+                                newMessage.content[lastContentPartIndex] = {
+                                    ...lastContentPart, // Copy properties from the old part
+                                    text: lastContentPart.text + message.textDelta // Update text
+                                };
+                            } else {
+                                // Add a *new* text part object
+                                newMessage.content.push({ type: 'text', text: message.textDelta });
+                            }
+
+                            // Replace the old message with the new one in the new array
+                            newMessages[messageIndex] = newMessage;
+
+                            return newMessages; // Return the new array reference
+                        });
                     } else {
                          console.warn("appendMessageChunk received but no current assistant message ID is set.");
                          // Optionally handle this by adding a new message?
@@ -248,13 +274,13 @@ export function App() {
                     if (Array.isArray(message.payload)) {
                         setAvailableModels(message.payload);
                         // Set initial provider and model ONLY if not restored from saved state
-                        if (!restoredModel && !currentModelInput && message.payload.length > 0) {
+                        if (!restoredState && message.payload.length > 0) {
                             const firstModel = message.payload[0];
-                            console.log("Setting initial model (no saved state):", firstModel.id);
+                            console.log("Setting initial provider and model (no saved state):", firstModel.provider, firstModel.id);
                             setSelectedProvider(firstModel.provider);
                             setCurrentModelInput(firstModel.id);
-                            // Save the initial state
-                            vscode?.setState({ selectedModelId: firstModel.id });
+                            // Save the initial state (both provider and model)
+                            vscode?.setState({ selectedProvider: firstModel.provider, selectedModelId: firstModel.id });
                         }
                     }
                     break;
@@ -318,9 +344,19 @@ export function App() {
 
     const handleSend = () => {
         if (inputValue.trim() && !isStreaming && currentModelInput) {
-            // Send message with text AND the currently selected model ID
+            const newUserMessage: Message = {
+                id: generateUniqueId(),
+                sender: 'user',
+                content: [{ type: 'text', text: inputValue }],
+                timestamp: Date.now()
+            };
+            // Add user message to UI immediately
+            setMessages(prev => [...prev, newUserMessage]);
+
+            // Send message with text AND the currently selected model ID to backend
             postMessage({ type: 'sendMessage', text: inputValue, modelId: currentModelInput });
-            setInputValue('');
+
+            setInputValue(''); // Clear input after adding to state and sending
             setIsStreaming(true); // Set streaming immediately for responsiveness
             currentAssistantMessageId.current = null; // Reset before new message stream
         } else if (!currentModelInput) {
@@ -341,14 +377,14 @@ export function App() {
         if (newProvider === '') {
             setSelectedProvider(null);
             setCurrentModelInput('');
-            vscode?.setState({ selectedModelId: undefined }); // Clear saved state
+            vscode?.setState({ selectedProvider: null, selectedModelId: undefined }); // Clear saved state
         } else {
             setSelectedProvider(newProvider);
             const defaultModel = availableModels.find(m => m.provider === newProvider);
             const newModelId = defaultModel ? defaultModel.id : '';
             setCurrentModelInput(newModelId);
             // Save state when provider changes
-            vscode?.setState({ selectedModelId: newModelId });
+            vscode?.setState({ selectedProvider: newProvider, selectedModelId: newModelId });
         }
     };
 
@@ -356,7 +392,7 @@ export function App() {
         const newModelId = e.currentTarget.value;
         setCurrentModelInput(newModelId);
         // Save state whenever the model input changes
-        vscode?.setState({ selectedModelId: newModelId });
+        vscode?.setState({ selectedProvider: selectedProvider, selectedModelId: newModelId }); // Save provider too
     };
 
     const handleProviderToggle = useCallback((providerId: string, enabled: boolean) => {
@@ -370,6 +406,14 @@ export function App() {
              type: 'setProviderEnabled',
              payload: { provider: providerId, enabled: enabled }
          });
+     }, []);
+
+     const handleClearChat = useCallback(() => {
+         if (confirm("Are you sure you want to clear the chat history? This cannot be undone.")) {
+             setMessages([]); // Clear local state immediately
+             postMessage({ type: 'clearChatHistory' }); // Tell backend to clear persistent state
+             console.log("Clear chat requested.");
+         }
      }, []);
 
 
@@ -431,7 +475,7 @@ export function App() {
                     <Route path="/">
                         <div class="chat-container flex flex-col h-full">
                             {/* Header Controls */}
-                            <div class="header-controls p-2 border-b border-gray-300 dark:border-gray-700">
+                            <div class="header-controls p-2 border-b border-gray-300 dark:border-gray-700 flex justify-between items-center">
                                 <div class="model-selector flex items-center space-x-2">
                                     <label htmlFor="provider-select" class="text-sm font-medium">Provider:</label>
                                     <select
@@ -465,6 +509,13 @@ export function App() {
                                         ))}
                                     </datalist>
                                 </div>
+                                <button
+                                    onClick={handleClearChat}
+                                    class="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm disabled:opacity-50"
+                                    disabled={messages.length === 0 || isStreaming} // Disable if no messages or streaming
+                                >
+                                    Clear Chat
+                                </button>
                             </div>
                             {/* Messages Area */}
                             <div class="messages-area flex-1 overflow-y-auto p-4 space-y-4">

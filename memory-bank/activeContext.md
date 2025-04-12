@@ -4,6 +4,13 @@
 Prepare for next task (UnoCSS styling).
 
 ## Recent Changes
+- **Implemented Provider Selection Persistence:** Modified `app.tsx` to save/restore both selected provider and model ID using `vscode.getState`/`setState`.
+- **Added Clear Chat Button:** Implemented button and handler in `app.tsx` and backend message handling in `extension.ts` to clear chat history.
+- **Fixed UI Update on Stream (Attempt 3):** Implemented stricter immutability in `appendMessageChunk` handler (`app.tsx`) by creating new objects/arrays for all modified levels of the state.
+- **Fixed UI Update on Stream (Attempt 2):** Further refined frontend logic (`app.tsx`) for `appendMessageChunk` using deep cloning to ensure state updates trigger immediate UI re-renders.
+- **Fixed UI Update on Stream:** Modified frontend logic (`app.tsx`) for `appendMessageChunk` to ensure state updates trigger immediate UI re-renders by creating new array references, resolving the issue where messages only appeared after reload.
+- **Fixed AI Response Handling:** Corrected frontend logic (`app.tsx`) in the `startAssistantMessage` handler to properly use the `messageId` sent from the backend, resolving issues where AI responses weren't displayed after the previous fix.
+- **Fixed Immediate User Message Display:** Updated `handleSend` in `app.tsx` to add the user message to the UI state *before* sending it to the backend, ensuring immediate visibility.
 - **Implemented UI State Persistence:** Refactored history management to use a single persistent store (`UiMessage[]` format mirroring frontend state) saved in `globalState` (`zenCoderUiHistory`).
     - Backend (`extension.ts`) now incrementally updates this UI history during streaming (text chunks, tool calls, tool status updates) and saves frequently.
     - Backend translates `UiMessage[]` to `CoreMessage[]` on demand before calling the AI SDK.
@@ -120,15 +127,19 @@ Prepare for next task (UnoCSS styling).
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Apply UnoCSS styling to UI components.
+- **Current Task:** Debug persistent UI update issue where AI responses don't render immediately.
 - **Next:** Apply UnoCSS styling to UI components.
-- **Previous:** Modify `App.tsx` to re-fetch models on status change.
-- **Future:** Implement model selection persistence in Chat UI.
-- **Future:** Implement model selection persistence in Chat UI.
-- **Future:** Implement chat history persistence.
+- **Previous:** Implement Provider/Model persistence and Clear Chat button.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
+- **Provider/Model Persistence Implemented:** UI now saves and restores both selections.
+- **Clear Chat Implemented:** Button added to UI, backend handler added.
+- **UI Stream Update Fixed (Attempt 3):** Applied stricter immutability pattern for state updates in `appendMessageChunk`.
+- **UI Stream Update Fixed (Attempt 2):** Implemented deep cloning for state updates in `appendMessageChunk` handler.
+- **UI Stream Update Fixed:** Frontend now correctly updates the UI immediately as message chunks arrive by ensuring new state array references are created.
+- **AI Response Display Fixed:** Frontend now correctly handles the `startAssistantMessage` signal using the provided `messageId` and appends response chunks.
+- **Immediate Message Display Fixed:** User messages now appear instantly in the chat UI.
 - **UI State Persistence Implemented:** Backend now persists history in UI format (`UiMessage[]`), including partial messages and tool statuses. Frontend loads this state directly.
 - **Model Selection Fixed:** Frontend now sends the selected `modelId` with the `sendMessage` request. Backend (`extension.ts` and `aiService.ts`) now correctly uses the provided `modelId` to instantiate the AI model, resolving the issue where the wrong provider/key was being used.
 - **UI Rendering Fixed:** Correctly handles different `CoreMessage` content types (string/array). Navigation should work again.
