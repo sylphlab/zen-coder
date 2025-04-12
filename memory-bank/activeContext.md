@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Merging Settings UI into the main Chat Webview.
+Refactoring extension activation to use WebviewViewProvider and remove commands.
 
 ## Recent Changes
 - **Tool Refactoring & Expansion:** (Completed previously)
@@ -22,17 +22,20 @@ Merging Settings UI into the main Chat Webview.
     - Settings are now displayed in a modal triggered by a new "Settings" button in the chat view header.
     - Added necessary CSS for the modal and button to `webview-ui/src/app.css`.
     - Updated `src/extension.ts`:
-        - Removed `settingsPanel` creation and management logic.
-        - Modified `zencoder.openSettings` command to send a `showSettings` message to the existing `chatPanel`.
-        - Updated `chatPanel` message handler to process settings-related messages (`getProviderStatus`, `setProviderEnabled`).
-        - Updated `getWebviewContent` to only handle the single `webview-ui`.
+        - Removed all command registrations (`startChat`, `openSettings`, `set*Key`).
+        - Removed `chatPanel` logic.
+        - Implemented `ZenCoderChatViewProvider` to manage the webview displayed in the activity bar.
+        - Registered the `WebviewViewProvider`.
+        - Updated `activate` to initialize the provider and set the `AiService` callback.
+        - Updated `deactivate` to be empty.
     - Updated `package.json`:
-        - Removed build/watch scripts related to `settings-ui`.
-    - Removed the `settings-ui` directory.
+        - Changed `activationEvents` to `onView:zencoder.views.chat`.
+        - Changed the view type in `contributes.views` to `webview`.
+        - Removed `contributes.commands` and `contributes.menus`.
+    - Removed the `settings-ui` directory (previously).
 
 ## Next Steps
-- **Current Task:** Implement Model Resolver (API/Web scraping).
-        - Updated `extension.ts` message handler for `getAvailableModels`.
+- **Current Task:** Test the new WebviewViewProvider activation and UI flow.
 - **Previous:** Test core chat functionality, focusing on the new inline, human-readable tool call display and the updated `uuidGenerateTool`.
 - **Future:** Implement API/Web scraping for `resolveAvailableModels` (e.g., OpenRouter).
 - **Future:** Implement model selection persistence in Chat UI.
@@ -43,12 +46,11 @@ Merging Settings UI into the main Chat Webview.
 - **Fixed Vite 504 Error (Chat UI):** Resolved "Outdated Optimize Dep" error for `@vscode/webview-ui-toolkit/react` by removing the unused import from `webview-ui/src/app.tsx`, deleting `webview-ui/node_modules/.vite`, and force-reinstalling dependencies.
 - **Fixed Chat UI Hang:** Modified `AiService.getAiResponseStream` to send an error message back to the Chat UI when a model instance cannot be created (due to disabled provider or missing API key), allowing the UI to reset its streaming state. (Resolved)
 - **Fixed `getCurrentModelId` Return Type:** Corrected the return type in `AiService` to `string`. (Resolved)
-- **Added Debug Logs (Settings Page):** Added console logs to `extension.ts` for the `zencoder.openSettings` command handler and the `ZenCoderCommandsProvider` to trace execution and view rendering. (Helped diagnose)
-- **Added Debug Logs (API Keys):** Added detailed console logs to `AiService` `initialize`, `setApiKey`, and `_getProviderInstance` methods to trace SecretStorage operations and internal key checking logic. (Helped diagnose)
-- **Verified Model Resolver Logic:** Confirmed the logic in `AiService.resolveAvailableModels` correctly filters hardcoded models based on provider status (enabled and API key set).
-- **Corrected `_getProviderInstance` Logic:** Refactored the method to determine provider based on model ID patterns first, then check enablement and API key status, resolving the issue where valid keys might be incorrectly reported as missing for certain model IDs (like `deepseek-chat`). (Resolved API Key issue)
-- **Added Activity Bar Entry:** Added a "Zen Coder" view to the Activity Bar with an "Open Settings" command as an alternative way to access settings, bypassing Command Palette issues. (Resolved Settings Page access issue)
-- **Verified Chat UI Code:** Confirmed `webview-ui/src/app.tsx` contains the code for the "Provider -> Model" selection flow. (Confirmed)
+- **Added Debug Logs (API Keys):** (Kept) Added detailed console logs to `AiService` `initialize`, `setApiKey`, and `_getProviderInstance` methods to trace SecretStorage operations and internal key checking logic.
+- **Verified Model Resolver Logic:** (Kept) Confirmed the logic in `AiService.resolveAvailableModels` correctly filters hardcoded models based on provider status (enabled and API key set).
+- **Corrected `_getProviderInstance` Logic:** (Kept) Refactored the method to determine provider based on model ID patterns first, then check enablement and API key status, resolving the issue where valid keys might be incorrectly reported as missing for certain model IDs (like `deepseek-chat`).
+- **Activity Bar Entry:** Changed from a Tree View with commands to a direct Webview View.
+- **Verified Chat UI Code:** (Kept) Confirmed `webview-ui/src/app.tsx` contains the code for the "Provider -> Model" selection flow and the integrated settings modal.
 - **Fixed Vite 504 Error (Chat UI):** Resolved "Outdated Optimize Dep" error for `@vscode/webview-ui-toolkit/react` by removing the unused import from `webview-ui/src/app.tsx`, deleting `webview-ui/node_modules/.vite`, and force-reinstalling dependencies.
 
 ## Active Decisions
@@ -57,4 +59,5 @@ Merging Settings UI into the main Chat Webview.
 - **New Principle:** Tools should support batch operations where applicable (added to `.clinerules`).
 - Prioritized human-readable, inline tool status summaries (including progress for `uuidGenerateTool`) over showing raw technical details by default in the UI.
 - Confirmed tool results are passed back to the AI; AI response generation determines if/how results are presented in text.
-- Merged Settings UI into the main Chat Webview, eliminating the separate `settings-ui` project.
+- Merged Settings UI into the main Chat Webview.
+- Refactored extension activation to use `WebviewViewProvider` instead of commands, displaying the UI directly in the activity bar.

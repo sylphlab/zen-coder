@@ -8,7 +8,7 @@
 - Basic Preact chat UI structure implemented.
 - Model selection dropdown implemented and functional.
 - Communication between Preact UI and extension host updated.
-- `zencoder.startChat` command registered and activated (project renamed).
+- Extension activates on view (`onView:zencoder.views.chat`).
 - **Webview panel creation logic loads correctly in both Development (Vite Dev Server for HMR) and Production (Vite build output) modes.** (Fixed Preact mount point to `#root` in `webview-ui/src/main.tsx` for dev mode).
 - CSP nonce handling adapted for both modes.
 - `AiService` class created (`src/ai/aiService.ts`) with:
@@ -22,7 +22,7 @@
 - `AiService` integrated into `src/extension.ts`.
 - Placeholder MCP tool executor removed from `src/extension.ts` and `AiService` constructor.
 - Streaming logic adapted for Preact UI.
-- API Key Setting Commands and handlers implemented.
+- (API Key Setting Commands removed, need alternative management).
 - Vite build configuration updated.
 - `package.json` scripts updated.
 - **VS Code Launch Configuration (`.vscode/launch.json`) updated to use `npm: watch` for `preLaunchTask`, enabling development mode HMR.**
@@ -52,8 +52,7 @@
 - **Merged Settings UI into Chat Webview:**
     - Settings UI (provider enablement, API key status) is now accessible via a modal within the main chat webview (`webview-ui/src/app.tsx`).
     - Removed separate `settings-ui` project and associated build scripts/dependencies.
-    - Updated `extension.ts` to manage only the single chat webview and handle settings messages.
-    - Updated `zencoder.openSettings` command to trigger the modal in the chat view.
+    - Updated `extension.ts` to use `WebviewViewProvider` instead of commands/panels.
 ## What's Left (Potential Future Enhancements)
 - Implement conversation history persistence.
 - Thorough testing and debugging of core chat and tool execution.
@@ -67,7 +66,8 @@
 ## Current Status
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates (for `uuidGenerateTool`).
 - **Tool Execution:** Tools (including multi-UUID generation) execute and return results to the AI.
-- **Settings Integration:** Settings UI (provider status/enablement) is integrated into the main chat webview via a modal.
+- **Settings Integration:** Settings UI integrated into the main chat webview via a modal.
+- **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
 
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
@@ -77,4 +77,4 @@
 - Custom tool execution status updates (beyond the inline display) are currently disabled.
 - Model resolver logic (fetching available models dynamically) is not yet implemented.
 - Chat UI model selection persistence is not yet implemented.
-- Conversation history is not persisted.
+- API Key management needs reimplementation (e.g., via VS Code settings or webview input).
