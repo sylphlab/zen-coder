@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks';
 import { JSX } from 'preact/jsx-runtime';
+import { Router, Route, Link, useLocation } from "wouter"; // Import wouter components (Corrected path)
 import './app.css';
+import { SettingPage } from './pages/SettingPage'; // Import SettingPage
+import { ChatPage } from './pages/ChatPage'; // Import ChatPage (though we might inline chat for now)
 
 // Define message structure
 interface Message {
@@ -136,8 +139,9 @@ export function App() {
     const [currentModelInput, setCurrentModelInput] = useState<string>(''); // Separate state for model input field
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const currentAssistantMessageId = useRef<string | null>(null);
-    const [isSettingsVisible, setIsSettingsVisible] = useState(false); // State for settings modal
-    const [providerStatus, setProviderStatus] = useState<AllProviderStatus | null>(null); // State for provider status
+    // const [isSettingsVisible, setIsSettingsVisible] = useState(false); // Replaced by routing
+    const [providerStatus, setProviderStatus] = useState<AllProviderStatus | null>(null); // State for provider status (keep for potential use in settings page)
+    const [location, setLocation] = useLocation(); // Hook for navigation state
 
      // --- Derived State ---
      const uniqueProviders = useMemo(() => {
@@ -159,7 +163,7 @@ export function App() {
     useEffect(() => {
         postMessage({ type: 'webviewReady' }); // Both UIs need this
         postMessage({ type: 'getAvailableModels' }); // For chat UI
-        postMessage({ type: 'getProviderStatus' }); // For settings UI
+        postMessage({ type: 'getProviderStatus' }); // For settings page
 
         const handleMessage = (event: MessageEvent) => {
             const message = event.data;
@@ -270,8 +274,8 @@ export function App() {
                         setProviderStatus(message.payload);
                     }
                     break;
-                case 'showSettings': // Handle command from extension to show settings
-                    setIsSettingsVisible(true);
+                case 'showSettings': // Handle command from extension to show settings page
+                    setLocation('/settings');
                     break;
             }
         };
@@ -402,106 +406,97 @@ export function App() {
        );
    };
 
-   const renderSettingsModal = () => {
-       if (!isSettingsVisible) return null;
-
-       return (
-           <div class="modal-overlay" onClick={() => setIsSettingsVisible(false)}>
-               <div class="modal-content" onClick={(e) => e.stopPropagation()}>
-                   <button class="modal-close-button" onClick={() => setIsSettingsVisible(false)}>&times;</button>
-                   <h2>Zen Coder 設定</h2>
-                   <section>
-                       <h3>Providers</h3>
-                       {providerStatus ? (
-                           <ul>
-                               {renderProviderSetting('ANTHROPIC', 'Anthropic (Claude)')}
-                               {renderProviderSetting('GOOGLE', 'Google (Gemini)')}
-                               {renderProviderSetting('OPENROUTER', 'OpenRouter')}
-                               {renderProviderSetting('DEEPSEEK', 'DeepSeek')}
-                           </ul>
-                       ) : (
-                           <p>正在載入 Provider 狀態...</p>
-                       )}
-                        <p><small>啟用 Provider 並且設定對應嘅 API Key 先可以使用.</small></p>
-                        <p><small>使用 Ctrl+Shift+P 並輸入 "Set [Provider] API Key" 去設定或更新 Key.</small></p>
-                   </section>
-                    {/* Add sections for Model Resolver later */}
-               </div>
-           </div>
-       );
-    };
-
+   // Settings Modal is removed, replaced by SettingsPage route
+    // Main application layout with routing
     return (
-        <div class="chat-container">
-            <div class="header-controls">
-                <button class="settings-button" onClick={() => setIsSettingsVisible(true)}>⚙️ Settings</button>
-                <div class="model-selector">
-                 {/* Provider Dropdown */}
-                 <label htmlFor="provider-select">Provider: </label>
-                 <select
-                     id="provider-select"
-                     value={selectedProvider ?? ''}
-                     onChange={handleProviderChange}
-                 >
-                     <option value="">-- Select Provider --</option>
-                     {uniqueProviders.map(provider => (
-                         <option key={provider} value={provider}>{provider}</option>
-                     ))}
-                 </select>
+        <Router>
+            <div class="app-layout">
+                <nav class="navigation">
+                    <Link href="/">Chat</Link>
+                    <Link href="/settings">Settings</Link>
+                </nav>
+                <main class="content-area">
+                    <Route path="/">
+                        {/* Existing Chat UI Logic */}
+                        <div class="chat-container">
+                            <div class="header-controls">
+                                {/* <button class="settings-button" onClick={() => setLocation('/settings')}>⚙️ Settings</button> */} {/* Replaced by nav link */}
+                                <div class="model-selector">
+                                    {/* Provider Dropdown */}
+                                    <label htmlFor="provider-select">Provider: </label>
+                                    <select
+                                        id="provider-select"
+                                        value={selectedProvider ?? ''}
+                                        onChange={handleProviderChange}
+                                    >
+                                        <option value="">-- Select Provider --</option>
+                                        {uniqueProviders.map(provider => (
+                                            <option key={provider} value={provider}>{provider}</option>
+                                        ))}
+                                    </select>
 
-                 {/* Model Autocomplete Input */}
-                 <label htmlFor="model-input">Model: </label>
-                 <input
-                     list="models-datalist"
-                     id="model-input"
-                     name="model-input"
-                     value={currentModelInput}
-                     onInput={handleModelInputChange}
-                     placeholder={selectedProvider ? "Select or type model ID" : "Select provider first"}
-                     disabled={!selectedProvider} // Disable if no provider selected
-                 />
-                 <datalist id="models-datalist">
-                     {filteredModels.map(model => (
-                         <option key={model.id} value={model.id}>
-                             {model.label}
-                         </option>
-                     ))}
-                 </datalist>
-                </div>
-            </div>
-            <div class="messages-area">
-                {messages.map((msg) => (
-                    <div key={msg.id} class={`message ${msg.sender}`}>
-                        <div class="message-content">
-                            {msg.content.map(renderContentPart)}
+                                    {/* Model Autocomplete Input */}
+                                    <label htmlFor="model-input">Model: </label>
+                                    <input
+                                        list="models-datalist"
+                                        id="model-input"
+                                        name="model-input"
+                                        value={currentModelInput}
+                                        onInput={handleModelInputChange}
+                                        placeholder={selectedProvider ? "Select or type model ID" : "Select provider first"}
+                                        disabled={!selectedProvider} // Disable if no provider selected
+                                    />
+                                    <datalist id="models-datalist">
+                                        {filteredModels.map(model => (
+                                            <option key={model.id} value={model.id}>
+                                                {model.label}
+                                            </option>
+                                        ))}
+                                    </datalist>
+                                </div>
+                            </div>
+                            <div class="messages-area">
+                                {messages.map((msg) => (
+                                    <div key={msg.id} class={`message ${msg.sender}`}>
+                                        <div class="message-content">
+                                            {msg.content.map(renderContentPart)}
+                                        </div>
+                                    </div>
+                                ))}
+                                {isStreaming && messages[messages.length - 1]?.sender === 'assistant' && (
+                                    <div class="message assistant">
+                                        <div class="message-content">
+                                            <span>Thinking...</span> {/* Replace ProgressRing with simple text */}
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={messagesEndRef} />
+                            </div>
+                            <div class="input-area">
+                                <textarea
+                                    value={inputValue}
+                                    onInput={(e) => setInputValue((e.target as HTMLTextAreaElement).value)}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder="Type your message..."
+                                    rows={3}
+                                    disabled={isStreaming || !currentModelInput} // Also disable if no model selected
+                                />
+                                <button onClick={handleSend} disabled={isStreaming || !inputValue.trim() || !currentModelInput}>
+                                    Send
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                ))}
-                {isStreaming && messages[messages.length - 1]?.sender === 'assistant' && (
-                     <div class="message assistant">
-                         <div class="message-content">
-                             <span>Thinking...</span> {/* Replace ProgressRing with simple text */}
-                         </div>
-                         {renderSettingsModal()} {/* Render the modal */}
-                     </div>
-                 )}
-                <div ref={messagesEndRef} />
+                    </Route>
+                    <Route path="/settings">
+                        <SettingPage />
+                    </Route>
+                    {/* Default route or 404 can be added here */}
+                </main>
             </div>
-            <div class="input-area">
-                <textarea
-                    value={inputValue}
-                    onInput={(e) => setInputValue((e.target as HTMLTextAreaElement).value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Type your message..."
-                    rows={3}
-                    disabled={isStreaming || !currentModelInput} // Also disable if no model selected
-                />
-                <button onClick={handleSend} disabled={isStreaming || !inputValue.trim() || !currentModelInput}>
-                    Send
-                </button>
-            </div>
-        </div>
+        </Router>
     );
-}
+
+/* Original return statement replaced by the Router structure above */
+} // Add back the closing brace for the App function
 
 // Type definitions are now correctly placed at the top of the file.
