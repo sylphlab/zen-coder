@@ -49,15 +49,11 @@
 - **`uuidGenerateTool` updated:** Now accepts `count` parameter and sends progress updates via callback.
 - **UI Tool Display:** Implemented inline, human-readable tool call display with progress updates for `uuidGenerateTool` and specific summaries for file tools. Technical details hidden by default.
 - **Tool Result Handling:** Confirmed tool results are correctly passed back to the AI model via the SDK.
-- **Settings Page Foundation:**
-    - Created `settings-ui` project (Vite + Preact).
-    - Registered `zencoder.openSettings` command.
-    - Implemented basic `settingsPanel` creation in `extension.ts`.
-    - Added `getApiKeyStatus` method to `AiService`.
-    - Configured Vite for `settings-ui` (port 5174, output dir).
-    - Updated build/watch scripts in `package.json`.
-    - Implemented basic Settings UI (`settings-ui/src/app.tsx`) to display API key status.
-    - Implemented communication for API key status between settings webview and extension host.
+- **Merged Settings UI into Chat Webview:**
+    - Settings UI (provider enablement, API key status) is now accessible via a modal within the main chat webview (`webview-ui/src/app.tsx`).
+    - Removed separate `settings-ui` project and associated build scripts/dependencies.
+    - Updated `extension.ts` to manage only the single chat webview and handle settings messages.
+    - Updated `zencoder.openSettings` command to trigger the modal in the chat view.
 ## What's Left (Potential Future Enhancements)
 - Implement conversation history persistence.
 - Thorough testing and debugging of core chat and tool execution.
@@ -71,7 +67,7 @@
 ## Current Status
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates (for `uuidGenerateTool`).
 - **Tool Execution:** Tools (including multi-UUID generation) execute and return results to the AI.
-- **Settings Foundation:** Basic infrastructure for the settings page is in place (command, panel creation, build setup, API key status display).
+- **Settings Integration:** Settings UI (provider status/enablement) is integrated into the main chat webview via a modal.
 
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
@@ -79,6 +75,6 @@
 - Conversation history is not persisted.
 - **AI Response Behavior:** AI models might not always explicitly list tool results (e.g., all generated UUIDs) in their text response, even though they receive the results. This depends on the model and prompt.
 - Custom tool execution status updates (beyond the inline display) are currently disabled.
-- Settings page UI only shows API key status; provider enable/disable and model selection are missing.
-- Model resolver logic is not yet implemented.
+- Model resolver logic (fetching available models dynamically) is not yet implemented.
 - Chat UI model selection persistence is not yet implemented.
+- Conversation history is not persisted.

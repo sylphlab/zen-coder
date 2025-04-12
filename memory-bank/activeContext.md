@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Finalizing Vercel AI SDK integration after addressing stream parsing and deprecated API issues.
+Merging Settings UI into the main Chat Webview.
 
 ## Recent Changes
 - **Tool Refactoring & Expansion:** (Completed previously)
@@ -17,31 +17,21 @@ Finalizing Vercel AI SDK integration after addressing stream parsing and depreca
 - **UI Tool Display Refinement:** Updated UI (`app.tsx`) to display tool calls inline with assistant messages, using a content array structure. Implemented human-readable status summaries for tools, hiding technical details by default (e.g., "[正在讀取 file.txt...]", "[uuidGenerateTool 已完成]").
 - **`uuidGenerateTool` Enhancement & Progress:** Updated tool to accept `count` parameter and implemented progress updates via callback. Modified `AiService` wrapper and UI (`app.tsx`) to handle and display progress (e.g., "[正在生成 UUID x/y...]").
 - **Tool Result Handling Clarification:** Confirmed that the tool (`uuidGenerateTool`) correctly returns the final result array to the SDK, which then passes it to the AI model. The AI's choice not to explicitly list the results in its initial response is a model behavior, not a code issue.
+- **Merged Settings UI into Chat Webview (Complete):**
+    - Moved settings UI components and logic from `settings-ui/src/app.tsx` into `webview-ui/src/app.tsx`.
+    - Settings are now displayed in a modal triggered by a new "Settings" button in the chat view header.
+    - Added necessary CSS for the modal and button to `webview-ui/src/app.css`.
+    - Updated `src/extension.ts`:
+        - Removed `settingsPanel` creation and management logic.
+        - Modified `zencoder.openSettings` command to send a `showSettings` message to the existing `chatPanel`.
+        - Updated `chatPanel` message handler to process settings-related messages (`getProviderStatus`, `setProviderEnabled`).
+        - Updated `getWebviewContent` to only handle the single `webview-ui`.
+    - Updated `package.json`:
+        - Removed build/watch scripts related to `settings-ui`.
+    - Removed the `settings-ui` directory.
 
 ## Next Steps
-- **Current Task:** Implement Settings Page & Model Resolver.
-    - **Phase 1 (Complete):**
-        - Created `settings-ui` directory and initialized Vite + Preact project.
-        - Registered `zencoder.openSettings` command in `package.json`.
-        - Added command handler and `settingsPanel` creation logic in `src/extension.ts`.
-        - Added `getApiKeyStatus` method to `src/ai/aiService.ts`.
-        - Configured `settings-ui/vite.config.ts` (port 5174, output dir `dist/settings`).
-        - Updated build/watch scripts in main `package.json`.
-    - **Phase 2 (Complete):**
-        - Implemented basic Preact UI (`settings-ui/src/app.tsx`) to display provider API key status.
-        - Implemented communication (`webviewReady`, `getApiKeyStatus` request, `apiKeyStatus` response) between `settingsPanel` and extension host.
-        - Added basic CSS (`settings-ui/src/app.css`).
-    - **Phase 3 (Complete):**
-        - Added VS Code configuration for provider enablement.
-        - Updated `AiService` to check provider enablement (`_isProviderEnabled`, `getProviderStatus`).
-        - Updated Settings UI to display and control provider enablement via checkboxes and communication (`getProviderStatus`, `setProviderEnabled`).
-        - Updated `extension.ts` message handler for provider status/enablement.
-        - Implemented basic Model Resolver framework (`resolveAvailableModels`) in `AiService` with hardcoded fallback list, respecting provider status.
-        - **Refactored Chat UI (`webview-ui/src/app.tsx`)**:
-            - Added Provider dropdown selector.
-            - Model input (`<input>`+`<datalist>`) is now filtered based on selected Provider.
-            - Allows custom model ID input.
-            - Corrected TypeScript errors related to message type definitions.
+- **Current Task:** Implement Model Resolver (API/Web scraping).
         - Updated `extension.ts` message handler for `getAvailableModels`.
 - **Previous:** Test core chat functionality, focusing on the new inline, human-readable tool call display and the updated `uuidGenerateTool`.
 - **Future:** Implement API/Web scraping for `resolveAvailableModels` (e.g., OpenRouter).
@@ -67,4 +57,4 @@ Finalizing Vercel AI SDK integration after addressing stream parsing and depreca
 - **New Principle:** Tools should support batch operations where applicable (added to `.clinerules`).
 - Prioritized human-readable, inline tool status summaries (including progress for `uuidGenerateTool`) over showing raw technical details by default in the UI.
 - Confirmed tool results are passed back to the AI; AI response generation determines if/how results are presented in text.
-- **New:** Established foundation for a separate Settings Webview UI using Vite + Preact.
+- Merged Settings UI into the main Chat Webview, eliminating the separate `settings-ui` project.

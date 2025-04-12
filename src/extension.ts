@@ -5,8 +5,7 @@ import { AiService, ApiProviderKey } from './ai/aiService'; // Import AiService 
 // Removed incorrect readDataStream import
 
 
-let chatPanel: vscode.WebviewPanel | undefined = undefined;
-let settingsPanel: vscode.WebviewPanel | undefined = undefined; // Panel for settings UI
+let chatPanel: vscode.WebviewPanel | undefined = undefined; // Only one panel now
 let aiServiceInstance: AiService | undefined = undefined; // Hold AiService instance
 
 // Make activate async to await AiService initialization
@@ -44,12 +43,12 @@ export async function activate(context: vscode.ExtensionContext) {
             {
                 enableScripts: true,
                 // IMPORTANT: Allow loading content ONLY from the Vite build output directory
-                localResourceRoots: [ vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview') ]
+                localResourceRoots: [ vscode.Uri.joinPath(context.extensionUri, 'dist', 'webview') ] // Only need webview dist
             }
         );
 
         // Pass extensionMode to getWebviewContent
-        chatPanel.webview.html = getWebviewContent(chatPanel.webview, context.extensionUri, context.extensionMode, 'chat'); // Specify 'chat' type
+        chatPanel.webview.html = getWebviewContent(chatPanel.webview, context.extensionUri, context.extensionMode); // No type needed
 
         // Set the postMessage callback in AiService
         if (aiServiceInstance) {
@@ -278,6 +277,43 @@ export async function activate(context: vscode.ExtensionContext) {
                             const models = await aiServiceInstance.resolveAvailableModels();
                             chatPanel?.webview.postMessage({ type: 'availableModels', payload: models });
                         }
+                    case 'getProviderStatus': // Handle settings request from the unified webview
+                        if (aiServiceInstance) {
+                            const status = await aiServiceInstance.getProviderStatus();
+                            chatPanel?.webview.postMessage({ type: 'providerStatus', payload: status });
+                        }
+                        return;
+                    case 'setProviderEnabled': // Handle settings update from the unified webview
+                        if (aiServiceInstance && message.payload && typeof message.payload.provider === 'string' && typeof message.payload.enabled === 'boolean') {
+                            const providerKeyInput = message.payload.provider;
+                            const enabled = message.payload.enabled;
+                            const validKeys: ApiProviderKey[] = ['ANTHROPIC', 'GOOGLE', 'OPENROUTER', 'DEEPSEEK'];
+                            if (validKeys.includes(providerKeyInput as ApiProviderKey)) {
+                                const providerKey = providerKeyInput as ApiProviderKey;
+                                try {
+                                    const config = vscode.workspace.getConfiguration('zencoder.provider');
+                                    const keyMap: Record<ApiProviderKey, string> = {
+                                        ANTHROPIC: 'anthropic.enabled',
+                                        GOOGLE: 'google.enabled',
+                                        OPENROUTER: 'openrouter.enabled',
+                                        DEEPSEEK: 'deepseek.enabled',
+                                    };
+                                    await config.update(keyMap[providerKey], enabled, vscode.ConfigurationTarget.Global);
+                                    console.log(`Provider ${String(providerKey)} enabled status updated to: ${enabled}`);
+                                    // Send updated status back to webview
+                                    const updatedStatus = await aiServiceInstance.getProviderStatus();
+                                    chatPanel?.webview.postMessage({ type: 'providerStatus', payload: updatedStatus });
+                                } catch (error: any) {
+                                    console.error(`Failed to update provider setting for ${String(providerKey)}:`, error);
+                                    vscode.window.showErrorMessage(`Failed to update setting for ${String(providerKey)}: ${error.message}`);
+                                    // Optionally send error back to webview
+                                }
+                            } else {
+                                 console.error(`Invalid provider key received in setProviderEnabled: ${providerKeyInput}`);
+                            }
+                        } else {
+                            console.error("Invalid payload for setProviderEnabled:", message.payload);
+                        }
                         return;
                 } // End switch (message.type)
             }, // End onDidReceiveMessage handler
@@ -327,98 +363,25 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // --- Register Settings Command ---
     const openSettingsCommand = vscode.commands.registerCommand('zencoder.openSettings', () => {
-        console.log('Command "zencoder.openSettings" triggered.'); // Add log
-        // Ensure AiService is ready before opening settings (might need API key status)
-        if (!aiServiceInstance) {
-             vscode.window.showErrorMessage("AI Service is not yet initialized. Please wait a moment and try again.");
-             return;
+        console.log('Command "zencoder.openSettings" triggered.');
+        // If chat panel exists, send message to show settings modal
+        if (chatPanel) {
+            console.log('Chat panel exists, sending showSettings message.');
+            chatPanel.webview.postMessage({ type: 'showSettings' });
+            chatPanel.reveal(); // Bring chat panel to front
+        } else {
+            // If chat panel doesn't exist, maybe open it first? Or show info message?
+            // For now, just inform the user to open the chat first.
+            console.log('Chat panel does not exist. Cannot show settings.');
+            vscode.window.showInformationMessage("Please open the Zen Coder chat panel first to access settings.");
+            // Optionally, trigger the startChat command:
+            // vscode.commands.executeCommand('zencoder.startChat').then(() => {
+            //     // Need a slight delay to ensure webview is ready
+            //     setTimeout(() => {
+            //         chatPanel?.webview.postMessage({ type: 'showSettings' });
+            //     }, 500); // Adjust delay if needed
+            // });
         }
-
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
-
-        if (settingsPanel) {
-            console.log('Settings panel already exists, revealing.'); // Add log
-            settingsPanel.reveal(column);
-            return;
-        }
-        console.log('Creating new settings panel.'); // Add log
-
-        settingsPanel = vscode.window.createWebviewPanel(
-            'zencoderSettings', // Unique ID for the settings panel
-            'Zen Coder Settings', // Title
-            column || vscode.ViewColumn.One,
-            {
-                enableScripts: true,
-                // IMPORTANT: Allow loading content ONLY from the settings UI build output directory
-                localResourceRoots: [ vscode.Uri.joinPath(context.extensionUri, 'dist', 'settings') ]
-            }
-        );
-
-        // Use a separate function or adapt getWebviewContent for settings
-        settingsPanel.webview.html = getSettingsWebviewContent(settingsPanel.webview, context.extensionUri, context.extensionMode);
-        console.log('Settings panel HTML set.'); // Add log
-
-        // Handle messages from the settings webview (if needed later)
-        settingsPanel.webview.onDidReceiveMessage(
-            async message => {
-                if (!aiServiceInstance) {
-                    vscode.window.showErrorMessage("AI Service not initialized.");
-                    return;
-                }
-                switch (message.type) {
-                    case 'getProviderStatus': // Changed from getApiKeyStatus
-                        const status = await aiServiceInstance.getProviderStatus(); // Call new method
-                        settingsPanel?.webview.postMessage({ type: 'providerStatus', payload: status }); // Send new type
-                        break;
-                    case 'webviewReady':
-                        console.log('Settings webview is ready');
-                        // Send initial provider status
-                        const initialStatus = await aiServiceInstance.getProviderStatus(); // Call new method
-                        settingsPanel?.webview.postMessage({ type: 'providerStatus', payload: initialStatus }); // Send new type
-                        break;
-                    case 'setProviderEnabled':
-                        if (message.payload && typeof message.payload.provider === 'string' && typeof message.payload.enabled === 'boolean') {
-                            const providerKeyInput = message.payload.provider;
-                            const enabled = message.payload.enabled;
-                            // Validate if the received key is actually part of ApiProviderKey
-                            const validKeys: ApiProviderKey[] = ['ANTHROPIC', 'GOOGLE', 'OPENROUTER', 'DEEPSEEK'];
-                            if (validKeys.includes(providerKeyInput as ApiProviderKey)) {
-                                const providerKey = providerKeyInput as ApiProviderKey;
-                                try {
-                                    const config = vscode.workspace.getConfiguration('zencoder.provider');
-                                    const keyMap: Record<ApiProviderKey, string> = {
-                                        ANTHROPIC: 'anthropic.enabled',
-                                        GOOGLE: 'google.enabled',
-                                        OPENROUTER: 'openrouter.enabled',
-                                        DEEPSEEK: 'deepseek.enabled',
-                                    };
-                                    await config.update(keyMap[providerKey], enabled, vscode.ConfigurationTarget.Global);
-                                    console.log(`Provider ${String(providerKey)} enabled status updated to: ${enabled}`); // Explicit String conversion
-                                    // Optionally send confirmation back to webview
-                                    // settingsPanel?.webview.postMessage({ type: 'providerStatusUpdated', payload: { provider: providerKey, enabled: enabled } });
-                                } catch (error: any) {
-                                    console.error(`Failed to update provider setting for ${String(providerKey)}:`, error); // Explicit String conversion
-                                    vscode.window.showErrorMessage(`Failed to update setting for ${String(providerKey)}: ${error.message}`); // Explicit String conversion
-                                    // Optionally send error back to webview
-                                }
-                            } else {
-                                 console.error(`Invalid provider key received in setProviderEnabled: ${providerKeyInput}`);
-                            }
-                        } else {
-                            console.error("Invalid payload for setProviderEnabled:", message.payload);
-                        }
-                        break;
-                    // Add more cases as needed
-                }
-            },
-            undefined,
-            context.subscriptions
-        );
-
-        settingsPanel.onDidDispose(() => { settingsPanel = undefined; }, null, context.subscriptions);
-        context.subscriptions.push(settingsPanel);
     });
     context.subscriptions.push(openSettingsCommand);
     console.log('Command "zencoder.openSettings" registration pushed to subscriptions.');
@@ -468,21 +431,20 @@ export async function activate(context: vscode.ExtensionContext) {
 
 // --- Helper Functions ---
 
-function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, extensionMode: vscode.ExtensionMode, webviewType: 'chat' | 'settings'): string {
+function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, extensionMode: vscode.ExtensionMode): string { // Removed webviewType
     const nonce = getNonce();
     const isDevelopment = extensionMode === vscode.ExtensionMode.Development;
-    // Determine Vite port based on webview type
-    const viteDevServerPort = webviewType === 'chat' ? 5173 : 5174; // Assuming 5174 for settings-ui
+    const viteDevServerPort = 5173; // Always use the chat UI port
     const viteDevServerUrl = `http://localhost:${viteDevServerPort}`;
-    const buildDir = webviewType === 'chat' ? 'webview' : 'settings';
-    const title = webviewType === 'chat' ? 'AI Coder Chat (Dev)' : 'Zen Coder Settings (Dev)';
-    const mainTsxPath = webviewType === 'chat' ? '/src/main.tsx' : '/src/main.tsx'; // Assuming same entry point name
+    const buildDir = 'webview'; // Always use the webview build dir
+    const title = 'Zen Coder (Dev)'; // Unified title
+    const mainTsxPath = '/src/main.tsx'; // Unified entry point
 
     console.log(`Getting webview content. Development mode: ${isDevelopment}`);
 
     if (isDevelopment) {
-        // Development mode: Load from the correct Vite dev server for HMR
-        console.log(`Loading ${webviewType} webview from Vite dev server: ${viteDevServerUrl}`);
+        // Development mode: Load from the Vite dev server for HMR
+        console.log(`Loading webview from Vite dev server: ${viteDevServerUrl}`);
         // CSP needs to allow connection to the dev server and inline styles (Vite might inject some)
         return `<!DOCTYPE html>
 <html lang="en">
@@ -507,8 +469,8 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, ex
 </html>`;
 
     } else {
-        // Production mode: Load from the correct build output directory
-        console.log(`Loading ${webviewType} webview from dist/${buildDir}`);
+        // Production mode: Load from the build output directory
+        console.log(`Loading webview from dist/${buildDir}`);
         const buildPath = vscode.Uri.joinPath(extensionUri, 'dist', buildDir);
         const htmlPath = vscode.Uri.joinPath(buildPath, 'index.html');
 
@@ -538,23 +500,17 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, ex
 
             return htmlContent;
         } catch (e) {
-            console.error(`Error reading or processing production ${webviewType} webview HTML from ${htmlPath.fsPath}: ${e}`);
-            return `<html><body>Error loading ${webviewType} webview content. Failed to read or process build output. Check console and ensure 'pnpm run build:${buildDir}' has run successfully. Path: ${htmlPath.fsPath} Error: ${e}</body></html>`;
+            console.error(`Error reading or processing production webview HTML from ${htmlPath.fsPath}: ${e}`);
+            return `<html><body>Error loading webview content. Failed to read or process build output. Check console and ensure 'pnpm run build:webview' has run successfully. Path: ${htmlPath.fsPath} Error: ${e}</body></html>`;
         }
      
 // Class definition moved above registration
     }
 }
 
-// Helper function specifically for settings webview content generation
-function getSettingsWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, extensionMode: vscode.ExtensionMode): string {
-    // Call the generalized function with 'settings' type
-    return getWebviewContent(webview, extensionUri, extensionMode, 'settings');
-}
+// Removed getSettingsWebviewContent function
 
-// Modify the call in startChat command to specify 'chat' type
-// Find the line: chatPanel.webview.html = getWebviewContent(chatPanel.webview, context.extensionUri, context.extensionMode);
-// Replace with: chatPanel.webview.html = getWebviewContent(chatPanel.webview, context.extensionUri, context.extensionMode, 'chat');
+// The call in startChat command was already updated to remove the type argument
 
 function getNonce() {
     let text = '';
@@ -566,6 +522,5 @@ function getNonce() {
 }
 
 export function deactivate() {
-    chatPanel?.dispose();
-    settingsPanel?.dispose(); // Dispose settings panel as well
-    }
+    chatPanel?.dispose(); // Only chat panel needs disposal
+}

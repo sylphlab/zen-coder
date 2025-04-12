@@ -292,14 +292,12 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",
-    "compile": "pnpm run build:webview && pnpm run build:settings && pnpm run check-types && pnpm run lint && node esbuild.js",
-    "watch": "npm-run-all -p watch:esbuild watch:tsc watch:webview watch:settings",
+    "compile": "pnpm run build:webview && pnpm run check-types && pnpm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:esbuild watch:tsc watch:webview",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "watch:webview": "pnpm --filter webview-ui dev",
-    "watch:settings": "pnpm --filter settings-ui dev",
     "build:webview": "pnpm --filter webview-ui build",
-    "build:settings": "pnpm --filter settings-ui build",
     "package": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
@@ -307,8 +305,7 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vscode-test",
-    "webview-ui": "pnpm --filter webview-ui",
-    "settings-ui": "pnpm --filter settings-ui"
+    "webview-ui": "pnpm --filter webview-ui"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

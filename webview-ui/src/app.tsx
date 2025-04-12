@@ -1,8 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks'; // Added useMemo
+import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks';
 import { JSX } from 'preact/jsx-runtime';
 import './app.css';
-
-// Removed VSCodeProgressRing import
 
 // Define message structure
 interface Message {
@@ -47,6 +45,19 @@ type ResolvedModel = {
 // Define ApiProviderKey here for UI use (or import if shared)
 type ApiProviderKey = 'ANTHROPIC' | 'GOOGLE' | 'OPENROUTER' | 'DEEPSEEK';
 
+// --- Settings Types (from settings-ui) ---
+type ProviderStatus = {
+    enabled: boolean;
+    apiKeySet: boolean;
+};
+
+type AllProviderStatus = {
+    ANTHROPIC: ProviderStatus;
+    GOOGLE: ProviderStatus;
+    OPENROUTER: ProviderStatus;
+    DEEPSEEK: ProviderStatus;
+};
+
 // Helper to get the VS Code API instance
 // @ts-ignore
 const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
@@ -76,7 +87,25 @@ const postMessage = (message: any) => {
                     }
                 }));
             }, 300);
-        }
+       } else if (message.type === 'getProviderStatus') {
+            // Simulate receiving status after a delay
+            setTimeout(() => {
+                window.dispatchEvent(new MessageEvent('message', {
+                    data: {
+                        type: 'providerStatus',
+                        payload: {
+                            ANTHROPIC: { enabled: true, apiKeySet: true },
+                            GOOGLE: { enabled: false, apiKeySet: false },
+                            OPENROUTER: { enabled: true, apiKeySet: true },
+                            DEEPSEEK: { enabled: true, apiKeySet: false }
+                        } // Example status
+                    }
+                }));
+            }, 500);
+       } else if (message.type === 'setProviderEnabled') {
+           console.log("Simulating provider enable change:", message.payload);
+           // Optionally update mock state here if needed for dev outside VS Code
+       }
     }
 };
 
@@ -107,6 +136,8 @@ export function App() {
     const [currentModelInput, setCurrentModelInput] = useState<string>(''); // Separate state for model input field
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const currentAssistantMessageId = useRef<string | null>(null);
+    const [isSettingsVisible, setIsSettingsVisible] = useState(false); // State for settings modal
+    const [providerStatus, setProviderStatus] = useState<AllProviderStatus | null>(null); // State for provider status
 
      // --- Derived State ---
      const uniqueProviders = useMemo(() => {
@@ -126,8 +157,9 @@ export function App() {
     }, [messages]);
 
     useEffect(() => {
-        postMessage({ type: 'webviewReady' });
-        postMessage({ type: 'getAvailableModels' });
+        postMessage({ type: 'webviewReady' }); // Both UIs need this
+        postMessage({ type: 'getAvailableModels' }); // For chat UI
+        postMessage({ type: 'getProviderStatus' }); // For settings UI
 
         const handleMessage = (event: MessageEvent) => {
             const message = event.data;
@@ -233,6 +265,14 @@ export function App() {
                         }
                     }
                     break;
+                case 'providerStatus': // Handle status from extension
+                    if (message.payload) {
+                        setProviderStatus(message.payload);
+                    }
+                    break;
+                case 'showSettings': // Handle command from extension to show settings
+                    setIsSettingsVisible(true);
+                    break;
             }
         };
 
@@ -301,6 +341,21 @@ export function App() {
         // For simplicity, inform on every change for now.
          postMessage({ type: 'setModel', modelId: newModelId });
     };
+     const handleProviderToggle = useCallback((providerKey: keyof AllProviderStatus, enabled: boolean) => {
+        // Optimistically update UI state
+        setProviderStatus(prevStatus => {
+            if (!prevStatus) return null;
+            return {
+                ...prevStatus,
+                [providerKey]: { ...prevStatus[providerKey], enabled: enabled }
+            };
+        });
+        // Send message to extension host to update the setting
+        postMessage({
+            type: 'setProviderEnabled',
+            payload: { provider: providerKey, enabled: enabled }
+        });
+    }, []);
 
 
     // --- Rendering Helpers ---
@@ -326,9 +381,61 @@ export function App() {
         }
     };
 
+    const renderProviderSetting = (key: keyof AllProviderStatus, name: string) => {
+       if (!providerStatus) return <li>{name}: 載入中...</li>;
+
+       const status = providerStatus[key];
+       const apiKeyText = status.apiKeySet ? '(Key 已設定)' : '(Key 未設定)';
+       const apiKeyColor = status.apiKeySet ? 'green' : 'red';
+
+       return (
+           <li key={key}>
+               <label>
+                   <input
+                       type="checkbox"
+                       checked={status.enabled}
+                       onChange={(e) => handleProviderToggle(key, (e.target as HTMLInputElement).checked)}
+                   />
+                   {name} <span style={{ color: apiKeyColor, fontSize: '0.9em' }}>{apiKeyText}</span>
+               </label>
+           </li>
+       );
+   };
+
+   const renderSettingsModal = () => {
+       if (!isSettingsVisible) return null;
+
+       return (
+           <div class="modal-overlay" onClick={() => setIsSettingsVisible(false)}>
+               <div class="modal-content" onClick={(e) => e.stopPropagation()}>
+                   <button class="modal-close-button" onClick={() => setIsSettingsVisible(false)}>&times;</button>
+                   <h2>Zen Coder 設定</h2>
+                   <section>
+                       <h3>Providers</h3>
+                       {providerStatus ? (
+                           <ul>
+                               {renderProviderSetting('ANTHROPIC', 'Anthropic (Claude)')}
+                               {renderProviderSetting('GOOGLE', 'Google (Gemini)')}
+                               {renderProviderSetting('OPENROUTER', 'OpenRouter')}
+                               {renderProviderSetting('DEEPSEEK', 'DeepSeek')}
+                           </ul>
+                       ) : (
+                           <p>正在載入 Provider 狀態...</p>
+                       )}
+                        <p><small>啟用 Provider 並且設定對應嘅 API Key 先可以使用.</small></p>
+                        <p><small>使用 Ctrl+Shift+P 並輸入 "Set [Provider] API Key" 去設定或更新 Key.</small></p>
+                   </section>
+                    {/* Add sections for Model Resolver later */}
+               </div>
+           </div>
+       );
+    };
+
     return (
         <div class="chat-container">
-            <div class="model-selector">
+            <div class="header-controls">
+                <button class="settings-button" onClick={() => setIsSettingsVisible(true)}>⚙️ Settings</button>
+                <div class="model-selector">
                  {/* Provider Dropdown */}
                  <label htmlFor="provider-select">Provider: </label>
                  <select
@@ -360,6 +467,7 @@ export function App() {
                          </option>
                      ))}
                  </datalist>
+                </div>
             </div>
             <div class="messages-area">
                 {messages.map((msg) => (
@@ -374,6 +482,7 @@ export function App() {
                          <div class="message-content">
                              <span>Thinking...</span> {/* Replace ProgressRing with simple text */}
                          </div>
+                         {renderSettingsModal()} {/* Render the modal */}
                      </div>
                  )}
                 <div ref={messagesEndRef} />
