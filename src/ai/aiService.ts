@@ -1,10 +1,7 @@
 import * as vscode from 'vscode';
 import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions } from 'ai';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { createDeepSeek } from '@ai-sdk/deepseek';
 import { allTools, ToolName } from '../tools';
+import { allProviders, providerMap, AiProvider, ModelDefinition } from './providers'; // Import new provider structure
 // Import the specific execution logic, callback type, AND the standard tool definition
 import { executeUuidGenerateWithProgress, UuidUpdateCallback, uuidGenerateTool as uuidGenerateToolDefinition } from '../tools/utils/uuidGenerate';
 
@@ -132,11 +129,9 @@ export class AiService {
         } else {
             // Cannot determine provider from ID pattern
              console.warn(`[AiService] Could not determine provider for model ID: ${modelId}. Attempting fallback checks.`);
-             // Fallback: Check if it matches known hardcoded IDs (less reliable)
-             if (this.hardcodedModels.some(m => m.id === modelId && m.provider === 'ANTHROPIC')) providerKey = 'ANTHROPIC';
-             else if (this.hardcodedModels.some(m => m.id === modelId && m.provider === 'GOOGLE')) providerKey = 'GOOGLE';
-             else if (this.hardcodedModels.some(m => m.id === modelId && m.provider === 'OPENROUTER')) providerKey = 'OPENROUTER';
-             else if (this.hardcodedModels.some(m => m.id === modelId && m.provider === 'DEEPSEEK')) providerKey = 'DEEPSEEK';
+             // Fallback logic is removed as hardcodedModels is gone.
+             // If pattern matching fails, we cannot determine the provider.
+             console.error(`[AiService] Cannot determine provider for model ID: ${modelId} using pattern matching.`);
         }
         console.log(`[AiService] Determined provider key: ${providerKey}`); // Log determined provider
         if (!providerKey) {
@@ -168,29 +163,24 @@ export class AiService {
             return null;
         }
 
-        // 4. Create Provider Instance
+        // 4. Get Provider from Map and Create Model Instance
+        const provider = providerMap.get(providerKey);
+        if (!provider) {
+             // Should not happen if providerKey logic is correct
+             console.error(`[AiService] Internal error: Provider implementation not found in map for key: ${providerKey}`);
+             vscode.window.showErrorMessage(`內部錯誤：找不到 Provider ${providerKey} 的實作。`);
+             return null;
+        }
+
         try {
-            console.log(`[AiService] Creating instance for Provider: ${providerKey}, Model: ${actualModelId}`);
-            switch (providerKey) {
-                case 'ANTHROPIC':
-                    const anthropic = createAnthropic({ apiKey });
-                    return anthropic(actualModelId as any); // Pass the user-provided ID
-                case 'GOOGLE':
-                    const google = createGoogleGenerativeAI({ apiKey });
-                    return google(actualModelId as any); // Pass the user-provided ID
-                case 'OPENROUTER':
-                    const openrouter = createOpenRouter({ apiKey });
-                    return openrouter(actualModelId as any); // Pass the user-provided ID
-                case 'DEEPSEEK':
-                    const deepseek = createDeepSeek({ apiKey });
-                    return deepseek(actualModelId as any); // Pass the user-provided ID
-                default:
-                    // Should not happen due to earlier checks
-                    throw new Error(`Unhandled provider key: ${providerKey}`);
-            }
+            console.log(`[AiService] Creating model instance using provider '${provider.id}' for model '${actualModelId}'`);
+            // Use the createModel method from the specific provider module
+            const modelInstance = provider.createModel(apiKey, actualModelId);
+            console.log(`[AiService] Successfully created model instance for ${provider.id}/${actualModelId}`);
+            return modelInstance;
         } catch (error: any) {
-            console.error(`[AiService] Error creating model instance for ${providerKey} / ${actualModelId}:`, error);
-            vscode.window.showErrorMessage(`創建模型實例時出錯 (${providerKey}): ${error.message}`);
+            console.error(`[AiService] Error creating model instance via provider '${provider.id}' for model '${actualModelId}':`, error);
+            vscode.window.showErrorMessage(`創建模型實例時出錯 (${provider.name}): ${error.message}`);
             return null;
         }
     }
@@ -446,118 +436,67 @@ export class AiService {
     }
 
     // --- Model Resolver ---
-    // Hardcoded fallback list (expand as needed)
-    private hardcodedModels: ResolvedModel[] = [
-        // Anthropic
-        { id: 'claude-3-5-sonnet-20240620', label: 'Claude 3.5 Sonnet (Hardcoded)', provider: 'ANTHROPIC', source: 'hardcoded' },
-        { id: 'claude-3-opus-20240229', label: 'Claude 3 Opus (Hardcoded)', provider: 'ANTHROPIC', source: 'hardcoded' },
-        { id: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku (Hardcoded)', provider: 'ANTHROPIC', source: 'hardcoded' },
-        // Google
-        { id: 'models/gemini-1.5-pro-latest', label: 'Gemini 1.5 Pro (Hardcoded)', provider: 'GOOGLE', source: 'hardcoded' },
-        { id: 'models/gemini-1.5-flash-latest', label: 'Gemini 1.5 Flash (Hardcoded)', provider: 'GOOGLE', source: 'hardcoded' },
-        { id: 'models/gemini-pro', label: 'Gemini 1.0 Pro (Hardcoded)', provider: 'GOOGLE', source: 'hardcoded' },
-        // OpenRouter (Examples - Needs verification)
-        { id: 'anthropic/claude-3.5-sonnet', label: 'OpenRouter: Claude 3.5 Sonnet (Hardcoded)', provider: 'OPENROUTER', source: 'hardcoded' },
-        { id: 'google/gemini-pro-1.5', label: 'OpenRouter: Gemini 1.5 Pro (Hardcoded)', provider: 'OPENROUTER', source: 'hardcoded' },
-        { id: 'mistralai/mistral-large', label: 'OpenRouter: Mistral Large (Hardcoded)', provider: 'OPENROUTER', source: 'hardcoded' },
-        // DeepSeek
-        { id: 'deepseek-coder', label: 'DeepSeek Coder (Hardcoded)', provider: 'DEEPSEEK', source: 'hardcoded' },
-        { id: 'deepseek-chat', label: 'DeepSeek Chat (Hardcoded)', provider: 'DEEPSEEK', source: 'hardcoded' },
-    ];
+    // The hardcodedModels property has been removed.
+    // Model resolution is now handled dynamically by iterating through providers
+    // in the resolveAvailableModels method.
 
     public async resolveAvailableModels(): Promise<ResolvedModel[]> {
-        const resolvedModels: ResolvedModel[] = [];
+        const allResolvedModels: ResolvedModel[] = [];
         const providerStatus = await this.getProviderStatus();
 
-        // --- Fetch OpenRouter Models ---
-        if (providerStatus.OPENROUTER.enabled && providerStatus.OPENROUTER.apiKeySet && this.openRouterApiKey) {
-            try {
-                console.log("[AiService] Fetching models from OpenRouter API...");
-                const openRouterModels = await this.fetchOpenRouterModels(this.openRouterApiKey);
-                resolvedModels.push(...openRouterModels);
-                console.log(`[AiService] Successfully fetched ${openRouterModels.length} models from OpenRouter.`);
-            } catch (error) {
-                console.error("[AiService] Failed to fetch OpenRouter models:", error);
-                // Optionally notify the user or just fall back to hardcoded list below
-                vscode.window.showWarningMessage('無法從 OpenRouter 獲取模型列表，將使用預設列表。');
-            }
-        }
+        // Iterate through all registered providers
+        for (const provider of allProviders) {
+            const status = providerStatus[provider.id as ApiProviderKey]; // Cast needed as provider.id is string
 
-        // --- TODO: Implement API/Web Scraping Logic for other providers ---
-        // Example structure:
-        // if (providerStatus.ANTHROPIC.enabled && providerStatus.ANTHROPIC.apiKeySet) { ... }
-        // --- Add Hardcoded Fallbacks ---
-        // Only add hardcoded models for providers that are enabled and have keys set,
-        // and only if no models were resolved via API/Scraping for that provider.
-        const providersWithApiModels = new Set(resolvedModels.map(m => m.provider));
+            // Check if the provider is enabled and has an API key if required
+            if (status?.enabled && (status.apiKeySet || !provider.requiresApiKey)) {
+                try {
+                    console.log(`[AiService] Fetching models for provider: ${provider.name}`);
+                    // Get the API key for this provider (will be undefined if not set or not required)
+                    let apiKey: string | undefined;
+                     switch (provider.id) {
+                         case 'anthropic': apiKey = this.anthropicApiKey; break;
+                         case 'google': apiKey = this.googleApiKey; break;
+                         case 'openrouter': apiKey = this.openRouterApiKey; break;
+                         case 'deepseek': apiKey = this.deepseekApiKey; break;
+                     }
 
-        for (const hcModel of this.hardcodedModels) {
-            if (providerStatus[hcModel.provider]?.enabled &&
-                providerStatus[hcModel.provider]?.apiKeySet &&
-                !providersWithApiModels.has(hcModel.provider))
-            {
-                // Avoid duplicates if hardcoded ID somehow matches a resolved ID
-                if (!resolvedModels.some(rm => rm.id === hcModel.id)) {
-                    resolvedModels.push(hcModel);
+                    // Call the provider's method to get models
+                    const modelsFromProvider: ModelDefinition[] = await provider.getAvailableModels(apiKey);
+
+                    // Map the result to the ResolvedModel structure
+                    const resolvedPortion: ResolvedModel[] = modelsFromProvider.map(m => ({
+                        id: m.id,
+                        label: m.name, // Use the name from ModelDefinition
+                        provider: provider.id as ApiProviderKey, // Store the provider ID
+                        // Determine source based on provider implementation (OpenRouter fetches, others are hardcoded for now)
+                        source: provider.id === 'openrouter' ? 'api' : 'hardcoded',
+                    }));
+
+                    allResolvedModels.push(...resolvedPortion);
+                    console.log(`[AiService] Successfully fetched/retrieved ${resolvedPortion.length} models from ${provider.name}.`);
+
+                } catch (error) {
+                    console.error(`[AiService] Failed to fetch models for provider ${provider.name}:`, error);
+                    vscode.window.showWarningMessage(`無法從 ${provider.name} 獲取模型列表。`);
+                    // Optionally add hardcoded fallbacks specifically for this provider if needed
+                    // e.g., addHardcodedForProvider(provider.id, allResolvedModels);
                 }
+            } else {
+                 console.log(`[AiService] Skipping model fetch for disabled/keyless provider: ${provider.name}`);
             }
         }
 
-        // Sort or further process the list if needed
-        resolvedModels.sort((a, b) => a.label.localeCompare(b.label));
+        // Remove duplicates (e.g., if a hardcoded list contained something also fetched)
+        // Using Map ensures the last occurrence wins if IDs collide, which is fine here.
+        const uniqueModels = Array.from(new Map(allResolvedModels.map(m => [m.id, m])).values());
 
-        console.log("Resolved available models:", resolvedModels);
-        return resolvedModels;
+        // Sort the final list by label
+        uniqueModels.sort((a, b) => a.label.localeCompare(b.label));
+
+        console.log("[AiService] Final resolved available models:", uniqueModels.length); // Log count for brevity
+        // console.log("[AiService] Final resolved available models:", uniqueModels); // Uncomment for full list if needed
+        return uniqueModels;
     }
-    // --- Helper to fetch OpenRouter Models --- (Moved inside the class)
-    private async fetchOpenRouterModels(apiKey: string): Promise<ResolvedModel[]> {
-        const https = await import('https'); // Use dynamic import for built-in module
-
-        return new Promise((resolve, reject) => {
-            const options = {
-                hostname: 'openrouter.ai',
-                path: '/api/v1/models',
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'User-Agent': 'VSCode-ZenCoder-Extension' // Optional: Identify client
-                }
-            };
-
-            const req = https.request(options, (res) => {
-                let data = '';
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-                res.on('end', () => {
-                    if (res.statusCode === 200) {
-                        try {
-                            const parsedData = JSON.parse(data);
-                            if (parsedData && Array.isArray(parsedData.data)) {
-                                const models: ResolvedModel[] = parsedData.data.map((model: any) => ({
-                                    id: model.id,
-                                    label: model.name || model.id, // Use name if available, else id
-                                    provider: 'OPENROUTER' as ApiProviderKey, // Explicitly type
-                                    source: 'api' as 'api' | 'web-scrape' | 'hardcoded' // Explicitly type
-                                }));
-                                resolve(models);
-                            } else {
-                                reject(new Error('Invalid API response structure from OpenRouter'));
-                            }
-                        } catch (e) {
-                            reject(new Error(`Failed to parse OpenRouter response: ${e instanceof Error ? e.message : String(e)}`));
-                        }
-                    } else {
-                        reject(new Error(`OpenRouter API request failed with status code ${res.statusCode}: ${data}`));
-                    }
-                });
-            });
-
-            req.on('error', (e) => {
-                reject(new Error(`OpenRouter API request error: ${e.message}`));
-            });
-
-            req.end();
-        });
-    } // End of fetchOpenRouterModels method
+    // --- Helper to fetch OpenRouter Models --- (REMOVED - Logic now in openRouterProvider.ts)
 } // End of AiService class

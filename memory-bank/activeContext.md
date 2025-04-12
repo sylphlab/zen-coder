@@ -1,10 +1,19 @@
 # Active Context
 
 ## Current Focus
-Adding Provider search functionality to the Settings page.
+Refactoring AI Provider logic in `AiService`.
 
 ## Recent Changes
-- **Added Settings Provider Search:**
+- **Refactored AI Provider Logic:**
+    - Created `src/ai/providers` directory.
+    - Defined `AiProvider` interface in `src/ai/providers/providerInterface.ts`.
+    - Created individual provider modules (`anthropicProvider.ts`, `googleProvider.ts`, `openRouterProvider.ts`, `deepseekProvider.ts`) implementing the interface.
+    - Implemented dynamic model fetching for OpenRouter in `openRouterProvider.ts`.
+    - Created `src/ai/providers/index.ts` to export all providers and a lookup map.
+    - Refactored `AiService` (`_getProviderInstance`, `resolveAvailableModels`) to use the new provider structure.
+    - Removed old SDK imports and helper methods (`fetchOpenRouterModels`, `hardcodedModels`) from `AiService`.
+    - Created `src/utils/dynamicImport.ts` helper for `node-fetch` in OpenRouter provider.
+- **Added Settings Provider Search:** (Previous change)
     - Added a search input field to `SettingPage.tsx`.
     - Implemented state (`searchQuery`) and filtering logic (`filteredProviders`, `useMemo`) to dynamically filter the displayed provider list based on the search query (matching name or key).
 - **Implemented OpenRouter Model Fetching:** (Previous change)
@@ -56,16 +65,17 @@ Adding Provider search functionality to the Settings page.
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit Settings Provider search implementation.
-- **Previous:** Implement Provider search UI and logic in `SettingPage.tsx`.
-- **Future:** Implement API/Web scraping for `resolveAvailableModels`.
+- **Current Task:** Update Memory Bank and commit AI Provider refactoring.
+- **Previous:** Refactor AI Provider logic in `AiService` and create provider modules.
+- **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **Settings Provider Search Added:** Users can now filter the provider list in the settings page.
-- **OpenRouter Models Fetched:** `AiService` attempts to fetch models dynamically (Previous).
+- **AI Provider Logic Refactored:** `AiService` now uses modular providers under `src/ai/providers`. Model creation and listing logic is delegated to individual provider modules.
+- **OpenRouter Models Fetched Dynamically:** Logic moved to `openRouterProvider.ts`.
+- **Settings Provider Search Added:** Users can now filter the provider list in the settings page (Previous).
 - **API Key Input Added:** Settings page allows setting API keys (Previous).
 - **Settings Page Restored:** Moved rendering logic and passed necessary props (Previous).
 - **Nanostores Added:** Installed the library and Preact integration (Previous).
@@ -90,16 +100,17 @@ Adding Provider search functionality to the Settings page.
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
-- Added search functionality to the Settings page Provider list.
-- Implemented dynamic fetching of OpenRouter models in `AiService`. (Previous)
-- Implemented API Key input and setting mechanism in the Settings page. (Previous)
-- Restored Settings page functionality after routing refactor. (Previous)
-- Added Nanostores for state management. (Previous)
-- Added GSAP for animations. (Previous)
-- Integrated UnoCSS for utility-first styling. (Previous)
-- Replaced Settings modal with a dedicated `/settings` route using `wouter`. (Previous)
-- Refactored activation to use `WebviewViewProvider`. (Previous)
-- Implemented Vite port discovery. (Previous)
-- Corrected `package.json` contributions. (Previous)
-- Corrected Vite port file path. (Previous)
-- Relaxed development CSP for testing. (Previous)
+- Refactored AI provider handling into modular components for better organization and extensibility.
+- Added search functionality to the Settings page Provider list (Previous).
+- Implemented dynamic fetching of OpenRouter models (Moved to provider module).
+- Implemented API Key input and setting mechanism in the Settings page (Previous).
+- Restored Settings page functionality after routing refactor (Previous).
+- Added Nanostores for state management (Previous).
+- Added GSAP for animations (Previous).
+- Integrated UnoCSS for utility-first styling (Previous).
+- Replaced Settings modal with a dedicated `/settings` route using `wouter` (Previous).
+- Refactored activation to use `WebviewViewProvider` (Previous).
+- Implemented Vite port discovery (Previous).
+- Corrected `package.json` contributions (Previous).
+- Corrected Vite port file path (Previous).
+- Relaxed development CSP for testing (Previous).
