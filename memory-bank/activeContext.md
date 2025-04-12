@@ -1,9 +1,12 @@
 # Active Context
 
 ## Current Focus
-Refactoring extension activation to use WebviewViewProvider and remove commands.
+Integrating Vite dev server port discovery into extension activation for reliable development mode HMR.
 
 ## Recent Changes
+- **Vite Port Discovery:**
+    - Modified `webview-ui/vite.config.ts` to add a custom plugin that writes the running dev server port to `../.vite.port` on startup.
+    - Modified `src/extension.ts` (`getWebviewContent`) to read the port from `../.vite.port` during development mode (`vscode.ExtensionMode.Development`). If the file doesn't exist or is invalid, it falls back to the default port (5173). This ensures the webview connects to the correct Vite dev server instance even if the default port is unavailable.
 - **Tool Refactoring & Expansion:** (Completed previously)
 - **Fixed Stream Parsing (Comprehensive):** Iteratively refined stream parsing logic in `src/extension.ts` to handle various Vercel AI SDK prefixes (`0:`-`7:`, `8:`, `9:`, `a:`, `d:`, `e:`, `f:`) and correctly parse JSON-encoded strings and tool call/result messages.
 - **Removed Deprecated `StreamData`:** Refactored `src/ai/aiService.ts` to remove usage of the deprecated `StreamData` API for sending custom tool status updates. Temporarily removed the feature of sending 'in-progress', 'complete', 'error' statuses during tool execution to simplify and stabilize the core functionality.
@@ -35,8 +38,8 @@ Refactoring extension activation to use WebviewViewProvider and remove commands.
     - Removed the `settings-ui` directory (previously).
 
 ## Next Steps
-- **Current Task:** Test the new WebviewViewProvider activation and UI flow.
-- **Previous:** Test core chat functionality, focusing on the new inline, human-readable tool call display and the updated `uuidGenerateTool`.
+- **Current Task:** Test the Vite port discovery integration.
+- **Previous:** Test the new WebviewViewProvider activation and UI flow.
 - **Future:** Implement API/Web scraping for `resolveAvailableModels` (e.g., OpenRouter).
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
@@ -61,3 +64,4 @@ Refactoring extension activation to use WebviewViewProvider and remove commands.
 - Confirmed tool results are passed back to the AI; AI response generation determines if/how results are presented in text.
 - Merged Settings UI into the main Chat Webview.
 - Refactored extension activation to use `WebviewViewProvider` instead of commands, displaying the UI directly in the activity bar.
+- Implemented Vite port discovery for reliable development mode HMR.

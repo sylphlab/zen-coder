@@ -244,7 +244,24 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, extensionMode: vscode.ExtensionMode): string {
     const nonce = getNonce();
     const isDevelopment = extensionMode === vscode.ExtensionMode.Development;
-    const viteDevServerPort = 5173; // Webview UI dev server port
+    let viteDevServerPort = 5173; // Default port
+    const portFilePath = path.join(extensionUri.fsPath, '..', '.vite.port'); // Path relative to extension root
+    try {
+        if (fs.existsSync(portFilePath)) {
+            const portFileContent = fs.readFileSync(portFilePath, 'utf8');
+            const parsedPort = parseInt(portFileContent.trim(), 10);
+            if (!isNaN(parsedPort) && parsedPort > 0) {
+                viteDevServerPort = parsedPort;
+                console.log(`Read Vite dev server port ${viteDevServerPort} from ${portFilePath}`);
+            } else {
+                console.warn(`Invalid port number found in ${portFilePath}: ${portFileContent}. Using default ${viteDevServerPort}.`);
+            }
+        } else {
+            console.log(`.vite.port file not found at ${portFilePath}. Using default port ${viteDevServerPort}.`);
+        }
+    } catch (error: any) {
+        console.error(`Error reading port file ${portFilePath}: ${error.message}. Using default port ${viteDevServerPort}.`);
+    }
     const viteDevServerUrl = `http://localhost:${viteDevServerPort}`;
     const buildDir = 'webview'; // Build output directory for webview UI
     const title = 'Zen Coder'; // Simple title

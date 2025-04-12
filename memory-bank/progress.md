@@ -9,50 +9,26 @@
 - Model selection dropdown implemented and functional.
 - Communication between Preact UI and extension host updated.
 - Extension activates on view (`onView:zencoder.views.chat`).
-- **Webview panel creation logic loads correctly in both Development (Vite Dev Server for HMR) and Production (Vite build output) modes.** (Fixed Preact mount point to `#root` in `webview-ui/src/main.tsx` for dev mode).
+- Webview panel creation logic loads correctly in both Development (Vite Dev Server for HMR) and Production (Vite build output) modes.
 - CSP nonce handling adapted for both modes.
-- `AiService` class created (`src/ai/aiService.ts`) with:
-    - API Key Management methods using `vscode.SecretStorage`.
-    - Correct model provider instantiation logic using factory functions.
-    - `getAiResponseStream` method using standard `streamText`.
-    - Tool definitions for all required tools.
-    - Basic tool execution logic implemented for most tools.
-    - `executeSearch` updated to indicate requirement for MCP integration (placeholder removed).
-    - Conversation history update methods.
+- `AiService` class created (`src/ai/aiService.ts`) with core functionality (API keys, model instantiation, streaming, tool definitions/execution).
 - `AiService` integrated into `src/extension.ts`.
-- Placeholder MCP tool executor removed from `src/extension.ts` and `AiService` constructor.
 - Streaming logic adapted for Preact UI.
-- (API Key Setting Commands removed, need alternative management).
 - Vite build configuration updated.
 - `package.json` scripts updated.
-- **VS Code Launch Configuration (`.vscode/launch.json`) updated to use `npm: watch` for `preLaunchTask`, enabling development mode HMR.**
-- **TypeScript RootDir Issue (TS6059) Fixed:** Main `tsconfig.json` updated with `include: ["src/**/*"]` to prevent conflicts with the separate `webview-ui` project.
-- **TypeScript DOM Type Errors (TS2304) Fixed:** Added `"DOM"` to `compilerOptions.lib` in main `tsconfig.json` to resolve type issues from `@ai-sdk/ui-utils`.
-- **Vite Dev Server CORS Issue Fixed:** Updated `webview-ui/vite.config.ts` with `server: { cors: true }` to allow webview access.
-- **Project Renamed to "Zen Coder":** All relevant files (`package.json`, `src/extension.ts`, `README.md`, Memory Bank files, `webview-ui/index.html`, `aiService.ts` secret keys) updated.
-- **Tool Refactoring & Expansion Completed:**
-    - All tool logic moved from `AiService` to modular files under `src/tools/`.
-    - Tools standardized using Vercel AI SDK `tool` helper and `zod`.
-    - **New/Enhanced Tools:**
-        - Filesystem: `readFileTool` (multi-file, encoding), `writeFileTool` (encoding, append), `listFilesTool` (recursive, depth, stats), `createFolderTool`, `getStatTool`, `deleteFileTool` (useTrash), `deleteFolderTool` (useTrash), `moveRenameTool` (overwrite), `copyFileTool`, `copyFolderTool`. (Internal `searchFiles` removed).
-        - Utils: `fetchUrlTool`, `base64EncodeTool`, `base64DecodeTool`, `md5HashTool`.
-        - System: `getOsInfoTool`, `getCurrentTimeTool`, `getTimezoneTool`, `getPublicIpTool`.
-        - VSCode: `getOpenTabsTool`, `getActiveTerminalsTool`, `runCommandTool` (cwd, env).
-    - `AiService` refactored to use the new tool structure.
-    - `package.json` configuration updated for new/enhanced tool names.
-    - Dependencies (`node-fetch`, types) added and import issues resolved.
-    - Previous enhancements (multi-step, error handling, repair, activation) remain integrated.
-- **Fixed Stream Parsing (Comprehensive):** Corrected stream parsing in `extension.ts` to handle Vercel AI SDK format, including various prefixes (`0:`-`7:`, `8:`, `9:`, `a:`, `d:`, `e:`, `f:`) and correctly parsing JSON-encoded strings and handling tool call/result messages.
-- **Removed Deprecated `StreamData`:** Refactored `aiService.ts` to remove `StreamData` usage and associated custom tool status updates.
-- **Corrected `streamText` Usage:** Fixed types and return value handling for `streamText` in `aiService.ts` and `extension.ts`.
-- **UI Update (Tool Status):** (Completed previously, but custom status updates are currently disabled).
-- **`uuidGenerateTool` updated:** Now accepts `count` parameter and sends progress updates via callback.
-- **UI Tool Display:** Implemented inline, human-readable tool call display with progress updates for `uuidGenerateTool` and specific summaries for file tools. Technical details hidden by default.
-- **Tool Result Handling:** Confirmed tool results are correctly passed back to the AI model via the SDK.
-- **Merged Settings UI into Chat Webview:**
-    - Settings UI (provider enablement, API key status) is now accessible via a modal within the main chat webview (`webview-ui/src/app.tsx`).
-    - Removed separate `settings-ui` project and associated build scripts/dependencies.
-    - Updated `extension.ts` to use `WebviewViewProvider` instead of commands/panels.
+- VS Code Launch Configuration (`.vscode/launch.json`) updated for HMR.
+- TypeScript RootDir and DOM Type Errors fixed.
+- Vite Dev Server CORS Issue Fixed.
+- Project Renamed to \"Zen Coder\".
+- Tool Refactoring & Expansion Completed.
+- Fixed Stream Parsing (Comprehensive).
+- Removed Deprecated `StreamData`.
+- Corrected `streamText` Usage.
+- `uuidGenerateTool` updated with progress callback.
+- UI Tool Display refined (inline, human-readable summaries, progress).
+- Merged Settings UI into Chat Webview.
+- **Vite Port Discovery Implemented:** Extension now reads the actual Vite dev server port from a file (`../.vite.port`) during development, ensuring reliable HMR connection even if the default port changes.
+
 ## What's Left (Potential Future Enhancements)
 - Implement conversation history persistence.
 - Thorough testing and debugging of core chat and tool execution.
@@ -64,10 +40,11 @@
 - Re-implement tool status updates using recommended Vercel AI SDK APIs (if desired).
 
 ## Current Status
-- **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates (for `uuidGenerateTool`).
-- **Tool Execution:** Tools (including multi-UUID generation) execute and return results to the AI.
+- **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
+- **Tool Execution:** Tools execute and return results to the AI.
 - **Settings Integration:** Settings UI integrated into the main chat webview via a modal.
 - **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
+- **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from a file.
 
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.

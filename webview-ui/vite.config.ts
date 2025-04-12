@@ -1,10 +1,31 @@
 import { defineConfig } from 'vite'
-import preact from '@preact/preset-vite'
+import preact from '@preact/preset-vite';
 import { resolve } from 'path';
+import { writeFileSync } from 'fs';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [preact()],
+  plugins: [
+    preact(),
+    {
+      name: 'write-port',
+      configureServer(server) {
+        server.httpServer?.once('listening', () => {
+          const address = server.httpServer?.address();
+          if (address && typeof address === 'object') {
+            const port = address.port;
+            const portFilePath = resolve(__dirname, '..', '.vite.port');
+            console.log(`Writing dev server port ${port} to ${portFilePath}`);
+            try {
+              writeFileSync(portFilePath, port.toString());
+            } catch (error) {
+              console.error(`Error writing port file: ${error}`);
+            }
+          }
+        });
+      },
+    },
+  ],
   // Set base to './' for relative asset paths in VS Code webview
   base: './',
   build: {
