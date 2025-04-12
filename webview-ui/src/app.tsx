@@ -46,7 +46,7 @@ type ResolvedModel = {
 };
 
 // Define ApiProviderKey here for UI use (or import if shared)
-type ApiProviderKey = 'ANTHROPIC' | 'GOOGLE' | 'OPENROUTER' | 'DEEPSEEK';
+export type ApiProviderKey = 'ANTHROPIC' | 'GOOGLE' | 'OPENROUTER' | 'DEEPSEEK'; // Export type
 
 // --- Settings Types (from settings-ui) ---
 type ProviderStatus = {
@@ -54,7 +54,7 @@ type ProviderStatus = {
     apiKeySet: boolean;
 };
 
-type AllProviderStatus = {
+export type AllProviderStatus = { // Export type
     ANTHROPIC: ProviderStatus;
     GOOGLE: ProviderStatus;
     OPENROUTER: ProviderStatus;
@@ -488,7 +488,7 @@ export function App() {
                         </div>
                     </Route>
                     <Route path="/settings">
-                        <SettingPage />
+                        <SettingPage providerStatus={providerStatus} onProviderToggle={handleProviderToggle} />
                     </Route>
                     {/* Default route or 404 can be added here */}
                 </main>
