@@ -1,64 +1,51 @@
 import { h } from 'preact';
 import { useState, useMemo } from 'preact/hooks'; // Import useMemo
-import { AllProviderStatus, ApiProviderKey, postMessage } from '../app'; // Import types and postMessage from app.tsx
+import { ProviderInfoAndStatus, ApiProviderKey, postMessage } from '../app'; // Import updated types
 // Removed incorrect backend import and duplicate preact imports
 
-// Define props for the SettingPage
+// Define props for the SettingPage - providerStatus is now an array
 interface SettingPageProps {
-  providerStatus: AllProviderStatus | null;
-  onProviderToggle: (providerKey: ApiProviderKey, enabled: boolean) => void;
+  providerStatus: ProviderInfoAndStatus[]; // Changed from AllProviderStatus | null
+  onProviderToggle: (providerId: string, enabled: boolean) => void; // Use string ID
 }
 
-// Define provider details locally in the frontend, including necessary static info
-// This should ideally match the backend definitions in src/ai/providers/*.ts
-const providerDetails: {
-    key: ApiProviderKey;
-    name: string;
-    apiKeyUrl?: string;
-    requiresApiKey: boolean;
-}[] = [
-    { key: 'ANTHROPIC', name: 'Anthropic (Claude)', apiKeyUrl: 'https://console.anthropic.com/settings/keys', requiresApiKey: true },
-    { key: 'GOOGLE', name: 'Google (Gemini)', apiKeyUrl: 'https://aistudio.google.com/app/apikey', requiresApiKey: true },
-    { key: 'OPENROUTER', name: 'OpenRouter', apiKeyUrl: 'https://openrouter.ai/keys', requiresApiKey: true },
-    { key: 'DEEPSEEK', name: 'DeepSeek', apiKeyUrl: 'https://platform.deepseek.com/docs/getting-started/apply-for-an-api-key', requiresApiKey: true },
-    // Add other providers here if needed
-];
+// Remove local providerDetails - info now comes from providerStatus prop
 
 export function SettingPage({ providerStatus, onProviderToggle }: SettingPageProps) {
   // State to hold the temporary API key input for each provider
-  const [apiKeysInput, setApiKeysInput] = useState<{ [key in ApiProviderKey]?: string }>({});
+  const [apiKeysInput, setApiKeysInput] = useState<{ [providerId: string]: string }>({}); // Use string key for providerId
   // State for the search query
   const [searchQuery, setSearchQuery] = useState('');
 
   // Handle input change for API key fields
-  const handleApiKeyInputChange = (providerKey: ApiProviderKey, value: string) => {
-    setApiKeysInput(prev => ({ ...prev, [providerKey]: value }));
+  const handleApiKeyInputChange = (providerId: string, value: string) => {
+    setApiKeysInput(prev => ({ ...prev, [providerId]: value }));
   };
 
   // Handle setting the API key
-  const handleSetApiKey = (providerKey: ApiProviderKey) => {
-    const apiKey = apiKeysInput[providerKey];
+  const handleSetApiKey = (providerId: string) => {
+    const apiKey = apiKeysInput[providerId];
     if (apiKey && apiKey.trim() !== '') {
-      console.log(`Setting API Key for ${providerKey}`);
+      console.log(`Setting API Key for ${providerId}`);
       postMessage({
         type: 'setApiKey',
-        payload: { provider: providerKey, apiKey: apiKey.trim() }
+        payload: { provider: providerId, apiKey: apiKey.trim() } // Send string ID
       });
       // Clear the input field after sending
-      setApiKeysInput(prev => ({ ...prev, [providerKey]: '' }));
+      setApiKeysInput(prev => ({ ...prev, [providerId]: '' }));
        // Optionally show a temporary success message or rely on providerStatus update
     } else {
-        console.warn(`API Key input for ${providerKey} is empty.`);
+        console.warn(`API Key input for ${providerId} is empty.`);
         // Optionally show a warning message
     }
   };
 
   // Handle deleting the API key
-  const handleDeleteApiKey = (providerKey: ApiProviderKey) => {
-      console.log(`Deleting API Key for ${providerKey}`);
+  const handleDeleteApiKey = (providerId: string) => {
+      console.log(`Deleting API Key for ${providerId}`);
       postMessage({
           type: 'deleteApiKey',
-          payload: { provider: providerKey }
+          payload: { provider: providerId } // Send string ID
       });
       // Optionally show a temporary confirmation or rely on providerStatus update
   };
@@ -68,39 +55,38 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
       setSearchQuery((e.target as HTMLInputElement).value);
   };
 
-  // Filter providers based on search query
+  // Filter providers based on search query using the providerStatus array
   const filteredProviders = useMemo(() => {
+      if (!providerStatus) return []; // Return empty if status not loaded
       if (!searchQuery) {
-          return providerDetails; // Return all if search is empty
+          return providerStatus; // Return all if search is empty
       }
       const lowerCaseQuery = searchQuery.toLowerCase();
-      return providerDetails.filter(provider =>
+      return providerStatus.filter(provider =>
           provider.name.toLowerCase().includes(lowerCaseQuery) ||
-          provider.key.toLowerCase().includes(lowerCaseQuery)
+          provider.id.toLowerCase().includes(lowerCaseQuery) // Search by ID now
       );
-  }, [searchQuery]);
+  }, [searchQuery, providerStatus]); // Add providerStatus dependency
 
 
   // Re-implement the rendering logic for a single provider setting
-  const renderProviderSetting = (provider: typeof providerDetails[number]) => {
-    const { key, name, apiKeyUrl, requiresApiKey } = provider; // Destructure provider details
-    if (!providerStatus) return <li key={key}>{name}: 載入中...</li>;
+  // renderProviderSetting now takes ProviderInfoAndStatus directly
+  const renderProviderSetting = (providerInfo: ProviderInfoAndStatus) => {
+    const { id, name, apiKeyUrl, requiresApiKey, enabled, apiKeySet } = providerInfo; // Destructure directly
+    // No need to check providerStatus null anymore, handled in the main return
 
-    const status = providerStatus[key];
-    if (!status) return <li key={key}>{name}: 狀態不可用</li>;
-
-    const apiKeyText = status.apiKeySet ? '(Key 已設定)' : '(Key 未設定)';
-    const apiKeyColor = status.apiKeySet ? 'green' : 'red';
+    const apiKeyText = apiKeySet ? '(Key 已設定)' : '(Key 未設定)';
+    const apiKeyColor = apiKeySet ? 'green' : 'red';
 
     return (
-      <li key={key} class="provider-setting-item mb-4 p-3 border border-gray-300 rounded">
+      <li key={id} class="provider-setting-item mb-4 p-3 border border-gray-300 rounded"> {/* Use id for key */}
         <div class="flex items-center justify-between mb-2">
             <label class="flex items-center font-semibold">
               <input
                 type="checkbox"
                 class="mr-2"
-                checked={status.enabled}
-                onChange={(e) => onProviderToggle(key, (e.target as HTMLInputElement).checked)}
+                checked={enabled}
+                onChange={(e) => onProviderToggle(id, (e.target as HTMLInputElement).checked)}
               />
               {name}
             </label>
@@ -114,23 +100,23 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
                      type="password" // Use password type for masking
                      class="flex-grow p-1 border border-gray-400 rounded text-sm"
                      placeholder={`輸入 ${name} API Key...`}
-                     value={apiKeysInput[key] || ''}
-                     onInput={(e) => handleApiKeyInputChange(key, (e.target as HTMLInputElement).value)}
+                     value={apiKeysInput[id] || ''}
+                     onInput={(e) => handleApiKeyInputChange(id, (e.target as HTMLInputElement).value)}
                      aria-label={`${name} API Key Input`}
                    />
                    <button
                      class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm disabled:opacity-50"
-                     onClick={() => handleSetApiKey(key)}
-                     disabled={!apiKeysInput[key]?.trim()} // Disable if input is empty
+                     onClick={() => handleSetApiKey(id)}
+                     disabled={!apiKeysInput[id]?.trim()} // Disable if input is empty
                      aria-label={`Set ${name} API Key`}
                    >
                      設定
                    </button>
                    {/* Show Delete button only if key is set */}
-                   {status.apiKeySet && (
+                   {apiKeySet && ( // Use destructured apiKeySet
                        <button
                          class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
-                         onClick={() => handleDeleteApiKey(key)}
+                         onClick={() => handleDeleteApiKey(id)}
                          aria-label={`Delete ${name} API Key`}
                        >
                          刪除
@@ -166,15 +152,17 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
             />
         </div>
 
-        {providerStatus ? (
-          <ul class="space-y-2"> {/* Use space-y for vertical spacing */}
+        {/* Check if providerStatus array has loaded */}
+        {providerStatus && providerStatus.length > 0 ? (
+          <ul class="space-y-2">
             {filteredProviders.length > 0 ? (
-                 filteredProviders.map(provider => renderProviderSetting(provider))
+                 filteredProviders.map(providerInfo => renderProviderSetting(providerInfo)) // Iterate over filtered list
              ) : (
                  <li class="text-gray-500">未找到匹配嘅 Provider。</li>
              )}
           </ul>
         ) : (
+          // Show loading message if providerStatus is null or empty array
           <p>正在載入 Provider 狀態...</p>
         )}
         <p class="text-xs text-gray-600 mt-4">啟用 Provider 並且設定對應嘅 API Key 先可以使用。</p>

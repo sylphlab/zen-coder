@@ -1,16 +1,31 @@
 # Active Context
 
 ## Current Focus
-Updating Settings UI (`SettingPage.tsx`) to reflect backend refactoring and add features.
+Correcting Settings UI (`SettingPage.tsx`) to use backend-provided data instead of local definitions.
 
 ## Recent Changes
-- **Updated Settings UI (`SettingPage.tsx`):**
-    - Added "Delete Key" button, visible when a key is set.
-    - Added handler `handleDeleteApiKey` to post `deleteApiKey` message.
-    - Added display for the provider's `apiKeyUrl` (link to get key).
-    - Updated `providerDetails` to be defined locally with necessary static info (`apiKeyUrl`, `requiresApiKey`).
-    - Removed incorrect backend import (`allProviders`).
-    - Fixed duplicate Preact imports.
+- **Corrected Settings UI (`SettingPage.tsx`):**
+    - Removed local hardcoded `providerDetails` array.
+    - Updated component to render provider information directly from the `providerStatus` prop (which now contains static info like name, apiKeyUrl, requiresApiKey).
+    - Updated filtering logic to use the `providerStatus` array.
+    - Fixed JSX comment issue causing TS errors.
+- **Updated Backend Data Structure (`AiService.ts`, `extension.ts`):**
+    - Modified `AiService.getProviderStatus` to return an array of `ProviderInfoAndStatus` objects, including static provider details.
+    - Updated `extension.ts` message handlers to send/receive this new array structure.
+- **Updated App State (`App.tsx`):**
+    - Changed `providerStatus` state to hold an array (`ProviderInfoAndStatus[]`).
+    - Updated message handling and prop drilling for the new state structure.
+- **Updated Settings UI (Initial Features):** (Previous change)
+    - Added "Delete Key" button.
+    - Added `handleDeleteApiKey` handler.
+    - Added `apiKeyUrl` display.
+    - Defined `providerDetails` locally (incorrectly).
+- **Updated Extension (`extension.ts`):** (Previous change)
+    - Added `deleteApiKey` handler.
+    - Updated other handlers.
+    - Imported `providerMap`.
+- **Updated App (`App.tsx`):** (Previous change)
+    - Updated message calls and props.
 - **Updated Extension (`extension.ts`):**
     - Added message handler for `deleteApiKey`.
     - Updated handlers for `webviewReady`, `getProviderStatus`, `setApiKey` to use refactored `AiService` methods and `providerMap`.
@@ -86,16 +101,16 @@ Updating Settings UI (`SettingPage.tsx`) to reflect backend refactoring and add 
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit Settings UI updates.
-- **Previous:** Update `SettingPage.tsx`, `extension.ts`, and `App.tsx` for new features and backend changes.
+- **Current Task:** Update Memory Bank and commit Settings UI correction.
+- **Previous:** Correct `SettingPage.tsx` to use backend data; update backend and App state accordingly.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **Settings UI Updated:** Displays API key status, allows setting/deleting keys, shows link to get keys, includes search.
-- **Backend Communication Updated:** Extension handles new `deleteApiKey` message and uses refactored `AiService` for status/key operations.
+- **Settings UI Corrected:** Now correctly uses backend-provided data for provider details (name, URL, requiresKey) instead of local hardcoding. Displays status, allows set/delete, shows URL, includes search.
+- **Backend Communication Updated:** Sends richer provider info list to frontend. Handles delete key message.
 - **AI Provider Logic Further Refactored:** `AiService` delegates key/status management (Previous).
 - **OpenRouter Models Fetched Dynamically:** Logic in `openRouterProvider.ts` (Previous).
 - **Settings Provider Search Added:** Users can now filter the provider list in the settings page (Previous).
@@ -123,8 +138,11 @@ Updating Settings UI (`SettingPage.tsx`) to reflect backend refactoring and add 
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
-- Updated Settings UI (`SettingPage.tsx`) to match backend refactoring and add delete/URL features.
-- Updated backend message handling (`extension.ts`) for UI changes.
+- Corrected `SettingPage.tsx` to remove local provider definitions and use backend data structure.
+- Updated `AiService` and `extension.ts` to provide the necessary combined static/dynamic provider info.
+- Updated `App.tsx` state management for the new data structure.
+- Updated Settings UI (`SettingPage.tsx`) to add delete/URL features (Previous).
+- Updated backend message handling (`extension.ts`) for UI changes (Previous).
 - Delegated API key and status management to provider modules (Previous).
 - Refactored AI provider handling into modular components (Initial refactor).
 - Added search functionality to the Settings page Provider list (Previous).

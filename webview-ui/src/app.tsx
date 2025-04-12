@@ -54,12 +54,17 @@ type ProviderStatus = {
     apiKeySet: boolean;
 };
 
-export type AllProviderStatus = { // Export type
-    ANTHROPIC: ProviderStatus;
-    GOOGLE: ProviderStatus;
-    OPENROUTER: ProviderStatus;
-    DEEPSEEK: ProviderStatus;
-};
+// Update AllProviderStatus to be an array of the combined info type
+// This type should match the one defined in AiService.ts
+export type ProviderInfoAndStatus = {
+     id: string; // Use string ID from backend
+     name: string;
+     apiKeyUrl?: string;
+     requiresApiKey: boolean;
+     enabled: boolean;
+     apiKeySet: boolean;
+ };
+export type AllProviderStatus = ProviderInfoAndStatus[]; // It's now an array
 
 // Helper to get the VS Code API instance
 // @ts-ignore
@@ -140,7 +145,7 @@ export function App() {
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const currentAssistantMessageId = useRef<string | null>(null);
     // const [isSettingsVisible, setIsSettingsVisible] = useState(false); // Replaced by routing
-    const [providerStatus, setProviderStatus] = useState<AllProviderStatus | null>(null); // State for provider status (keep for potential use in settings page)
+    const [providerStatus, setProviderStatus] = useState<AllProviderStatus>([]); // Initialize as empty array
     const [location, setLocation] = useLocation(); // Hook for navigation state
 
      // --- Derived State ---
@@ -270,9 +275,9 @@ export function App() {
                         }
                     }
                     break;
-                case 'providerStatus': // Handle status from extension
-                    if (message.payload) {
-                        setProviderStatus(message.payload);
+                case 'providerStatus': // Handle status list from extension
+                    if (Array.isArray(message.payload)) {
+                        setProviderStatus(message.payload); // Set the array directly
                     }
                     break;
                 case 'showSettings': // Handle command from extension to show settings page
@@ -346,21 +351,20 @@ export function App() {
         // For simplicity, inform on every change for now.
          postMessage({ type: 'setModel', modelId: newModelId });
     };
-     const handleProviderToggle = useCallback((providerKey: keyof AllProviderStatus, enabled: boolean) => {
-        // Optimistically update UI state
-        setProviderStatus(prevStatus => {
-            if (!prevStatus) return null;
-            return {
-                ...prevStatus,
-                [providerKey]: { ...prevStatus[providerKey], enabled: enabled }
-            };
-        });
-        // Send message to extension host to update the setting
-        postMessage({
-            type: 'setProviderEnabled',
-            payload: { provider: providerKey, enabled: enabled }
-        });
-    }, []);
+     // Update handleProviderToggle to work with the array structure
+      const handleProviderToggle = useCallback((providerId: string, enabled: boolean) => {
+         // Optimistically update UI state (find and update the specific provider)
+         setProviderStatus(prevStatus =>
+             prevStatus.map(p =>
+                 p.id === providerId ? { ...p, enabled: enabled } : p
+             )
+         );
+         // Send message to extension host to update the setting
+         postMessage({
+             type: 'setProviderEnabled',
+             payload: { provider: providerId, enabled: enabled } // Send providerId (string)
+         });
+     }, []);
 
 
     // --- Rendering Helpers ---
@@ -386,26 +390,7 @@ export function App() {
         }
     };
 
-    const renderProviderSetting = (key: keyof AllProviderStatus, name: string) => {
-       if (!providerStatus) return <li>{name}: 載入中...</li>;
-
-       const status = providerStatus[key];
-       const apiKeyText = status.apiKeySet ? '(Key 已設定)' : '(Key 未設定)';
-       const apiKeyColor = status.apiKeySet ? 'green' : 'red';
-
-       return (
-           <li key={key}>
-               <label>
-                   <input
-                       type="checkbox"
-                       checked={status.enabled}
-                       onChange={(e) => handleProviderToggle(key, (e.target as HTMLInputElement).checked)}
-                   />
-                   {name} <span style={{ color: apiKeyColor, fontSize: '0.9em' }}>{apiKeyText}</span>
-               </label>
-           </li>
-       );
-   };
+   // renderProviderSetting removed from App.tsx - logic moved entirely to SettingPage.tsx
 
    // Settings Modal is removed, replaced by SettingsPage route
     // Main application layout with routing

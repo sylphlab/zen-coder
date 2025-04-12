@@ -180,9 +180,10 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         const models = await this._aiService.resolveAvailableModels();
                         this.postMessageToWebview({ type: 'availableModels', payload: models });
                         console.log("[Extension] Sent available models to webview.");
-                        const status = await this._aiService.getProviderStatus();
-                        this.postMessageToWebview({ type: 'providerStatus', payload: status });
-                        console.log("[Extension] Sent provider status to webview.");
+                        // Fetch the new combined status list
+                        const statusList = await this._aiService.getProviderStatus();
+                        this.postMessageToWebview({ type: 'providerStatus', payload: statusList }); // Send the list
+                        console.log("[Extension] Sent provider status list to webview.");
                     } catch (error: any) {
                          console.error("[Extension] Error fetching initial state for webview:", error);
                          vscode.window.showErrorMessage(`Error fetching initial state: ${error.message}`);
@@ -204,9 +205,10 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                 case 'getProviderStatus': // Handle settings request (e.g., refresh)
                     try {
                         console.log("[Extension] Received getProviderStatus request from webview.");
-                        const currentStatus = await this._aiService.getProviderStatus();
-                        this.postMessageToWebview({ type: 'providerStatus', payload: currentStatus });
-                        console.log("[Extension] Sent updated provider status to webview.");
+                        // Fetch the new combined status list
+                        const currentStatusList = await this._aiService.getProviderStatus();
+                        this.postMessageToWebview({ type: 'providerStatus', payload: currentStatusList }); // Send the list
+                        console.log("[Extension] Sent updated provider status list to webview.");
                     } catch (error: any) {
                          console.error("[Extension] Error handling getProviderStatus request:", error);
                          vscode.window.showErrorMessage(`Error getting provider status: ${error.message}`);
@@ -225,9 +227,9 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                 const keyMap: Record<ApiProviderKey, string> = { ANTHROPIC: 'anthropic.enabled', GOOGLE: 'google.enabled', OPENROUTER: 'openrouter.enabled', DEEPSEEK: 'deepseek.enabled' };
                                 await config.update(keyMap[providerKey], enabled, vscode.ConfigurationTarget.Global);
                                 console.log(`Provider ${String(providerKey)} enabled status updated to: ${enabled}`);
-                                // Send updated status back
-                                const updatedStatus = await this._aiService.getProviderStatus();
-                                this.postMessageToWebview({ type: 'providerStatus', payload: updatedStatus });
+                                // Send updated status list back
+                                const updatedStatusList = await this._aiService.getProviderStatus();
+                                this.postMessageToWebview({ type: 'providerStatus', payload: updatedStatusList });
                             } catch (error: any) {
                                 console.error(`Failed to update provider setting for ${String(providerKey)}:`, error);
                                 vscode.window.showErrorMessage(`Failed to update setting for ${String(providerKey)}: ${error.message}`);
@@ -243,11 +245,11 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         if (providerMap.has(providerKey)) {
                             try {
                                 // Delegate directly to AiService, which now handles provider lookup
-                                await this._aiService.setApiKey(providerKey, apiKey);
+                                await this._aiService.setApiKey(providerKey, apiKey); // AiService handles confirmation now
                                 console.log(`[Extension] API Key set request processed for ${providerKey}`);
                                 // Send updated status back to reflect the change
-                                const updatedStatus = await this._aiService.getProviderStatus();
-                                this.postMessageToWebview({ type: 'providerStatus', payload: updatedStatus });
+                                const updatedStatusList = await this._aiService.getProviderStatus();
+                                this.postMessageToWebview({ type: 'providerStatus', payload: updatedStatusList });
                                 // Confirmation message handled by AiService now
                             } catch (error: any) {
                                 // Error message handled by AiService now
@@ -266,11 +268,11 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         const providerId = message.payload.provider;
                         if (providerMap.has(providerId)) {
                             try {
-                                await this._aiService.deleteApiKey(providerId);
+                                await this._aiService.deleteApiKey(providerId); // AiService handles confirmation now
                                 console.log(`[Extension] API Key delete request processed for ${providerId}`);
                                 // Send updated status back
-                                const updatedStatus = await this._aiService.getProviderStatus();
-                                this.postMessageToWebview({ type: 'providerStatus', payload: updatedStatus });
+                                const updatedStatusList = await this._aiService.getProviderStatus();
+                                this.postMessageToWebview({ type: 'providerStatus', payload: updatedStatusList });
                                 // Confirmation message handled by AiService
                             } catch (error: any) {
                                 // Error message handled by AiService

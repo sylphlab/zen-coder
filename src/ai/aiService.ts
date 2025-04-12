@@ -6,11 +6,20 @@ import { allProviders, providerMap, AiProvider, ModelDefinition } from './provid
 import { executeUuidGenerateWithProgress, UuidUpdateCallback, uuidGenerateTool as uuidGenerateToolDefinition } from '../tools/utils/uuidGenerate';
 
 // SECRET_KEYS constant removed - managed by individual providers now.
- // Type for provider status (enabled + API key status)
- export type ProviderStatus = {
+ // Type combining static provider info and dynamic status
+ export type ProviderInfoAndStatus = {
+     id: string;
+     name: string;
+     apiKeyUrl?: string;
+     requiresApiKey: boolean;
      enabled: boolean;
      apiKeySet: boolean;
  };
+ // Keep original ProviderStatus type if needed elsewhere, or remove if fully replaced
+ export type ProviderStatus = {
+      enabled: boolean;
+      apiKeySet: boolean;
+  };
 
 // Define ApiProviderKey based on provider IDs
 // This assumes provider IDs match the keys previously used in SECRET_KEYS
@@ -406,21 +415,29 @@ export class AiService {
      }
 
     // --- Provider Status ---
-    public async getProviderStatus(): Promise<Record<string, ProviderStatus>> {
-        const apiKeyStatus = await this.getApiKeyStatus(); // Fetches current key status
-        const providerStatus: Record<string, ProviderStatus> = {};
+    // Now returns an array of objects containing both static info and dynamic status
+    public async getProviderStatus(): Promise<ProviderInfoAndStatus[]> {
+        const apiKeyStatusMap = await this.getApiKeyStatus(); // Fetches current key status map { providerId: boolean }
+        const combinedStatusList: ProviderInfoAndStatus[] = [];
 
         for (const provider of allProviders) {
             const isEnabled = provider.isEnabled(); // Use provider's own method
-            const hasApiKey = apiKeyStatus[provider.id] ?? false; // Get status from fetched map
+            const hasApiKey = apiKeyStatusMap[provider.id] ?? false; // Get status from fetched map
 
-            providerStatus[provider.id] = {
+            combinedStatusList.push({
+                id: provider.id,
+                name: provider.name,
+                apiKeyUrl: provider.apiKeyUrl,
+                requiresApiKey: provider.requiresApiKey,
                 enabled: isEnabled,
-                apiKeySet: hasApiKey, // Use the result from getApiKeyStatus
-            };
+                apiKeySet: hasApiKey,
+            });
         }
-        console.log("[AiService] Calculated Provider Status:", providerStatus);
-        return providerStatus;
+        // Sort alphabetically by name for consistent UI order
+        combinedStatusList.sort((a, b) => a.name.localeCompare(b.name));
+
+        console.log("[AiService] Calculated Combined Provider Status List:", combinedStatusList);
+        return combinedStatusList;
     }
 
     // --- Model Resolver ---
@@ -430,11 +447,19 @@ export class AiService {
 
     public async resolveAvailableModels(): Promise<ResolvedModel[]> {
         const allResolvedModels: ResolvedModel[] = [];
-        const providerStatus = await this.getProviderStatus();
+        // Get the combined status list first
+        const providerInfoList = await this.getProviderStatus();
 
-        // Iterate through all registered providers
-        for (const provider of allProviders) {
-            const status = providerStatus[provider.id as ApiProviderKey]; // Cast needed as provider.id is string
+        // Iterate through the combined list
+        for (const providerInfo of providerInfoList) {
+            // Use the status directly from the combined object
+            const status = { enabled: providerInfo.enabled, apiKeySet: providerInfo.apiKeySet };
+            const provider = providerMap.get(providerInfo.id); // Get the provider implementation if needed
+
+            if (!provider) {
+                 console.warn(`[AiService] Provider implementation not found for ID '${providerInfo.id}' during model resolution. Skipping.`);
+                 continue; // Skip if provider implementation is missing for some reason
+            }
 
             // Check if the provider is enabled and has an API key if required
             if (status?.enabled && (status.apiKeySet || !provider.requiresApiKey)) {
