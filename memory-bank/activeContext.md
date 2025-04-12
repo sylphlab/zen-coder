@@ -1,10 +1,14 @@
 # Active Context
 
 ## Current Focus
-Adding Nanostores library to the webview UI for state management.
+Restoring functionality to the Settings page after refactoring to routing.
 
 ## Recent Changes
-- **Added Nanostores:**
+- **Restored Settings Page:**
+    - Updated `SettingPage.tsx` to accept `providerStatus` and `onProviderToggle` props and render the provider settings UI.
+    - Exported `AllProviderStatus` and `ApiProviderKey` types from `App.tsx`.
+    - Passed the required props (`providerStatus`, `handleProviderToggle`) from `App.tsx` to the `SettingPage` component within the `/settings` route.
+- **Added Nanostores:** (Previous change)
     - Installed `nanostores` and `@nanostores/preact` dependencies.
 - **Added GSAP:** (Previous change)
     - Installed `gsap` dependency.
@@ -44,15 +48,16 @@ Adding Nanostores library to the webview UI for state management.
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit Nanostores installation.
-- **Previous:** Install Nanostores.
+- **Current Task:** Update Memory Bank and commit Settings page restoration.
+- **Previous:** Restore Settings page functionality by passing props.
 - **Future:** Implement API/Web scraping for `resolveAvailableModels`.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **Nanostores Added:** Installed the library and Preact integration.
+- **Settings Page Restored:** Moved rendering logic and passed necessary props.
+- **Nanostores Added:** Installed the library and Preact integration (Previous).
 - **GSAP Added:** Installed the library (Previous).
 - **UnoCSS Integrated:** Added dependencies, Vite plugin, config, and imports (Previous).
 - **Routing Implemented:** Added `wouter` and page components (Previous).
@@ -74,7 +79,8 @@ Adding Nanostores library to the webview UI for state management.
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
-- Added Nanostores for state management.
+- Restored Settings page functionality after routing refactor.
+- Added Nanostores for state management. (Previous)
 - Added GSAP for animations. (Previous)
 - Integrated UnoCSS for utility-first styling. (Previous)
 - Replaced Settings modal with a dedicated `/settings` route using `wouter`. (Previous)
