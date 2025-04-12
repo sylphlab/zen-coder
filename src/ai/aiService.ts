@@ -469,16 +469,23 @@ export class AiService {
         const resolvedModels: ResolvedModel[] = [];
         const providerStatus = await this.getProviderStatus();
 
-        // --- TODO: Implement API/Web Scraping Logic ---
-        // Example structure:
-        // if (providerStatus.ANTHROPIC.enabled && providerStatus.ANTHROPIC.apiKeySet) {
-        //     try {
-        //         const apiModels = await this.fetchAnthropicModels(); // Placeholder
-        //         resolvedModels.push(...apiModels);
-        //     } catch (e) { console.error("Failed to fetch Anthropic models:", e); }
-        // }
-        // ... similar logic for other providers ...
+        // --- Fetch OpenRouter Models ---
+        if (providerStatus.OPENROUTER.enabled && providerStatus.OPENROUTER.apiKeySet && this.openRouterApiKey) {
+            try {
+                console.log("[AiService] Fetching models from OpenRouter API...");
+                const openRouterModels = await this.fetchOpenRouterModels(this.openRouterApiKey);
+                resolvedModels.push(...openRouterModels);
+                console.log(`[AiService] Successfully fetched ${openRouterModels.length} models from OpenRouter.`);
+            } catch (error) {
+                console.error("[AiService] Failed to fetch OpenRouter models:", error);
+                // Optionally notify the user or just fall back to hardcoded list below
+                vscode.window.showWarningMessage('無法從 OpenRouter 獲取模型列表，將使用預設列表。');
+            }
+        }
 
+        // --- TODO: Implement API/Web Scraping Logic for other providers ---
+        // Example structure:
+        // if (providerStatus.ANTHROPIC.enabled && providerStatus.ANTHROPIC.apiKeySet) { ... }
         // --- Add Hardcoded Fallbacks ---
         // Only add hardcoded models for providers that are enabled and have keys set,
         // and only if no models were resolved via API/Scraping for that provider.
@@ -502,4 +509,55 @@ export class AiService {
         console.log("Resolved available models:", resolvedModels);
         return resolvedModels;
     }
-}
+    // --- Helper to fetch OpenRouter Models --- (Moved inside the class)
+    private async fetchOpenRouterModels(apiKey: string): Promise<ResolvedModel[]> {
+        const https = await import('https'); // Use dynamic import for built-in module
+
+        return new Promise((resolve, reject) => {
+            const options = {
+                hostname: 'openrouter.ai',
+                path: '/api/v1/models',
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'User-Agent': 'VSCode-ZenCoder-Extension' // Optional: Identify client
+                }
+            };
+
+            const req = https.request(options, (res) => {
+                let data = '';
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+                res.on('end', () => {
+                    if (res.statusCode === 200) {
+                        try {
+                            const parsedData = JSON.parse(data);
+                            if (parsedData && Array.isArray(parsedData.data)) {
+                                const models: ResolvedModel[] = parsedData.data.map((model: any) => ({
+                                    id: model.id,
+                                    label: model.name || model.id, // Use name if available, else id
+                                    provider: 'OPENROUTER' as ApiProviderKey, // Explicitly type
+                                    source: 'api' as 'api' | 'web-scrape' | 'hardcoded' // Explicitly type
+                                }));
+                                resolve(models);
+                            } else {
+                                reject(new Error('Invalid API response structure from OpenRouter'));
+                            }
+                        } catch (e) {
+                            reject(new Error(`Failed to parse OpenRouter response: ${e instanceof Error ? e.message : String(e)}`));
+                        }
+                    } else {
+                        reject(new Error(`OpenRouter API request failed with status code ${res.statusCode}: ${data}`));
+                    }
+                });
+            });
+
+            req.on('error', (e) => {
+                reject(new Error(`OpenRouter API request error: ${e.message}`));
+            });
+
+            req.end();
+        });
+    } // End of fetchOpenRouterModels method
+} // End of AiService class

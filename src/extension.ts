@@ -215,6 +215,29 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         } else { console.error(`Invalid provider key received in setProviderEnabled: ${providerKeyInput}`); }
                     } else { console.error("Invalid payload for setProviderEnabled:", message.payload); }
                     break;
+                case 'setApiKey':
+                    if (message.payload && typeof message.payload.provider === 'string' && typeof message.payload.apiKey === 'string') {
+                        const providerKey = message.payload.provider as ApiProviderKey;
+                        const apiKey = message.payload.apiKey;
+                        if (['ANTHROPIC', 'GOOGLE', 'OPENROUTER', 'DEEPSEEK'].includes(providerKey)) {
+                            try {
+                                await this._aiService.setApiKey(providerKey, apiKey);
+                                console.log(`API Key set for ${providerKey}`);
+                                // Send updated status back to reflect the change
+                                const updatedStatus = await this._aiService.getProviderStatus();
+                                this.postMessageToWebview({ type: 'providerStatus', payload: updatedStatus });
+                                vscode.window.showInformationMessage(`${providerKey} API Key set successfully.`);
+                            } catch (error: any) {
+                                console.error(`Failed to set API Key for ${providerKey}:`, error);
+                                vscode.window.showErrorMessage(`Failed to set API Key for ${providerKey}: ${error.message}`);
+                            }
+                        } else {
+                            console.error(`Invalid provider key received in setApiKey: ${providerKey}`);
+                        }
+                    } else {
+                        console.error("Invalid payload for setApiKey:", message.payload);
+                    }
+                    break;
                 default:
                     console.warn("Received unknown message type from webview:", message.type);
             }

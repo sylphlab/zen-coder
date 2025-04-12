@@ -1,13 +1,20 @@
 # Active Context
 
 ## Current Focus
-Restoring functionality to the Settings page after refactoring to routing.
+Implementing dynamic model resolution for OpenRouter.
 
 ## Recent Changes
-- **Restored Settings Page:**
-    - Updated `SettingPage.tsx` to accept `providerStatus` and `onProviderToggle` props and render the provider settings UI.
-    - Exported `AllProviderStatus` and `ApiProviderKey` types from `App.tsx`.
-    - Passed the required props (`providerStatus`, `handleProviderToggle`) from `App.tsx` to the `SettingPage` component within the `/settings` route.
+- **Implemented OpenRouter Model Fetching:**
+    - Added `fetchOpenRouterModels` private async method to `AiService` using Node.js `https` module to call the OpenRouter API (`/api/v1/models`).
+    - Updated `resolveAvailableModels` in `AiService` to call `fetchOpenRouterModels` if OpenRouter is enabled and has an API key set.
+    - Fetched models are added to the `resolvedModels` list with `source: 'api'`.
+    - Hardcoded OpenRouter models are now only added as fallbacks if the API call fails.
+- **Implemented Settings API Key Input:** (Previous change)
+    - Added UI elements and message handling for setting API keys in `SettingPage.tsx` and `src/extension.ts`.
+- **Restored Settings Page:** (Previous change)
+    - Updated `SettingPage.tsx` props and rendering logic.
+    - Exported types from `App.tsx`.
+    - Passed props in `App.tsx` route.
 - **Added Nanostores:** (Previous change)
     - Installed `nanostores` and `@nanostores/preact` dependencies.
 - **Added GSAP:** (Previous change)
@@ -48,15 +55,17 @@ Restoring functionality to the Settings page after refactoring to routing.
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit Settings page restoration.
-- **Previous:** Restore Settings page functionality by passing props.
+- **Current Task:** Update Memory Bank and commit OpenRouter model fetching implementation.
+- **Previous:** Implement OpenRouter model fetching in `AiService`.
 - **Future:** Implement API/Web scraping for `resolveAvailableModels`.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **Settings Page Restored:** Moved rendering logic and passed necessary props.
+- **OpenRouter Models Fetched:** `AiService` now attempts to fetch models dynamically from the OpenRouter API.
+- **API Key Input Added:** Settings page allows setting API keys (Previous).
+- **Settings Page Restored:** Moved rendering logic and passed necessary props (Previous).
 - **Nanostores Added:** Installed the library and Preact integration (Previous).
 - **GSAP Added:** Installed the library (Previous).
 - **UnoCSS Integrated:** Added dependencies, Vite plugin, config, and imports (Previous).
@@ -79,7 +88,9 @@ Restoring functionality to the Settings page after refactoring to routing.
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
-- Restored Settings page functionality after routing refactor.
+- Implemented dynamic fetching of OpenRouter models in `AiService`.
+- Implemented API Key input and setting mechanism in the Settings page. (Previous)
+- Restored Settings page functionality after routing refactor. (Previous)
 - Added Nanostores for state management. (Previous)
 - Added GSAP for animations. (Previous)
 - Integrated UnoCSS for utility-first styling. (Previous)
