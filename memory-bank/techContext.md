@@ -11,7 +11,7 @@
     - `@ai-sdk/deepseek`: For DeepSeek models.
 - **Zod:** For defining tool parameter schemas.
 - **HTML/CSS/JavaScript:** For the webview UI.
-- **VS Code Webview UI Toolkit:** Preferred initial choice for building the webview UI components. **(Note: Deprecated as of v1.4.0, may need replacement later)**.
+- **Preact + Vite:** Used for the webview UI.
 - **pnpm:** Package management (v10.8.0 used for initial install).
 - **esbuild:** Bundler (as indicated by `esbuild.js` in the project root).
 - **eslint:** Linter (as indicated by `eslint.config.mjs`).
@@ -36,7 +36,7 @@
 - `@openrouter/ai-sdk-provider`: 0.4.5
 - `@ai-sdk/deepseek`: 0.2.9
 - `zod`: 3.24.2
-- `@vscode/webview-ui-toolkit`: 1.4.0 (Deprecated)
+- *(Removed @vscode/webview-ui-toolkit)*
 - `node-fetch`: ^3.3.2 (Used for fetchUrlTool, getPublicIpTool - dynamic import used for CJS compat)
 - `@types/node-fetch`: ^2.6.12
 - *(Plus transitive dependencies)*

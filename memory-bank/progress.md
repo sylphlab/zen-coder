@@ -46,7 +46,7 @@
 ## What's Left (Potential Future Enhancements)
 - Thorough testing and debugging of core chat and tool execution.
 - Thorough testing and debugging of core chat and tool execution.
-- Remove unused `@vscode/webview-ui-toolkit` dependency.
+- Implement saving of tool results to chat history (TODO in `extension.ts`).
 - Implement actual MCP client integration for tools like `search` (currently placeholder/disabled).
 - Refine Preact component structure.
 - Improve Markdown rendering in Preact UI.
@@ -75,7 +75,7 @@
 
 ## Known Issues
 - Saving tool results to chat history is not yet implemented in `extension.ts`.
-- `@vscode/webview-ui-toolkit` dependency is unused but still listed.
+- Saving tool results to chat history is not yet implemented in `extension.ts`.
 - Search tool functionality relies on the external `search_files` tool (requires environment support).
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
 - **AI Response Behavior:** AI models might not always explicitly list tool results (e.g., all generated UUIDs) in their text response, even though they receive the results. This depends on the model and prompt.

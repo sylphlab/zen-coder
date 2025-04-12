@@ -95,12 +95,12 @@
           "default": true,
           "description": "Enable the 'moveRenameTool' (moves/renames files/folders, supports overwrite)."
         },
-         "zencoder.tools.copyFileTool.enabled": {
+        "zencoder.tools.copyFileTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'copyFileTool' (copies files, supports overwrite)."
         },
-         "zencoder.tools.copyFolderTool.enabled": {
+        "zencoder.tools.copyFolderTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'copyFolderTool' (copies folders recursively, supports overwrite)."
@@ -125,22 +125,22 @@
           "default": true,
           "description": "Enable the 'md5HashTool' (calculates MD5 hash)."
         },
-         "zencoder.tools.sha256HashTool.enabled": {
+        "zencoder.tools.sha256HashTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'sha256HashTool' (calculates SHA-256 hash)."
         },
-         "zencoder.tools.uuidGenerateTool.enabled": {
+        "zencoder.tools.uuidGenerateTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'uuidGenerateTool' (generates a v4 UUID)."
         },
-         "zencoder.tools.jsonParseTool.enabled": {
+        "zencoder.tools.jsonParseTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'jsonParseTool' (parses a JSON string)."
         },
-         "zencoder.tools.jsonStringifyTool.enabled": {
+        "zencoder.tools.jsonStringifyTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'jsonStringifyTool' (stringifies a JS object/array)."
@@ -180,57 +180,57 @@
           "default": true,
           "description": "Enable the 'runCommandTool' (runs command with options after confirmation)."
         },
-         "zencoder.tools.getActiveEditorContextTool.enabled": {
+        "zencoder.tools.getActiveEditorContextTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'getActiveEditorContextTool' (gets active editor path, language, selection)."
         },
-         "zencoder.tools.replaceInActiveEditorTool.enabled": {
+        "zencoder.tools.replaceInActiveEditorTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'replaceInActiveEditorTool' (replaces selected text)."
         },
-         "zencoder.tools.showInformationMessageTool.enabled": {
+        "zencoder.tools.showInformationMessageTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'showInformationMessageTool' (shows an info notification)."
         },
-         "zencoder.tools.showWarningMessageTool.enabled": {
+        "zencoder.tools.showWarningMessageTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'showWarningMessageTool' (shows a warning notification)."
         },
-         "zencoder.tools.showErrorMessageTool.enabled": {
+        "zencoder.tools.showErrorMessageTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'showErrorMessageTool' (shows an error notification)."
         },
-         "zencoder.tools.showInputBoxTool.enabled": {
+        "zencoder.tools.showInputBoxTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'showInputBoxTool' (prompts user for text input)."
         },
-         "zencoder.tools.showQuickPickTool.enabled": {
+        "zencoder.tools.showQuickPickTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'showQuickPickTool' (shows a selection list to the user)."
         },
-         "zencoder.tools.formatDocumentTool.enabled": {
+        "zencoder.tools.formatDocumentTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'formatDocumentTool' (formats the active document)."
         },
-         "zencoder.tools.saveActiveFileTool.enabled": {
+        "zencoder.tools.saveActiveFileTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'saveActiveFileTool' (saves the active file)."
         },
-         "zencoder.tools.closeActiveFileTool.enabled": {
+        "zencoder.tools.closeActiveFileTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'closeActiveFileTool' (closes the active file)."
         },
-         "zencoder.tools.openFileTool.enabled": {
+        "zencoder.tools.openFileTool.enabled": {
           "type": "boolean",
           "default": true,
           "description": "Enable the 'openFileTool' (opens a specified file)."
@@ -274,7 +274,6 @@
     "@ai-sdk/google": "^1.2.10",
     "@openrouter/ai-sdk-provider": "^0.4.5",
     "@types/node-fetch": "^2.6.12",
-    "@vscode/webview-ui-toolkit": "^1.4.0",
     "ai": "^4.3.5",
     "node-fetch": "^3.3.2",
     "zod": "^3.24.2"

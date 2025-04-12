@@ -1,9 +1,10 @@
 # Active Context
 
 ## Current Focus
-Commit UI styling changes and prepare for next task (e.g., remove deprecated toolkit).
+Commit removal of deprecated dependency and prepare for next task (e.g., address TODOs).
 
 ## Recent Changes
+- **Removed Deprecated Dependency:** Removed `@vscode/webview-ui-toolkit` from root `package.json`.
 - **Applied UnoCSS Styling:** Added utility classes to `App.tsx` (layout, chat elements) and `SettingPage.tsx` for basic styling and dark mode support. Fixed related JSX errors.
 - **Fixed History Format Error:** Corrected `_chatHistory` type in `extension.ts` to `CoreMessage[]` and ensured user messages are converted to the correct format before being added, resolving `AI_InvalidPromptError`.
 - **Fixed UI Infinite Loop:** Adjusted `useEffect` dependencies and removed automatic model re-fetch on status update in `App.tsx` to prevent loop.
@@ -113,8 +114,8 @@ Commit UI styling changes and prepare for next task (e.g., remove deprecated too
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit UI styling changes.
-- **Next:** Remove deprecated `@vscode/webview-ui-toolkit` dependency.
+- **Current Task:** Update Memory Bank and commit dependency removal.
+- **Next:** Address TODO for saving tool results to history in `extension.ts`.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
