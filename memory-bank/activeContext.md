@@ -1,15 +1,24 @@
 # Active Context
 
 ## Current Focus
-Implementing routing with `wouter` for Chat and Settings pages in the webview UI.
+Adding Nanostores library to the webview UI for state management.
 
 ## Recent Changes
-- **Implemented Routing:**
+- **Added Nanostores:**
+    - Installed `nanostores` and `@nanostores/preact` dependencies.
+- **Added GSAP:** (Previous change)
+    - Installed `gsap` dependency.
+- **Integrated UnoCSS:** (Previous change)
+    - Installed `unocss`, `@unocss/vite`, `@unocss/reset`.
+    - Configured Vite (`webview-ui/vite.config.ts`).
+    - Created UnoCSS config file (`webview-ui/uno.config.ts`).
+    - Imported UnoCSS styles in `webview-ui/src/main.tsx`.
+- **Implemented Routing:** (Previous change)
     - Installed `wouter`.
-    - Created `SettingPage.tsx` and `ChatPage.tsx` components in `webview-ui/src/pages/`.
-    - Updated `webview-ui/src/app.tsx` to use `wouter`'s `Router`, `Route`, and `Link` components to handle navigation between the Chat (`/`) and Settings (`/settings`) views.
-    - Replaced the settings modal with the `/settings` route.
-    - Updated `showSettings` message handler to navigate to `/settings`.
+    - Created `SettingPage.tsx` and `ChatPage.tsx` components.
+    - Updated `webview-ui/src/app.tsx` for routing.
+    - Replaced settings modal with `/settings` route.
+    - Updated `showSettings` message handler.
 - **Relaxed Development CSP:** (Previous change)
     - Added `'unsafe-eval'` to the `script-src` directive in the development mode Content Security Policy within `src/extension.ts` (`getWebviewContent`). This was to test if Vite's HMR script execution was being blocked.
 - **Fixed Vite Port File Path:**
@@ -35,15 +44,18 @@ Implementing routing with `wouter` for Chat and Settings pages in the webview UI
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Verify routing implementation and ensure both Chat and Settings pages render correctly.
-- **Previous:** Implement routing with `wouter`.
+- **Current Task:** Update Memory Bank and commit Nanostores installation.
+- **Previous:** Install Nanostores.
 - **Future:** Implement API/Web scraping for `resolveAvailableModels`.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **Routing Implemented:** Added `wouter` and page components.
+- **Nanostores Added:** Installed the library and Preact integration.
+- **GSAP Added:** Installed the library (Previous).
+- **UnoCSS Integrated:** Added dependencies, Vite plugin, config, and imports (Previous).
+- **Routing Implemented:** Added `wouter` and page components (Previous).
 - **Relaxed Dev CSP:** Added `'unsafe-eval'` to `script-src` for testing HMR compatibility (Previous).
 - **Fixed Vite Port File Path:** Corrected path in `src/extension.ts`.
 - **Fixed "No data provider registered" Error:** Resolved by correcting `package.json`.
@@ -62,7 +74,10 @@ Implementing routing with `wouter` for Chat and Settings pages in the webview UI
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
-- Replaced Settings modal with a dedicated `/settings` route using `wouter`.
+- Added Nanostores for state management.
+- Added GSAP for animations. (Previous)
+- Integrated UnoCSS for utility-first styling. (Previous)
+- Replaced Settings modal with a dedicated `/settings` route using `wouter`. (Previous)
 - Refactored activation to use `WebviewViewProvider`. (Previous)
 - Implemented Vite port discovery. (Previous)
 - Corrected `package.json` contributions. (Previous)

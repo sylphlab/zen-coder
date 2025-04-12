@@ -1,6 +1,9 @@
 # Project Progress
 
 ## What Works
+- **Nanostores Added:** Installed `nanostores` and `@nanostores/preact`. Ready for state management.
+- **GSAP Added:** Installed `gsap` dependency. Ready for use in animations. (Previous)
+- **UnoCSS Integrated:** Added dependencies, Vite plugin, config (`uno.config.ts`), and imported into `main.tsx`. Ready for use. (Previous)
 - Initial project structure exists.
 - Memory Bank files created and updated.
 - Core dependencies installed.
@@ -41,6 +44,9 @@
 - Improve error handling in Preact UI.
 - Re-implement tool status updates using recommended Vercel AI SDK APIs (if desired).
 - If relaxing CSP works, investigate if a more specific CSP rule can be used instead of `'unsafe-eval'`.
+- Apply UnoCSS classes for styling.
+- Implement animations using GSAP where appropriate.
+- Define and use Nanostores stores for managing shared state (e.g., settings, chat history).
 
 ## Current Status
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
@@ -49,7 +55,8 @@
 - **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
 - **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from the correct file path.
 - **View Provider Registration:** Corrected `package.json` ensures the `WebviewViewProvider` is properly registered.
-- **Webview Loading (Troubleshooting):** Relaxed development CSP to potentially resolve blank webview issue.
+- **Webview Loading (Troubleshooting):** Relaxed development CSP to potentially resolve blank webview issue. (Previous)
+- **Styling:** UnoCSS is set up but not yet applied to components. Existing CSS (`app.css`, `index.css`) might conflict or be redundant.
 
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
