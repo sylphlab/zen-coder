@@ -464,7 +464,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, ex
     <script type="module" nonce="${nonce}" src="${viteDevServerUrl}${mainTsxPath}"></script>
 </head>
 <body>
-    <div id="root">Loading UI from Dev Server...</div>
+    <div id="root"></div>
 </body>
 </html>`;
 
