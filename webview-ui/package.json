@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "gsap": "^3.12.7",
     "preact": "^10.26.2",
     "wouter": "^3.6.0"
   },
