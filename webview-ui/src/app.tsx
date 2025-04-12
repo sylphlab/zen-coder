@@ -66,7 +66,7 @@ export type AllProviderStatus = { // Export type
 const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
 
 // Function to post messages to the extension host
-const postMessage = (message: any) => {
+export const postMessage = (message: any) => { // Export function
     if (vscode) {
         vscode.postMessage(message);
     } else {
