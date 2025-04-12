@@ -1,11 +1,12 @@
 # Active Context
 
 ## Current Focus
-Commit removal of deprecated dependency and prepare for next task (Address TODO for saving tool results).
+Commit fix for UI rendering error (`msg.content.map`) and prepare for next task (UnoCSS styling).
 
 ## Recent Changes
 - **Removed Deprecated Dependency:** Removed `@vscode/webview-ui-toolkit` from root `package.json`.
 - **Applied UnoCSS Styling:** Added utility classes to `App.tsx` (layout, chat elements) and `SettingPage.tsx` for basic styling and dark mode support. Fixed related JSX errors.
+- **Fixed UI Rendering Error:** Corrected message rendering logic in `App.tsx` to handle both string and array types for `msg.content`, resolving `msg.content.map is not a function` error.
 - **Added Tool Result History Saving:** Modified `extension.ts` stream processing to create and save `role: 'tool'` messages to history when tool results are received.
 - **Fixed History Format Error:** Corrected `_chatHistory` type in `extension.ts` to `CoreMessage[]` and ensured user messages are converted to the correct format before being added, resolving `AI_InvalidPromptError`.
 - **Fixed UI Infinite Loop:** Adjusted `useEffect` dependencies and removed automatic model re-fetch on status update in `App.tsx` to prevent loop.
@@ -115,8 +116,8 @@ Commit removal of deprecated dependency and prepare for next task (Address TODO 
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit dependency removal.
-- **Next:** Address TODO for saving tool results to history in `extension.ts`.
+- **Current Task:** Update Memory Bank and commit UI rendering fix.
+- **Next:** Apply UnoCSS styling to UI components.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
@@ -124,6 +125,7 @@ Commit removal of deprecated dependency and prepare for next task (Address TODO 
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
+- **UI Rendering Fixed:** Correctly handles different `CoreMessage` content types (string/array). Navigation should work again.
 - **UI Styled:** Applied basic UnoCSS styling to Chat and Settings pages. Fixed JSX errors caused by diff application.
 - **Tool Results Saved to History:** Added logic in `extension.ts` to persist `role: 'tool'` messages.
 - **History Format Corrected:** Ensured `_chatHistory` in `extension.ts` uses `CoreMessage` format, fixing SDK errors.
@@ -141,7 +143,7 @@ Commit removal of deprecated dependency and prepare for next task (Address TODO 
 - **Settings Page Restored:** Moved rendering logic and passed necessary props (Previous).
 - **Nanostores Added:** Installed the library and Preact integration (Previous).
 - **GSAP Added:** Installed the library (Previous).
-- **UnoCSS Integrated:** Added dependencies, Vite plugin, config, and imports (Previous).
+- **Integrated UnoCSS:** Added dependencies, Vite plugin, config, and imports (Previous).
 - **Routing Implemented:** Added `wouter` and page components (Previous).
 - **Relaxed Dev CSP:** Added `'unsafe-eval'` to `script-src` for testing HMR compatibility (Previous).
 - **Fixed Vite Port File Path:** Corrected path in `src/extension.ts`.

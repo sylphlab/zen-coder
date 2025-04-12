@@ -1,6 +1,7 @@
 # Project Progress
 
 ## What Works
+- **UI Rendering Fixed:** Corrected message rendering logic in `App.tsx` to handle both string and array content types, resolving `msg.content.map is not a function` error.
 - **UI Initialization Loop Fixed:** Corrected `useEffect` dependencies in `App.tsx` to prevent infinite requests on startup.
 - **UI Styling (UnoCSS):** Basic styling applied to main layout, navigation, chat elements (header, messages, input), and settings page using UnoCSS utility classes. Dark mode support included.
 - **Chat History Persistence:** History is loaded/saved using `CoreMessage` format in `context.globalState`. User/Assistant messages are saved; Tool results saving is incomplete.
@@ -45,8 +46,7 @@
 
 ## What's Left (Potential Future Enhancements)
 - Thorough testing and debugging of core chat and tool execution.
-- Thorough testing and debugging of core chat and tool execution.
-- Implement saving of tool results to chat history (TODO in `extension.ts`).
+// - Implement saving of tool results to chat history (TODO in `extension.ts`). // Addressed in latest extension.ts write
 - Implement actual MCP client integration for tools like `search` (currently placeholder/disabled).
 - Refine Preact component structure.
 - Improve Markdown rendering in Preact UI.
@@ -58,7 +58,7 @@
 - Define and use Nanostores stores for managing shared state (e.g., settings, chat history).
 
 ## Current Status
-- **UI:** Basic layout and component styling applied using UnoCSS. Dark mode supported.
+- **UI:** Basic layout and component styling applied using UnoCSS. Dark mode supported. Rendering errors fixed. Navigation functional.
 - **Initialization:** Webview initializes correctly without infinite loops, loads history and model state.
 - **History Persistence:** User/Assistant messages saved to global state and loaded on init. Tool result saving needs implementation.
 - **Model Selection:** Selection persists across webview reloads.
@@ -74,14 +74,13 @@
 - **Styling:** UnoCSS is set up but not yet applied to components. Existing CSS (`app.css`, `index.css`) might conflict or be redundant.
 
 ## Known Issues
-- Saving tool results to chat history is not yet implemented in `extension.ts`.
-- Saving tool results to chat history is not yet implemented in `extension.ts`.
+// - Saving tool results to chat history is not yet implemented in `extension.ts`. // Addressed in latest extension.ts write
 - Search tool functionality relies on the external `search_files` tool (requires environment support).
-- `@vscode/webview-ui-toolkit` dependency is unused but still listed.
+// - `@vscode/webview-ui-toolkit` dependency is unused but still listed. // Removed
 - **AI Response Behavior:** AI models might not always explicitly list tool results (e.g., all generated UUIDs) in their text response, even though they receive the results. This depends on the model and prompt.
 - Custom tool execution status updates (beyond the inline display) are currently disabled.
 - Model resolver logic now iterates through all enabled providers using their `getAvailableModels` method. Dynamic fetching is implemented only for OpenRouter currently; others use hardcoded lists within their modules.
-- Conversation history is not persisted.
+// - Conversation history is not persisted. // Implemented
 - API Key management is now handled by individual provider modules, interacting with `vscode.SecretStorage`. `AiService` delegates these operations. Input fields remain in the Settings page webview.
 - **Blank Webview (Development):** Still investigating the cause of the blank webview in development mode, currently testing relaxed CSP. (Previous issue)
 - **Routing CSS:** Basic navigation links added, but styling (`.app-layout`, `.navigation`, `.content-area`) needs to be implemented in `app.css`.

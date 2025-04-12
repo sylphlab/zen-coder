@@ -499,7 +499,13 @@ export function App() {
                                     // Style individual messages
                                     <div key={msg.id} class={`message flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                                         <div class={`message-content p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
-                                            {msg.content.map(renderContentPart)}
+                                            {/* Check if content is string or array before mapping */}
+                                            {typeof msg.content === 'string'
+                                                ? <span dangerouslySetInnerHTML={{ __html: (msg.content as string).replace(/\n/g, '<br />') }}></span> // Explicitly cast to string
+                                                : Array.isArray(msg.content)
+                                                    ? msg.content.map(renderContentPart) // Map if it's an array
+                                                    : null /* Handle potential invalid content */
+                                            }
                                         </div>
                                     </div>
                                 ))}
