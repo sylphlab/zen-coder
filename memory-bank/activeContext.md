@@ -1,20 +1,22 @@
 # Active Context
 
 ## Current Focus
-Correcting Settings UI (`SettingPage.tsx`) to use backend-provided data instead of local definitions.
+Fixing state synchronization between Settings and Chat UI regarding available models.
 
 ## Recent Changes
-- **Corrected Settings UI (`SettingPage.tsx`):**
-    - Removed local hardcoded `providerDetails` array.
-    - Updated component to render provider information directly from the `providerStatus` prop (which now contains static info like name, apiKeyUrl, requiresApiKey).
-    - Updated filtering logic to use the `providerStatus` array.
-    - Fixed JSX comment issue causing TS errors.
-- **Updated Backend Data Structure (`AiService.ts`, `extension.ts`):**
-    - Modified `AiService.getProviderStatus` to return an array of `ProviderInfoAndStatus` objects, including static provider details.
-    - Updated `extension.ts` message handlers to send/receive this new array structure.
-- **Updated App State (`App.tsx`):**
-    - Changed `providerStatus` state to hold an array (`ProviderInfoAndStatus[]`).
-    - Updated message handling and prop drilling for the new state structure.
+- **Fixed Model List Refresh (`App.tsx`):**
+    - Modified `useEffect` hook in `App.tsx` to re-trigger `getAvailableModels` message when `providerStatus` is updated (e.g., after setting/deleting an API key), ensuring the chat UI's model list reflects newly available providers.
+- **Corrected Settings UI (`SettingPage.tsx`):** (Previous change)
+    - Removed local `providerDetails`.
+    - Updated component to render from `providerStatus` prop.
+    - Updated filtering logic.
+    - Fixed JSX comment issue.
+- **Updated Backend Data Structure (`AiService.ts`, `extension.ts`):** (Previous change)
+    - `AiService.getProviderStatus` returns richer `ProviderInfoAndStatus[]`.
+    - `extension.ts` handlers updated for new structure.
+- **Updated App State (`App.tsx`):** (Previous change)
+    - `providerStatus` state holds `ProviderInfoAndStatus[]`.
+    - Message handling updated.
 - **Updated Settings UI (Initial Features):** (Previous change)
     - Added "Delete Key" button.
     - Added `handleDeleteApiKey` handler.
@@ -101,16 +103,17 @@ Correcting Settings UI (`SettingPage.tsx`) to use backend-provided data instead 
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit Settings UI correction.
-- **Previous:** Correct `SettingPage.tsx` to use backend data; update backend and App state accordingly.
+- **Current Task:** Update Memory Bank and commit state synchronization fix.
+- **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **Settings UI Corrected:** Now correctly uses backend-provided data for provider details (name, URL, requiresKey) instead of local hardcoding. Displays status, allows set/delete, shows URL, includes search.
-- **Backend Communication Updated:** Sends richer provider info list to frontend. Handles delete key message.
+- **Model List Refresh Fixed:** Chat UI model list now updates automatically after API keys are set/deleted in Settings.
+- **Settings UI Corrected:** Uses backend data for provider details (Previous).
+- **Backend Communication Updated:** Sends richer provider info list (Previous). Handles delete key message (Previous).
 - **AI Provider Logic Further Refactored:** `AiService` delegates key/status management (Previous).
 - **OpenRouter Models Fetched Dynamically:** Logic in `openRouterProvider.ts` (Previous).
 - **Settings Provider Search Added:** Users can now filter the provider list in the settings page (Previous).
@@ -138,9 +141,10 @@ Correcting Settings UI (`SettingPage.tsx`) to use backend-provided data instead 
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
-- Corrected `SettingPage.tsx` to remove local provider definitions and use backend data structure.
-- Updated `AiService` and `extension.ts` to provide the necessary combined static/dynamic provider info.
-- Updated `App.tsx` state management for the new data structure.
+- Added logic to `App.tsx` to re-fetch models when provider status changes.
+- Corrected `SettingPage.tsx` to use backend data structure (Previous).
+- Updated `AiService` and `extension.ts` for combined provider info (Previous).
+- Updated `App.tsx` state management (Previous).
 - Updated Settings UI (`SettingPage.tsx`) to add delete/URL features (Previous).
 - Updated backend message handling (`extension.ts`) for UI changes (Previous).
 - Delegated API key and status management to provider modules (Previous).

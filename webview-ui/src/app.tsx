@@ -277,7 +277,13 @@ export function App() {
                     break;
                 case 'providerStatus': // Handle status list from extension
                     if (Array.isArray(message.payload)) {
+                        const isInitialLoad = providerStatus.length === 0; // Check if it's the first time loading status
                         setProviderStatus(message.payload); // Set the array directly
+                        // If it's an update (not initial load), re-fetch models
+                        if (!isInitialLoad) {
+                            console.log("Provider status updated, re-fetching available models...");
+                            postMessage({ type: 'getAvailableModels' });
+                        }
                     }
                     break;
                 case 'showSettings': // Handle command from extension to show settings page
