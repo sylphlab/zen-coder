@@ -53,6 +53,7 @@
 - Define and use Nanostores stores for managing shared state (e.g., settings, chat history).
 
 ## Current Status
+- **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
 - **Tool Execution:** Tools execute and return results to the AI.
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.

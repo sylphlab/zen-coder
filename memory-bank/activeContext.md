@@ -1,9 +1,10 @@
 # Active Context
 
 ## Current Focus
-Fixing state synchronization between Settings and Chat UI regarding available models.
+Commit state sync fix and prepare for next task (Model selection persistence).
 
 ## Recent Changes
+- **Fixed State Synchronization:** Ensured Chat UI model list updates correctly after API key changes in Settings UI. (Triggered model re-fetch on provider status change in `App.tsx`).
 - **Fixed Model List Refresh (`App.tsx`):**
     - Modified `useEffect` hook in `App.tsx` to re-trigger `getAvailableModels` message when `providerStatus` is updated (e.g., after setting/deleting an API key), ensuring the chat UI's model list reflects newly available providers.
 - **Corrected Settings UI (`SettingPage.tsx`):** (Previous change)
@@ -103,7 +104,7 @@ Fixing state synchronization between Settings and Chat UI regarding available mo
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit state synchronization fix.
+- **Current Task:** Implement model selection persistence in Chat UI.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
