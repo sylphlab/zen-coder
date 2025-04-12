@@ -1,16 +1,30 @@
 # Active Context
 
 ## Current Focus
-Further refactoring AI Provider logic, delegating API key and status management.
+Updating Settings UI (`SettingPage.tsx`) to reflect backend refactoring and add features.
 
 ## Recent Changes
-- **Further Refactored AI Provider Logic:**
-    - Modified `AiProvider` interface to include methods/properties for managing API keys (`getApiKey`, `setApiKey`, `deleteApiKey`, `secretStorageKey`) and enabled status (`isEnabled`, `settingsEnabledKey`).
-    - Updated all provider modules (`anthropicProvider.ts`, `googleProvider.ts`, `openRouterProvider.ts`, `deepseekProvider.ts`) to implement the new interface requirements.
-    - Refactored `AiService` to delegate API key storage/retrieval and enabled status checks entirely to the provider modules.
-    - Removed API key properties (`anthropicApiKey`, etc.) and related management methods (`_isProviderEnabled`, old `getApiKeyStatus`, etc.) from `AiService`.
-    - Updated `_getProviderInstance`, `getProviderStatus`, `resolveAvailableModels`, `setApiKey`, `deleteApiKey` in `AiService` to use the new provider methods.
-    - Fixed import path issues for `dynamicImport` in `openRouterProvider.ts`.
+- **Updated Settings UI (`SettingPage.tsx`):**
+    - Added "Delete Key" button, visible when a key is set.
+    - Added handler `handleDeleteApiKey` to post `deleteApiKey` message.
+    - Added display for the provider's `apiKeyUrl` (link to get key).
+    - Updated `providerDetails` to be defined locally with necessary static info (`apiKeyUrl`, `requiresApiKey`).
+    - Removed incorrect backend import (`allProviders`).
+    - Fixed duplicate Preact imports.
+- **Updated Extension (`extension.ts`):**
+    - Added message handler for `deleteApiKey`.
+    - Updated handlers for `webviewReady`, `getProviderStatus`, `setApiKey` to use refactored `AiService` methods and `providerMap`.
+    - Imported `providerMap`.
+- **Updated App (`App.tsx`):**
+    - Ensured `getProviderStatus` and `getAvailableModels` are called on `webviewReady`.
+    - Passed necessary props to `SettingPage`.
+- **Further Refactored AI Provider Logic:** (Previous change)
+    - Modified `AiProvider` interface for key/status management.
+    - Updated provider modules to implement the interface.
+    - Refactored `AiService` to delegate key/status management.
+    - Removed redundant properties/methods from `AiService`.
+    - Updated methods in `AiService` to use provider methods.
+    - Fixed `dynamicImport` path.
 - **Refactored AI Provider Logic (Initial):** (Previous change)
     - Created `src/ai/providers` directory.
     - Defined initial `AiProvider` interface.
@@ -72,16 +86,18 @@ Further refactoring AI Provider logic, delegating API key and status management.
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit further AI Provider refactoring.
-- **Previous:** Further refactor `AiService` and provider modules to delegate API key/status management.
+- **Current Task:** Update Memory Bank and commit Settings UI updates.
+- **Previous:** Update `SettingPage.tsx`, `extension.ts`, and `App.tsx` for new features and backend changes.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **AI Provider Logic Further Refactored:** `AiService` is now significantly leaner, delegating API key management and status checks to the individual provider modules in `src/ai/providers`.
-- **OpenRouter Models Fetched Dynamically:** Logic remains in `openRouterProvider.ts`.
+- **Settings UI Updated:** Displays API key status, allows setting/deleting keys, shows link to get keys, includes search.
+- **Backend Communication Updated:** Extension handles new `deleteApiKey` message and uses refactored `AiService` for status/key operations.
+- **AI Provider Logic Further Refactored:** `AiService` delegates key/status management (Previous).
+- **OpenRouter Models Fetched Dynamically:** Logic in `openRouterProvider.ts` (Previous).
 - **Settings Provider Search Added:** Users can now filter the provider list in the settings page (Previous).
 - **API Key Input Added:** Settings page allows setting API keys (Previous).
 - **Settings Page Restored:** Moved rendering logic and passed necessary props (Previous).
@@ -107,7 +123,9 @@ Further refactoring AI Provider logic, delegating API key and status management.
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
-- Delegated API key and status management to individual provider modules, simplifying `AiService`.
+- Updated Settings UI (`SettingPage.tsx`) to match backend refactoring and add delete/URL features.
+- Updated backend message handling (`extension.ts`) for UI changes.
+- Delegated API key and status management to provider modules (Previous).
 - Refactored AI provider handling into modular components (Initial refactor).
 - Added search functionality to the Settings page Provider list (Previous).
 - Implemented dynamic fetching of OpenRouter models (Moved to provider module).

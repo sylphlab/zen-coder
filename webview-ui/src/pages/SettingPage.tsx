@@ -1,7 +1,7 @@
 import { h } from 'preact';
 import { useState, useMemo } from 'preact/hooks'; // Import useMemo
-import { AllProviderStatus, ApiProviderKey } from '../app'; // Import types from app.tsx (adjust path if needed)
-import { postMessage } from '../app'; // Import postMessage
+import { AllProviderStatus, ApiProviderKey, postMessage } from '../app'; // Import types and postMessage from app.tsx
+// Removed incorrect backend import and duplicate preact imports
 
 // Define props for the SettingPage
 interface SettingPageProps {
@@ -9,12 +9,19 @@ interface SettingPageProps {
   onProviderToggle: (providerKey: ApiProviderKey, enabled: boolean) => void;
 }
 
-// Define provider details for searching
-const providerDetails: { key: ApiProviderKey; name: string }[] = [
-    { key: 'ANTHROPIC', name: 'Anthropic (Claude)' },
-    { key: 'GOOGLE', name: 'Google (Gemini)' },
-    { key: 'OPENROUTER', name: 'OpenRouter' },
-    { key: 'DEEPSEEK', name: 'DeepSeek' },
+// Define provider details locally in the frontend, including necessary static info
+// This should ideally match the backend definitions in src/ai/providers/*.ts
+const providerDetails: {
+    key: ApiProviderKey;
+    name: string;
+    apiKeyUrl?: string;
+    requiresApiKey: boolean;
+}[] = [
+    { key: 'ANTHROPIC', name: 'Anthropic (Claude)', apiKeyUrl: 'https://console.anthropic.com/settings/keys', requiresApiKey: true },
+    { key: 'GOOGLE', name: 'Google (Gemini)', apiKeyUrl: 'https://aistudio.google.com/app/apikey', requiresApiKey: true },
+    { key: 'OPENROUTER', name: 'OpenRouter', apiKeyUrl: 'https://openrouter.ai/keys', requiresApiKey: true },
+    { key: 'DEEPSEEK', name: 'DeepSeek', apiKeyUrl: 'https://platform.deepseek.com/docs/getting-started/apply-for-an-api-key', requiresApiKey: true },
+    // Add other providers here if needed
 ];
 
 export function SettingPage({ providerStatus, onProviderToggle }: SettingPageProps) {
@@ -46,6 +53,16 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
     }
   };
 
+  // Handle deleting the API key
+  const handleDeleteApiKey = (providerKey: ApiProviderKey) => {
+      console.log(`Deleting API Key for ${providerKey}`);
+      postMessage({
+          type: 'deleteApiKey',
+          payload: { provider: providerKey }
+      });
+      // Optionally show a temporary confirmation or rely on providerStatus update
+  };
+
   // Handle search input change
   const handleSearchChange = (e: Event) => {
       setSearchQuery((e.target as HTMLInputElement).value);
@@ -65,11 +82,12 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
 
 
   // Re-implement the rendering logic for a single provider setting
-  const renderProviderSetting = (key: ApiProviderKey, name: string) => {
+  const renderProviderSetting = (provider: typeof providerDetails[number]) => {
+    const { key, name, apiKeyUrl, requiresApiKey } = provider; // Destructure provider details
     if (!providerStatus) return <li key={key}>{name}: 載入中...</li>;
 
     const status = providerStatus[key];
-    if (!status) return <li key={key}>{name}: 狀態不可用</li>; // Handle case where status might be missing
+    if (!status) return <li key={key}>{name}: 狀態不可用</li>;
 
     const apiKeyText = status.apiKeySet ? '(Key 已設定)' : '(Key 未設定)';
     const apiKeyColor = status.apiKeySet ? 'green' : 'red';
@@ -88,24 +106,45 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
             </label>
             <span class={`text-sm font-medium ${apiKeyColor === 'green' ? 'text-green-600' : 'text-red-600'}`}>{apiKeyText}</span>
         </div>
-        <div class="flex items-center space-x-2">
-           <input
-             type="password" // Use password type for masking
-             class="flex-grow p-1 border border-gray-400 rounded text-sm"
-             placeholder={`輸入 ${name} API Key...`}
-             value={apiKeysInput[key] || ''}
-             onInput={(e) => handleApiKeyInputChange(key, (e.target as HTMLInputElement).value)}
-             aria-label={`${name} API Key Input`}
-           />
-           <button
-             class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm disabled:opacity-50"
-             onClick={() => handleSetApiKey(key)}
-             disabled={!apiKeysInput[key]?.trim()} // Disable if input is empty
-             aria-label={`Set ${name} API Key`}
-           >
-             設定
-           </button>
-        </div>
+        {/* Only show API Key input if the provider requires one */}
+        {requiresApiKey && (
+            <div class="mt-2">
+                <div class="flex items-center space-x-2">
+                   <input
+                     type="password" // Use password type for masking
+                     class="flex-grow p-1 border border-gray-400 rounded text-sm"
+                     placeholder={`輸入 ${name} API Key...`}
+                     value={apiKeysInput[key] || ''}
+                     onInput={(e) => handleApiKeyInputChange(key, (e.target as HTMLInputElement).value)}
+                     aria-label={`${name} API Key Input`}
+                   />
+                   <button
+                     class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm disabled:opacity-50"
+                     onClick={() => handleSetApiKey(key)}
+                     disabled={!apiKeysInput[key]?.trim()} // Disable if input is empty
+                     aria-label={`Set ${name} API Key`}
+                   >
+                     設定
+                   </button>
+                   {/* Show Delete button only if key is set */}
+                   {status.apiKeySet && (
+                       <button
+                         class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+                         onClick={() => handleDeleteApiKey(key)}
+                         aria-label={`Delete ${name} API Key`}
+                       >
+                         刪除
+                       </button>
+                   )}
+                </div>
+                {/* Display link to get API key */}
+                {apiKeyUrl && (
+                    <p class="text-xs text-gray-500 mt-1">
+                        喺呢度攞 API Key: <a href={apiKeyUrl} target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">{apiKeyUrl}</a>
+                    </p>
+                )}
+            </div>
+        )}
       </li>
     );
   };
@@ -130,7 +169,7 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
         {providerStatus ? (
           <ul class="space-y-2"> {/* Use space-y for vertical spacing */}
             {filteredProviders.length > 0 ? (
-                 filteredProviders.map(provider => renderProviderSetting(provider.key, provider.name))
+                 filteredProviders.map(provider => renderProviderSetting(provider))
              ) : (
                  <li class="text-gray-500">未找到匹配嘅 Provider。</li>
              )}

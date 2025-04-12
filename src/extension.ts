@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { AiService, ApiProviderKey } from './ai/aiService';
+import { providerMap } from './ai/providers'; // Import providerMap
 
 let aiServiceInstance: AiService | undefined = undefined; // Hold AiService instance
 
@@ -173,11 +174,22 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
 
                 case 'webviewReady':
                     console.log('Webview view is ready');
-                    // Send initial state (models, provider status)
-                    const models = await this._aiService.resolveAvailableModels();
-                    this.postMessageToWebview({ type: 'availableModels', payload: models });
-                    const status = await this._aiService.getProviderStatus();
-                    this.postMessageToWebview({ type: 'providerStatus', payload: status });
+                    // Send initial state (models, provider status) - Use new methods
+                    console.log("[Extension] Webview ready, fetching initial state...");
+                    try {
+                        const models = await this._aiService.resolveAvailableModels();
+                        this.postMessageToWebview({ type: 'availableModels', payload: models });
+                        console.log("[Extension] Sent available models to webview.");
+                        const status = await this._aiService.getProviderStatus();
+                        this.postMessageToWebview({ type: 'providerStatus', payload: status });
+                        console.log("[Extension] Sent provider status to webview.");
+                    } catch (error: any) {
+                         console.error("[Extension] Error fetching initial state for webview:", error);
+                         vscode.window.showErrorMessage(`Error fetching initial state: ${error.message}`);
+                         // Send empty state or error message?
+                         this.postMessageToWebview({ type: 'availableModels', payload: [] });
+                         this.postMessageToWebview({ type: 'providerStatus', payload: {} });
+                    }
                     break;
                 case 'setModel':
                     if (typeof message.modelId === 'string') {
@@ -189,9 +201,17 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                     const currentModels = await this._aiService.resolveAvailableModels();
                     this.postMessageToWebview({ type: 'availableModels', payload: currentModels });
                     break;
-                case 'getProviderStatus': // Handle settings request
-                    const currentStatus = await this._aiService.getProviderStatus();
-                    this.postMessageToWebview({ type: 'providerStatus', payload: currentStatus });
+                case 'getProviderStatus': // Handle settings request (e.g., refresh)
+                    try {
+                        console.log("[Extension] Received getProviderStatus request from webview.");
+                        const currentStatus = await this._aiService.getProviderStatus();
+                        this.postMessageToWebview({ type: 'providerStatus', payload: currentStatus });
+                        console.log("[Extension] Sent updated provider status to webview.");
+                    } catch (error: any) {
+                         console.error("[Extension] Error handling getProviderStatus request:", error);
+                         vscode.window.showErrorMessage(`Error getting provider status: ${error.message}`);
+                         this.postMessageToWebview({ type: 'providerStatus', payload: {} }); // Send empty status on error
+                    }
                     break;
                 case 'setProviderEnabled': // Handle settings update
                     if (message.payload && typeof message.payload.provider === 'string' && typeof message.payload.enabled === 'boolean') {
@@ -219,27 +239,53 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                     if (message.payload && typeof message.payload.provider === 'string' && typeof message.payload.apiKey === 'string') {
                         const providerKey = message.payload.provider as ApiProviderKey;
                         const apiKey = message.payload.apiKey;
-                        if (['ANTHROPIC', 'GOOGLE', 'OPENROUTER', 'DEEPSEEK'].includes(providerKey)) {
+                        // Validate providerKey against known provider IDs from the map
+                        if (providerMap.has(providerKey)) {
                             try {
+                                // Delegate directly to AiService, which now handles provider lookup
                                 await this._aiService.setApiKey(providerKey, apiKey);
-                                console.log(`API Key set for ${providerKey}`);
+                                console.log(`[Extension] API Key set request processed for ${providerKey}`);
                                 // Send updated status back to reflect the change
                                 const updatedStatus = await this._aiService.getProviderStatus();
                                 this.postMessageToWebview({ type: 'providerStatus', payload: updatedStatus });
-                                vscode.window.showInformationMessage(`${providerKey} API Key set successfully.`);
+                                // Confirmation message handled by AiService now
                             } catch (error: any) {
-                                console.error(`Failed to set API Key for ${providerKey}:`, error);
-                                vscode.window.showErrorMessage(`Failed to set API Key for ${providerKey}: ${error.message}`);
+                                // Error message handled by AiService now
+                                console.error(`[Extension] Error setting API Key for ${providerKey} (forwarded from AiService):`, error);
                             }
                         } else {
-                            console.error(`Invalid provider key received in setApiKey: ${providerKey}`);
+                            console.error(`[Extension] Invalid provider ID received in setApiKey: ${providerKey}`);
+                            vscode.window.showErrorMessage(`Invalid provider ID: ${providerKey}`);
                         }
                     } else {
                         console.error("Invalid payload for setApiKey:", message.payload);
                     }
                     break;
+                case 'deleteApiKey':
+                    if (message.payload && typeof message.payload.provider === 'string') {
+                        const providerId = message.payload.provider;
+                        if (providerMap.has(providerId)) {
+                            try {
+                                await this._aiService.deleteApiKey(providerId);
+                                console.log(`[Extension] API Key delete request processed for ${providerId}`);
+                                // Send updated status back
+                                const updatedStatus = await this._aiService.getProviderStatus();
+                                this.postMessageToWebview({ type: 'providerStatus', payload: updatedStatus });
+                                // Confirmation message handled by AiService
+                            } catch (error: any) {
+                                // Error message handled by AiService
+                                console.error(`[Extension] Error deleting API Key for ${providerId} (forwarded from AiService):`, error);
+                            }
+                        } else {
+                            console.error(`[Extension] Invalid provider ID received in deleteApiKey: ${providerId}`);
+                            vscode.window.showErrorMessage(`Invalid provider ID: ${providerId}`);
+                        }
+                    } else {
+                        console.error("[Extension] Invalid payload for deleteApiKey:", message.payload);
+                    }
+                    break;
                 default:
-                    console.warn("Received unknown message type from webview:", message.type);
+                    console.warn("[Extension] Received unknown message type from webview:", message.type);
             }
         });
 

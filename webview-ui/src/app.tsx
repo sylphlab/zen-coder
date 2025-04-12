@@ -162,8 +162,9 @@ export function App() {
 
     useEffect(() => {
         postMessage({ type: 'webviewReady' }); // Both UIs need this
-        postMessage({ type: 'getAvailableModels' }); // For chat UI
-        postMessage({ type: 'getProviderStatus' }); // For settings page
+        // Request initial state from extension
+        postMessage({ type: 'getAvailableModels' });
+        postMessage({ type: 'getProviderStatus' });
 
         const handleMessage = (event: MessageEvent) => {
             const message = event.data;
@@ -488,7 +489,13 @@ export function App() {
                         </div>
                     </Route>
                     <Route path="/settings">
-                        <SettingPage providerStatus={providerStatus} onProviderToggle={handleProviderToggle} />
+                        {/* Pass necessary props and handlers to SettingPage */}
+                        <SettingPage
+                            providerStatus={providerStatus}
+                            onProviderToggle={handleProviderToggle}
+                            // Add handlers for setting/deleting keys later if needed directly here
+                            // For now, SettingPage handles its own input and posts messages
+                        />
                     </Route>
                     {/* Default route or 404 can be added here */}
                 </main>

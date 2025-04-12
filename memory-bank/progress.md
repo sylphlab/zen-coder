@@ -55,7 +55,7 @@
 ## Current Status
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
 - **Tool Execution:** Tools execute and return results to the AI.
-- **Settings Integration:** Settings UI (`/settings`) now allows enabling/disabling providers, setting API keys directly, and searching/filtering the provider list. Key status (set/not set) is displayed.
+- **Settings Integration:** Settings UI (`/settings`) now allows enabling/disabling providers, setting/deleting API keys, searching providers, and displays links to get API keys. Key status (set/not set) is displayed. Backend communication updated accordingly.
 - **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
 - **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from the correct file path.
 - **View Provider Registration:** Corrected `package.json` ensures the `WebviewViewProvider` is properly registered.
