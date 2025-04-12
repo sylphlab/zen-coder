@@ -1,9 +1,10 @@
 # Active Context
 
 ## Current Focus
-Apply UnoCSS styling to UI components.
+Commit fix for UI infinite loop and prepare for next task (UnoCSS styling).
 
 ## Recent Changes
+- **Fixed UI Infinite Loop:** Adjusted `useEffect` dependencies and removed automatic model re-fetch on status update in `App.tsx` to prevent loop.
 - **Implemented Chat History Persistence:**
     - Extension (`extension.ts`) now loads/saves history using `context.globalState`.
     - History is passed to `AiService` and sent to webview (`App.tsx`) on load.
@@ -110,7 +111,7 @@ Apply UnoCSS styling to UI components.
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit history persistence implementation.
+- **Current Task:** Update Memory Bank and commit UI loop fix.
 - **Next:** Apply UnoCSS styling to UI components.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
@@ -119,6 +120,7 @@ Apply UnoCSS styling to UI components.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
+- **UI Loop Fixed:** Changed `useEffect` dependencies in `App.tsx` to prevent infinite state requests.
 - **Chat History Persists:** History is loaded from and saved to global state by the extension host.
 - **Model Selection Persists:** Last selected model is now saved and restored using webview state API.
 - **Streaming Indicator Fixed:** Added explicit `streamFinished` message handling to ensure UI stops indicating streaming reliably.
@@ -152,6 +154,7 @@ Apply UnoCSS styling to UI components.
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
+- Changed `App.tsx` `useEffect` dependencies to `[]` to fix initialization loop.
 - Implemented history persistence using `context.globalState` managed by the extension host.
 - Refactored `AiService` to return final assistant message via promise to enable history saving.
 - Used `vscode.getState/setState` for simple webview state persistence (model selection).

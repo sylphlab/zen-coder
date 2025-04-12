@@ -1,6 +1,7 @@
 # Project Progress
 
 ## What Works
+- **UI Initialization Loop Fixed:** Corrected `useEffect` dependencies in `App.tsx` to prevent infinite requests on startup.
 - **Chat History Persistence:** History is now loaded from and saved to `context.globalState` by the extension host. Assistant responses are captured via promise resolution after stream completion.
 - **Model Selection Persistence:** Last selected model ID is now saved/restored using webview state API (`vscode.getState`/`setState`).
 - **Stream End Handling Fixed:** Backend now sends an explicit `streamFinished` message, and the UI handles it to reliably stop the streaming indicator.
@@ -56,6 +57,7 @@
 - Define and use Nanostores stores for managing shared state (e.g., settings, chat history).
 
 ## Current Status
+- **Initialization:** Webview initializes correctly without infinite loops, loads history and model state.
 - **History Persistence:** Chat history is saved to global state and loaded on webview init.
 - **Model Selection:** Selection persists across webview reloads.
 - **Stream Handling:** Explicit end-of-stream signaling implemented between backend and frontend.

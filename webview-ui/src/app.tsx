@@ -303,11 +303,9 @@ export function App() {
                     if (Array.isArray(message.payload)) {
                         const isInitialLoad = providerStatus.length === 0; // Check if it's the first time loading status
                         setProviderStatus(message.payload); // Set the array directly
-                        // If it's an update (not initial load), re-fetch models
-                        if (!isInitialLoad) {
-                            console.log("Provider status updated, re-fetching available models...");
-                            postMessage({ type: 'getAvailableModels' });
-                        }
+                        // REMOVED: Do not automatically re-fetch models just because status was received.
+                        // Fetching should happen explicitly when needed (e.g., after key change).
+                        // console.log("Provider status updated."); // Keep log if desired
                     }
                     break;
                 case 'showSettings': // Handle command from extension to show settings page
@@ -333,7 +331,7 @@ export function App() {
         return () => {
             window.removeEventListener('message', handleMessage);
         };
-    }, [messages, selectedProvider]); // Add selectedProvider dependency
+    }, []); // Run only on mount to set up listener and initial requests
 
     // --- Event Handlers ---
     const handleInputChange = (e: JSX.TargetedEvent<HTMLInputElement>) => {
