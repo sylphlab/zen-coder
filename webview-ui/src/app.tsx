@@ -166,9 +166,27 @@ export function App() {
     }, [messages]);
 
     useEffect(() => {
+        // Restore state when the webview loads
+        const savedState = vscode?.getState();
+        const initialModelId = savedState?.selectedModelId;
+        let restoredModel = false; // Flag to check if we restored a model
+
+        if (initialModelId) {
+            console.log("Restoring saved model ID:", initialModelId);
+            setCurrentModelInput(initialModelId);
+            // Determine provider from restored model ID if possible
+            const restoredProvider = getProviderFromModelId(initialModelId);
+            if (restoredProvider) {
+                setSelectedProvider(restoredProvider);
+            }
+            // Inform backend about the restored model
+            postMessage({ type: 'setModel', modelId: initialModelId });
+            restoredModel = true;
+        }
+
         postMessage({ type: 'webviewReady' }); // Both UIs need this
         // Request initial state from extension
-        postMessage({ type: 'getAvailableModels' });
+        postMessage({ type: 'getAvailableModels' }); // This will potentially overwrite if no saved state
         postMessage({ type: 'getProviderStatus' });
 
         const handleMessage = (event: MessageEvent) => {
@@ -268,10 +286,16 @@ export function App() {
                         setAvailableModels(message.payload);
                         // Set initial provider and model if not already set
                         if (!selectedProvider && message.payload.length > 0) {
-                            const firstModel = message.payload[0];
-                            setSelectedProvider(firstModel.provider);
-                            setCurrentModelInput(firstModel.id); // Set initial model input value
-                            postMessage({ type: 'setModel', modelId: firstModel.id }); // Inform backend
+                            // Only set default if we didn't restore a saved model
+                            if (!restoredModel && !currentModelInput && message.payload.length > 0) {
+                                const firstModel = message.payload[0];
+                                console.log("Setting initial model (no saved state):", firstModel.id);
+                                setSelectedProvider(firstModel.provider);
+                                setCurrentModelInput(firstModel.id); // Set initial model input value
+                                postMessage({ type: 'setModel', modelId: firstModel.id }); // Inform backend
+                                // Save the initial state
+                                vscode?.setState({ selectedModelId: firstModel.id });
+                            }
                         }
                     }
                     break;
@@ -349,6 +373,11 @@ export function App() {
             setCurrentModelInput(newModelId);
             if (newModelId) {
                  postMessage({ type: 'setModel', modelId: newModelId }); // Inform backend
+                 // Save state when provider changes and a default model is selected
+                 vscode?.setState({ selectedModelId: newModelId });
+            } else {
+                 // Clear saved state if no default model is found for the provider
+                 vscode?.setState({ selectedModelId: undefined });
             }
         }
     };
@@ -361,6 +390,8 @@ export function App() {
         // Only inform backend if the model ID is likely valid or complete
         // For simplicity, inform on every change for now.
          postMessage({ type: 'setModel', modelId: newModelId });
+         // Save state whenever the model input changes
+         vscode?.setState({ selectedModelId: newModelId });
     };
      // Update handleProviderToggle to work with the array structure
       const handleProviderToggle = useCallback((providerId: string, enabled: boolean) => {

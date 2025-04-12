@@ -1,6 +1,7 @@
 # Project Progress
 
 ## What Works
+- **Model Selection Persistence:** Last selected model ID is now saved/restored using webview state API (`vscode.getState`/`setState`).
 - **Stream End Handling Fixed:** Backend now sends an explicit `streamFinished` message, and the UI handles it to reliably stop the streaming indicator.
 - **Nanostores Added:** Installed `nanostores` and `@nanostores/preact`. Ready for state management.
 - **GSAP Added:** Installed `gsap` dependency. Ready for use in animations. (Previous)
@@ -40,7 +41,7 @@
 - **Development CSP Relaxed (Testing):** Added `'unsafe-eval'` to `script-src` in development mode CSP to test HMR compatibility.
 
 ## What's Left (Potential Future Enhancements)
-- Implement conversation history persistence.
+- Implement conversation history persistence (Next).
 - Thorough testing and debugging of core chat and tool execution.
 - Remove unused `@vscode/webview-ui-toolkit` dependency.
 - Implement actual MCP client integration for tools like `search` (currently placeholder/disabled).
@@ -54,6 +55,7 @@
 - Define and use Nanostores stores for managing shared state (e.g., settings, chat history).
 
 ## Current Status
+- **Model Selection:** Selection persists across webview reloads.
 - **Stream Handling:** Explicit end-of-stream signaling implemented between backend and frontend.
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
@@ -72,7 +74,7 @@
 - **AI Response Behavior:** AI models might not always explicitly list tool results (e.g., all generated UUIDs) in their text response, even though they receive the results. This depends on the model and prompt.
 - Custom tool execution status updates (beyond the inline display) are currently disabled.
 - Model resolver logic now iterates through all enabled providers using their `getAvailableModels` method. Dynamic fetching is implemented only for OpenRouter currently; others use hardcoded lists within their modules.
-- Chat UI model selection persistence is not yet implemented.
+- Conversation history is not persisted.
 - API Key management is now handled by individual provider modules, interacting with `vscode.SecretStorage`. `AiService` delegates these operations. Input fields remain in the Settings page webview.
 - **Blank Webview (Development):** Still investigating the cause of the blank webview in development mode, currently testing relaxed CSP. (Previous issue)
 - **Routing CSS:** Basic navigation links added, but styling (`.app-layout`, `.navigation`, `.content-area`) needs to be implemented in `app.css`.

@@ -1,9 +1,10 @@
 # Active Context
 
 ## Current Focus
-Fixing issue where UI streaming indicator doesn't stop after AI response completes.
+Implement chat history persistence.
 
 ## Recent Changes
+- **Implemented Model Selection Persistence:** Used `vscode.getState()`/`setState()` in `App.tsx` to save and restore the last selected model ID across webview reloads.
 - **Fixed Stream End Handling:** Added explicit `streamFinished` message from backend (`extension.ts`) to frontend (`App.tsx`) to reliably stop the UI streaming indicator.
 - **Fixed State Synchronization:** Ensured Chat UI model list updates correctly after API key changes in Settings UI. (Triggered model re-fetch on provider status change in `App.tsx`).
 - **Fixed Model List Refresh (`App.tsx`):**
@@ -105,8 +106,8 @@ Fixing issue where UI streaming indicator doesn't stop after AI response complet
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit stream end fix.
-- **Next:** Implement model selection persistence in Chat UI.
+- **Current Task:** Update Memory Bank and commit model persistence fix.
+- **Next:** Implement chat history persistence.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
@@ -114,6 +115,7 @@ Fixing issue where UI streaming indicator doesn't stop after AI response complet
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
+- **Model Selection Persists:** Last selected model is now saved and restored using webview state API.
 - **Streaming Indicator Fixed:** Added explicit `streamFinished` message handling to ensure UI stops indicating streaming reliably.
 - **Model List Refresh Fixed:** Chat UI model list now updates automatically after API keys are set/deleted in Settings.
 - **Settings UI Corrected:** Uses backend data for provider details (Previous).
@@ -145,6 +147,7 @@ Fixing issue where UI streaming indicator doesn't stop after AI response complet
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
+- Used `vscode.getState/setState` for simple webview state persistence (model selection).
 - Added explicit `streamFinished` message from backend to UI to fix streaming indicator persistence.
 - Added logic to `App.tsx` to re-fetch models when provider status changes.
 - Corrected `SettingPage.tsx` to use backend data structure (Previous).
