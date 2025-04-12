@@ -126,19 +126,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
                         console.log(`Saved user message to UI history. Count: ${this._history.length}`);
 
-                        if (!this._aiService.getCurrentModelId()) {
-                            this.postMessageToWebview({ type: 'addMessage', sender: 'assistant', text: 'Please select a model first in the settings.' });
-                            this._history.pop(); // Remove invalid user message from UI history
-                            await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
-                            return;
-                        }
-
-                        // --- Translate UI History to CoreMessages for AI ---
-                        const coreMessagesForAi = translateUiHistoryToCoreMessages(this._history);
-                        console.log(`Translated ${this._history.length} UI messages to ${coreMessagesForAi.length} CoreMessages for AI.`);
-
-                        // --- Get AI Response Stream using translated history AND the modelId from the message ---
-                        const modelId = message.modelId; // Get modelId from the message payload
+                        // --- Get modelId from message ---
+                        const modelId = message.modelId;
                         if (!modelId) {
                              console.error("sendMessage handler did not receive a modelId.");
                              this.postMessageToWebview({ type: 'addMessage', sender: 'assistant', text: 'Error: No model ID specified in the request.' });
@@ -146,6 +135,12 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                              await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
                              return; // Stop processing
                         }
+
+                        // --- Translate UI History to CoreMessages for AI ---
+                        const coreMessagesForAi = translateUiHistoryToCoreMessages(this._history);
+                        console.log(`Translated ${this._history.length} UI messages to ${coreMessagesForAi.length} CoreMessages for AI.`);
+
+                        // --- Get AI Response Stream using translated history AND the modelId ---
                         const streamResult = await this._aiService.getAiResponseStream(message.text, coreMessagesForAi, modelId); // Pass modelId
                         if (!streamResult) {
                             console.log("getAiResponseStream returned null, likely handled error.");
@@ -166,6 +161,9 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         this._history.push(initialAssistantUiMessage);
                         await this._context.globalState.update(this.UI_HISTORY_KEY, this._history); // Save initial frame
                         console.log(`Saved initial assistant message frame to UI history. Count: ${this._history.length}`);
+
+                        // --- Send start signal *with* the ID of the UI message frame ---
+                        this.postMessageToWebview({ type: 'startAssistantMessage', sender: 'assistant', messageId: assistantUiMsgId });
 
                         // --- Stream Processing ---
                         const reader = streamResult.stream.getReader();
@@ -191,6 +189,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                          const prefix = match[1];
                                          const contentData = match[2];
                                          try {
+                                             let historyChanged = false; // Flag to check if save is needed
                                              if (prefix >= '0' && prefix <= '7') { // Text/Error Chunks
                                                  const part = JSON.parse(contentData);
                                                  let textDelta = '';
@@ -205,9 +204,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                                  }
                                                  // --- Append text chunk to UI history ---
                                                  if (textDelta && this._history.length > 0) {
-                                                     const lastUiMessage = this._history[this._history.length - 1];
-                                                     if (lastUiMessage.sender === 'assistant') {
-                                                         // Ensure content is an array
+                                                     const lastUiMessage = this._history.find(msg => msg.id === assistantUiMsgId); // Find by ID
+                                                     if (lastUiMessage?.sender === 'assistant') {
                                                          if (!Array.isArray(lastUiMessage.content)) { lastUiMessage.content = []; }
                                                          const lastContentPart = lastUiMessage.content[lastUiMessage.content.length - 1];
                                                          if (lastContentPart?.type === 'text') {
@@ -215,13 +213,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                                          } else {
                                                              lastUiMessage.content.push({ type: 'text', text: textDelta });
                                                          }
-                                                         // Save only if changed
-                                                         const currentUiHistoryJson = JSON.stringify(this._history);
-                                                         if (currentUiHistoryJson !== lastSavedUiHistoryJson) {
-                                                             await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
-                                                             lastSavedUiHistoryJson = currentUiHistoryJson;
-                                                             // console.log(`Saved UI history after text chunk.`); // Optional
-                                                         }
+                                                         historyChanged = true;
                                                      }
                                                  }
                                              } else if (prefix === '9') { // Tool Call
@@ -230,19 +222,12 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                                      this.postMessageToWebview({ type: 'addToolCall', payload: { toolCallId: part.toolCallId, toolName: part.toolName, args: part.args } });
                                                      // --- Add tool call part to UI history ---
                                                      if (this._history.length > 0) {
-                                                         const lastUiMessage = this._history[this._history.length - 1];
-                                                         if (lastUiMessage.sender === 'assistant') {
-                                                             // Ensure content is an array
+                                                         const lastUiMessage = this._history.find(msg => msg.id === assistantUiMsgId); // Find by ID
+                                                         if (lastUiMessage?.sender === 'assistant') {
                                                              if (!Array.isArray(lastUiMessage.content)) { lastUiMessage.content = []; }
                                                              const toolCallPart: UiToolCallPart = { type: 'tool-call', toolCallId: part.toolCallId, toolName: part.toolName, args: part.args, status: 'pending' };
                                                              lastUiMessage.content.push(toolCallPart);
-                                                             // Save only if changed
-                                                             const currentUiHistoryJson = JSON.stringify(this._history);
-                                                             if (currentUiHistoryJson !== lastSavedUiHistoryJson) {
-                                                                 await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
-                                                                 lastSavedUiHistoryJson = currentUiHistoryJson;
-                                                                 // console.log(`Saved UI history after tool call part.`); // Optional
-                                                             }
+                                                             historyChanged = true;
                                                          }
                                                      }
                                                  }
@@ -253,45 +238,32 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                                      this.postMessageToWebview({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, status: 'complete', message: part.result, toolName: part.toolName });
                                                      // --- Update tool status in UI history ---
                                                      if (this._history.length > 0) {
-                                                         // Find the assistant message that contains this tool call
-                                                         // Iterate backwards for efficiency, assuming it's likely in the last message
-                                                         for (let i = this._history.length - 1; i >= 0; i--) {
+                                                         for (let i = this._history.length - 1; i >= 0; i--) { // Find relevant message
                                                              const msg = this._history[i];
                                                              if (msg.sender === 'assistant' && Array.isArray(msg.content)) {
                                                                  const toolCallIndex = msg.content.findIndex((p: any) => p.type === 'tool-call' && p.toolCallId === part.toolCallId);
                                                                  if (toolCallIndex !== -1) {
-                                                                     // Explicitly cast to UiToolCallPart for type safety
                                                                      const uiToolCallPart = msg.content[toolCallIndex] as UiToolCallPart;
                                                                      uiToolCallPart.status = 'complete';
                                                                      uiToolCallPart.result = part.result;
-                                                                     // Save only if changed
-                                                                     const currentUiHistoryJson = JSON.stringify(this._history);
-                                                                     if (currentUiHistoryJson !== lastSavedUiHistoryJson) {
-                                                                         await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
-                                                                         lastSavedUiHistoryJson = currentUiHistoryJson;
-                                                                         // console.log(`Updated UI history with tool result.`); // Optional
-                                                                     }
-                                                                     break; // Found and updated, exit loop
+                                                                     historyChanged = true;
+                                                                     break;
                                                                  }
                                                              }
                                                          }
                                                      }
                                                      // --- Tool result is NOT added to AI history here ---
-                                                     // It will be generated during the next translation step
                                                  } else { console.warn("Received tool result ('a') without complete data:", part); }
                                              } else if (prefix === 'd') { // Data/Annotations (e.g., custom tool progress/completion)
                                                    const part = JSON.parse(contentData);
                                                    if (part.type === 'message-annotation' && part.toolCallId && part.toolName) {
                                                        const statusMessage = (typeof part.message === 'string') ? part.message : undefined;
                                                        const finalStatus = part.status as 'complete' | 'error' | 'running';
-
                                                        // Send UI update
                                                        this.postMessageToWebview({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, toolName: part.toolName, status: finalStatus, message: statusMessage });
-
                                                        // --- Update tool status/progress/result in UI history ---
                                                        if (this._history.length > 0) {
-                                                            // Find the assistant message containing the tool call
-                                                            for (let i = this._history.length - 1; i >= 0; i--) {
+                                                            for (let i = this._history.length - 1; i >= 0; i--) { // Find relevant message
                                                                 const msg = this._history[i];
                                                                 if (msg.sender === 'assistant' && Array.isArray(msg.content)) {
                                                                     const toolCallIndex = msg.content.findIndex((p: any) => p.type === 'tool-call' && p.toolCallId === part.toolCallId);
@@ -300,18 +272,12 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                                                         toolCallPart.status = finalStatus;
                                                                         if (finalStatus === 'complete' || finalStatus === 'error') {
                                                                             toolCallPart.result = statusMessage ?? (finalStatus === 'complete' ? 'Completed' : 'Error');
-                                                                            toolCallPart.progress = undefined; // Clear progress on completion/error
+                                                                            toolCallPart.progress = undefined;
                                                                         } else if (finalStatus === 'running') {
                                                                             toolCallPart.progress = statusMessage;
                                                                         }
-                                                                        // Save only if changed
-                                                                        const currentUiHistoryJson = JSON.stringify(this._history);
-                                                                        if (currentUiHistoryJson !== lastSavedUiHistoryJson) {
-                                                                            await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
-                                                                            lastSavedUiHistoryJson = currentUiHistoryJson;
-                                                                            // console.log(`Updated UI history with tool annotation status.`); // Optional
-                                                                        }
-                                                                        break; // Found and updated
+                                                                        historyChanged = true;
+                                                                        break;
                                                                     }
                                                                 }
                                                             }
@@ -321,21 +287,28 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                                        vscode.window.showErrorMessage(`Stream Error: ${part.error}`);
                                                        this.postMessageToWebview({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` });
                                                        // Also update the last UI message to reflect the error
-                                                       if (this._history.length > 0 && this._history[this._history.length - 1].sender === 'assistant') {
-                                                            const lastMsg = this._history[this._history.length - 1];
-                                                            if (!Array.isArray(lastMsg.content)) { lastMsg.content = []; }
-                                                            lastMsg.content.push({ type: 'text', text: `\n[STREAM ERROR: ${part.error}]` });
-                                                            // Save only if changed
-                                                            const currentUiHistoryJson = JSON.stringify(this._history);
-                                                            if (currentUiHistoryJson !== lastSavedUiHistoryJson) {
-                                                                await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
-                                                                lastSavedUiHistoryJson = currentUiHistoryJson;
+                                                       if (this._history.length > 0) {
+                                                            const lastMsg = this._history.find(msg => msg.id === assistantUiMsgId); // Find by ID
+                                                            if (lastMsg?.sender === 'assistant') {
+                                                                if (!Array.isArray(lastMsg.content)) { lastMsg.content = []; }
+                                                                lastMsg.content.push({ type: 'text', text: `\n[STREAM ERROR: ${part.error}]` });
+                                                                historyChanged = true;
                                                             }
                                                        }
                                                    }
                                              } else if (prefix === 'e') { // Events/Errors
                                                   const part = JSON.parse(contentData);
                                                   if (part.error) { vscode.window.showErrorMessage(`Stream Event Error: ${part.error}`); this.postMessageToWebview({ type: 'addMessage', sender: 'assistant', text: `Sorry, an error occurred: ${part.error}` }); }
+                                             }
+
+                                             // --- Save UI history if changed ---
+                                             if (historyChanged) {
+                                                 const currentUiHistoryJson = JSON.stringify(this._history);
+                                                 if (currentUiHistoryJson !== lastSavedUiHistoryJson) {
+                                                     await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
+                                                     lastSavedUiHistoryJson = currentUiHistoryJson;
+                                                     // console.log(`Saved UI history after update.`); // Optional
+                                                 }
                                              }
                                          } catch (e) { console.error(`Failed to parse JSON for prefix '${prefix}':`, contentData, e); }
                                      } else { if (line.trim() !== '') { console.warn('Received stream line without expected prefix format:', line); } }
@@ -351,15 +324,12 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         console.log("[Extension] Stream processing loop finished.");
                         this.postMessageToWebview({ type: 'streamFinished' });
 
-                        // --- Final AI History Update (Optional but good practice) ---
-                        // We don't *need* to save the final CoreMessage here because it's generated on demand.
-                        // However, we can retrieve it to ensure the UI state accurately reflects the final text content
-                        // in case the stream ended abruptly before the last text chunk was processed/saved.
+                        // --- Final AI History Update (Only add final CoreMessage to AI context) ---
                         try {
                              const finalAssistantCoreMessage = await streamResult.finalMessagePromise;
                              if (finalAssistantCoreMessage) {
                                  console.log("[Extension] Final assistant CoreMessage received.");
-                                 // Find the corresponding UI message and ensure its text content matches the final CoreMessage
+                                 // --- Reconcile final UI state based on CoreMessage ---
                                  const uiMessageIndex = this._history.findIndex(msg => msg.id === assistantUiMsgId);
                                  if (uiMessageIndex !== -1) {
                                      const finalUiMessage = this._history[uiMessageIndex];
@@ -370,17 +340,12 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                          finalCoreText = finalAssistantCoreMessage.content;
                                      } else if (Array.isArray(finalAssistantCoreMessage.content)) {
                                          finalAssistantCoreMessage.content.forEach(part => {
-                                             if (part.type === 'text') {
-                                                 finalCoreText += part.text;
-                                             } else if (part.type === 'tool-call') {
-                                                 finalCoreToolCalls.push(part);
-                                             }
+                                             if (part.type === 'text') { finalCoreText += part.text; }
+                                             else if (part.type === 'tool-call') { finalCoreToolCalls.push(part); }
                                          });
                                      }
 
-                                     // Reconstruct the UI content based on the final CoreMessage structure
                                      const reconstructedUiContent: UiMessageContentPart[] = [];
-                                     // Add tool calls first (matching the order they appear in the final CoreMessage)
                                      finalCoreToolCalls.forEach(coreToolCall => {
                                          const existingUiToolCall = finalUiMessage.content.find(p => p.type === 'tool-call' && p.toolCallId === coreToolCall.toolCallId) as UiToolCallPart | undefined;
                                          reconstructedUiContent.push({
@@ -388,27 +353,25 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                              toolCallId: coreToolCall.toolCallId,
                                              toolName: coreToolCall.toolName,
                                              args: coreToolCall.args,
-                                             // Preserve status/result from existing UI state if available
-                                             status: existingUiToolCall?.status ?? 'pending',
+                                             status: existingUiToolCall?.status ?? 'complete', // Assume complete if final message exists
                                              result: existingUiToolCall?.result,
-                                             progress: existingUiToolCall?.progress
+                                             progress: undefined // Clear progress
                                          });
                                      });
-                                     // Add the final text content
                                      if (finalCoreText) {
                                          reconstructedUiContent.push({ type: 'text', text: finalCoreText });
                                      }
-
-                                     // Update the UI message content
                                      finalUiMessage.content = reconstructedUiContent;
 
-                                     // Save the potentially updated final UI message state
+                                     // Save the final reconciled UI message state
                                      const finalUiHistoryJson = JSON.stringify(this._history);
                                      if (finalUiHistoryJson !== lastSavedUiHistoryJson) {
                                          await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
-                                         lastSavedUiHistoryJson = finalUiHistoryJson; // Update tracker
+                                         lastSavedUiHistoryJson = finalUiHistoryJson;
                                          console.log(`Saved final reconciled UI history state. Count: ${this._history.length}`);
                                      }
+                                 } else {
+                                      console.warn("[Extension] Could not find UI message frame to reconcile final state.");
                                  }
                              } else {
                                  console.warn("[Extension] No final assistant message object received from AiService promise. UI history might represent an incomplete final state if interrupted.");
@@ -450,10 +413,10 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                          this.postMessageToWebview({ type: 'loadUiHistory', payload: [] }); // Send empty UI history on error
                     }
                     break;
-                // ... (other cases remain the same) ...
+                // ... other cases remain the same ...
                  case 'setModel':
                     if (typeof message.modelId === 'string') {
-                        this._aiService.setModel(message.modelId as any); // Cast might be needed
+                        this._aiService.setModel(message.modelId); // No cast needed
                         console.log(`Model changed to: ${message.modelId}`);
                     } else { console.error('Invalid modelId received', message); }
                     break;
@@ -481,7 +444,6 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                              const providerKey = providerKeyInput as ApiProviderKey;
                             try {
                                 const config = vscode.workspace.getConfiguration('zencoder.provider');
-                                // Assuming config keys match provider IDs (e.g., 'anthropic.enabled')
                                 await config.update(`${providerKey}.enabled`, enabled, vscode.ConfigurationTarget.Global);
                                 console.log(`Provider ${String(providerKey)} enabled status updated to: ${enabled}`);
                                 const updatedStatusList = await this._aiService.getProviderStatus();
@@ -560,28 +522,28 @@ function translateUiHistoryToCoreMessages(uiHistory: UiMessage[]): CoreMessage[]
     const coreMessages: CoreMessage[] = [];
     for (const uiMsg of uiHistory) {
         if (uiMsg.sender === 'user') {
-            // Simple case: user message content is assumed to be text
+            // User message: Extract text content
             const userText = uiMsg.content.find(part => part.type === 'text')?.text || '';
             coreMessages.push({ role: 'user', content: userText });
         } else if (uiMsg.sender === 'assistant') {
-            // Check if this assistant message looks complete enough to send to AI
-            // A simple heuristic: has text OR has completed/error tool calls
-            let isPotentiallyComplete = false;
+            // Assistant message: Translate content parts and generate tool results
             const assistantContent: AssistantContent = []; // Use SDK's AssistantContent type
             const toolResultsForThisMsg: CoreToolResultPart[] = [];
+            let hasContentForAi = false; // Track if this message should be sent to AI
 
             for (const part of uiMsg.content) {
-                if (part.type === 'text' && part.text.trim()) {
+                if (part.type === 'text') {
                     assistantContent.push({ type: 'text', text: part.text });
-                    isPotentiallyComplete = true; // Has text content
+                    hasContentForAi = true;
                 } else if (part.type === 'tool-call') {
-                    // Add the tool call part (without UI status/result) to assistant content
+                    // Add the tool call part (without UI status/result)
                     assistantContent.push({
                         type: 'tool-call',
                         toolCallId: part.toolCallId,
                         toolName: part.toolName,
                         args: part.args
                     });
+                    hasContentForAi = true; // Tool call itself is content for AI
                     // If the tool call is marked complete/error in UI state, generate a tool result message
                     if (part.status === 'complete' || part.status === 'error') {
                         toolResultsForThisMsg.push({
@@ -590,32 +552,27 @@ function translateUiHistoryToCoreMessages(uiHistory: UiMessage[]): CoreMessage[]
                             toolName: part.toolName,
                             result: part.result ?? (part.status === 'complete' ? 'Completed' : 'Error') // Use stored result or default
                         });
-                        isPotentiallyComplete = true; // Has completed tool calls
                     }
-                    // Ignore pending/running tool calls for AI history
+                    // Ignore pending/running tool calls for AI history translation
                 }
             }
 
-            // Only add assistant message if it seems complete
-            if (isPotentiallyComplete) {
-                 // Ensure content is not empty before pushing
-                 if (assistantContent.length > 0) {
-                    coreMessages.push({ role: 'assistant', content: assistantContent });
-                 }
-                 // Add any corresponding tool results immediately after the assistant message
+            // Only add assistant message if it has relevant content for the AI
+            if (hasContentForAi && assistantContent.length > 0) {
+                 coreMessages.push({ role: 'assistant', content: assistantContent });
+                 // Add any corresponding tool results immediately after
                  if (toolResultsForThisMsg.length > 0) {
                      coreMessages.push({ role: 'tool', content: toolResultsForThisMsg });
                  }
-            } else {
-                console.log(`Skipping potentially incomplete assistant message (ID: ${uiMsg.id}) for AI history translation.`);
+            } else if (!hasContentForAi) {
+                 console.log(`Skipping assistant message (ID: ${uiMsg.id}) with no AI-relevant content during translation.`);
             }
         }
-        // Ignore 'tool' role messages from the UI history structure if they somehow exist
     }
     return coreMessages;
 }
 
-// --- Other Helper Functions --- (getWebviewContent and getNonce remain unchanged)
+// --- Other Helper Functions ---
 function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, extensionMode: vscode.ExtensionMode): string {
     const nonce = getNonce();
     const isDevelopment = extensionMode === vscode.ExtensionMode.Development;
@@ -647,7 +604,6 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, ex
     if (isDevelopment) {
         // Development mode: Load from the Vite dev server for HMR
         console.log(`Loading webview from Vite dev server: ${viteDevServerUrl}`);
-        // CSP needs to allow connection to the dev server and inline styles (Vite might inject some)
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -695,18 +651,15 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, ex
             // Inject CSP meta tag
             htmlContent = htmlContent.replace(
                 '</head>',
-                // CSP for production: allow styles/images/fonts from webview source, scripts with nonce, self connections
                 `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; img-src ${webview.cspSource} data:; font-src ${webview.cspSource};">
                  </head>`
             );
 
             return htmlContent;
-        } catch (e: any) { // Add type annotation for error
+        } catch (e: any) {
             console.error(`Error reading or processing production webview HTML from ${htmlPath.fsPath}: ${e}`);
             return `<html><body>Error loading webview content. Failed to read or process build output. Check console and ensure 'pnpm run build:webview' has run successfully. Path: ${htmlPath.fsPath} Error: ${e.message}</body></html>`;
         }
-
-// Class definition moved above registration
     }
 }
 
@@ -719,4 +672,4 @@ function getNonce() {
     return text;
 }
 
-export function deactivate() {} // No resources to dispose explicitly in deactivate
+export function deactivate() {}

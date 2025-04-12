@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Commit final fix for UI state persistence (including partial messages and tool status) and prepare for next task (UnoCSS styling).
+Prepare for next task (UnoCSS styling).
 
 ## Recent Changes
 - **Implemented UI State Persistence:** Refactored history management to use a single persistent store (`UiMessage[]` format mirroring frontend state) saved in `globalState` (`zenCoderUiHistory`).
@@ -120,7 +120,7 @@ Commit final fix for UI state persistence (including partial messages and tool s
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit fixes for UI state persistence and model selection handling.
+- **Current Task:** Apply UnoCSS styling to UI components.
 - **Next:** Apply UnoCSS styling to UI components.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
