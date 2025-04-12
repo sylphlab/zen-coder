@@ -1,0 +1,34 @@
+.settings-container {
+  padding: 20px;
+  font-family: var(--vscode-font-family, Arial, sans-serif);
+  color: var(--vscode-editor-foreground);
+  background-color: var(--vscode-editor-background);
+}
+
+h1, h2 {
+  color: var(--vscode-textLink-foreground);
+  border-bottom: 1px solid var(--vscode-editorWidget-border);
+  padding-bottom: 5px;
+  margin-bottom: 15px;
+}
+
+ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+li {
+  margin-bottom: 8px;
+  padding: 5px;
+  border-radius: 3px;
+  background-color: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-editorWidget-border);
+}
+
+section {
+    margin-bottom: 25px;
+}
+
+small {
+    color: var(--vscode-descriptionForeground);
+}

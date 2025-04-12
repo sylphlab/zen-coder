@@ -14,10 +14,44 @@
     "onCommand:zencoder.setAnthropicKey",
     "onCommand:zencoder.setGoogleKey",
     "onCommand:zencoder.setOpenRouterKey",
-    "onCommand:zencoder.setDeepseekKey"
+    "onCommand:zencoder.setDeepseekKey",
+    "onCommand:zencoder.openSettings"
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "zencoder-view-container",
+          "title": "Zen Coder",
+          "icon": "$(code)"
+        }
+      ]
+    },
+    "views": {
+      "zencoder-view-container": [
+        {
+          "id": "zencoder.views.commands",
+          "name": "Commands",
+          "type": "tree"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "zencoder.openSettings",
+          "when": "view == zencoder.views.commands",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+         {
+            "command": "zencoder.openSettings",
+            "when": "never"
+         }
+      ]
+    },
     "commands": [
       {
         "command": "zencoder.startChat",
@@ -42,11 +76,37 @@
         "command": "zencoder.setDeepseekKey",
         "title": "Set Deepseek API Key",
         "category": "Zen Coder"
+      },
+      {
+        "command": "zencoder.openSettings",
+        "title": "Open Zen Coder Settings",
+        "category": "Zen Coder",
+        "icon": "$(gear)"
       }
     ],
     "configuration": {
       "title": "Zen Coder Settings",
       "properties": {
+        "zencoder.provider.anthropic.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Anthropic (Claude) provider."
+        },
+        "zencoder.provider.google.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Google (Gemini) provider."
+        },
+        "zencoder.provider.openrouter.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable OpenRouter provider."
+        },
+        "zencoder.provider.deepseek.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable DeepSeek provider."
+        },
         "zencoder.tools.readFileTool.enabled": {
           "type": "boolean",
           "default": true,
@@ -232,12 +292,14 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm run package",
-    "compile": "pnpm run build:webview && pnpm run check-types && pnpm run lint && node esbuild.js",
-    "watch": "npm-run-all -p watch:*",
+    "compile": "pnpm run build:webview && pnpm run build:settings && pnpm run check-types && pnpm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:esbuild watch:tsc watch:webview watch:settings",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "watch:webview": "pnpm --filter webview-ui dev",
+    "watch:settings": "pnpm --filter settings-ui dev",
     "build:webview": "pnpm --filter webview-ui build",
+    "build:settings": "pnpm --filter settings-ui build",
     "package": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
@@ -245,7 +307,8 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vscode-test",
-    "webview-ui": "pnpm --filter webview-ui"
+    "webview-ui": "pnpm --filter webview-ui",
+    "settings-ui": "pnpm --filter settings-ui"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",

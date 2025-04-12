@@ -46,6 +46,18 @@
 - **Removed Deprecated `StreamData`:** Refactored `aiService.ts` to remove `StreamData` usage and associated custom tool status updates.
 - **Corrected `streamText` Usage:** Fixed types and return value handling for `streamText` in `aiService.ts` and `extension.ts`.
 - **UI Update (Tool Status):** (Completed previously, but custom status updates are currently disabled).
+- **`uuidGenerateTool` updated:** Now accepts `count` parameter and sends progress updates via callback.
+- **UI Tool Display:** Implemented inline, human-readable tool call display with progress updates for `uuidGenerateTool` and specific summaries for file tools. Technical details hidden by default.
+- **Tool Result Handling:** Confirmed tool results are correctly passed back to the AI model via the SDK.
+- **Settings Page Foundation:**
+    - Created `settings-ui` project (Vite + Preact).
+    - Registered `zencoder.openSettings` command.
+    - Implemented basic `settingsPanel` creation in `extension.ts`.
+    - Added `getApiKeyStatus` method to `AiService`.
+    - Configured Vite for `settings-ui` (port 5174, output dir).
+    - Updated build/watch scripts in `package.json`.
+    - Implemented basic Settings UI (`settings-ui/src/app.tsx`) to display API key status.
+    - Implemented communication for API key status between settings webview and extension host.
 ## What's Left (Potential Future Enhancements)
 - Implement conversation history persistence.
 - Thorough testing and debugging of core chat and tool execution.
@@ -57,11 +69,16 @@
 - Re-implement tool status updates using recommended Vercel AI SDK APIs (if desired).
 
 ## Current Status
-- **Core Functionality Stabilized:** Stream parsing and Vercel AI SDK interaction logic corrected and simplified by removing deprecated APIs. Custom tool status updates temporarily disabled.
-- Project should be stable for core chat and tool execution, pending testing.
+- **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates (for `uuidGenerateTool`).
+- **Tool Execution:** Tools (including multi-UUID generation) execute and return results to the AI.
+- **Settings Foundation:** Basic infrastructure for the settings page is in place (command, panel creation, build setup, API key status display).
 
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
 - Search tool functionality relies on the external `search_files` tool (requires environment support).
 - Conversation history is not persisted.
-- Custom tool execution status updates (in-progress, complete, error) are currently disabled.
+- **AI Response Behavior:** AI models might not always explicitly list tool results (e.g., all generated UUIDs) in their text response, even though they receive the results. This depends on the model and prompt.
+- Custom tool execution status updates (beyond the inline display) are currently disabled.
+- Settings page UI only shows API key status; provider enable/disable and model selection are missing.
+- Model resolver logic is not yet implemented.
+- Chat UI model selection persistence is not yet implemented.

@@ -1,18 +1,18 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { AiService } from './ai/aiService'; // Import AiService
+import { AiService, ApiProviderKey } from './ai/aiService'; // Import AiService AND ApiProviderKey
 // Removed incorrect readDataStream import
-// Type definition for the keys used in AiService SECRET_KEYS
-type ApiProviderKey = 'ANTHROPIC' | 'GOOGLE' | 'OPENROUTER' | 'DEEPSEEK';
 
 
 let chatPanel: vscode.WebviewPanel | undefined = undefined;
+let settingsPanel: vscode.WebviewPanel | undefined = undefined; // Panel for settings UI
 let aiServiceInstance: AiService | undefined = undefined; // Hold AiService instance
 
 // Make activate async to await AiService initialization
 export async function activate(context: vscode.ExtensionContext) {
-
+    console.log('--- Zen Coder Extension Activating ---'); // Add early log
+ 
     console.log('Congratulations, your extension "zencoder" is now active!');
 
     // Instantiate and initialize AiService.
@@ -49,7 +49,19 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         // Pass extensionMode to getWebviewContent
-        chatPanel.webview.html = getWebviewContent(chatPanel.webview, context.extensionUri, context.extensionMode);
+        chatPanel.webview.html = getWebviewContent(chatPanel.webview, context.extensionUri, context.extensionMode, 'chat'); // Specify 'chat' type
+
+        // Set the postMessage callback in AiService
+        if (aiServiceInstance) {
+            aiServiceInstance.setPostMessageCallback((message: any) => {
+                // Ensure panel still exists before posting
+                if (chatPanel) {
+                    chatPanel.webview.postMessage(message);
+                } else {
+                    console.warn("Attempted to post message to disposed chat panel.");
+                }
+            });
+        }
 
         // Handle messages from the webview
         chatPanel.webview.onDidReceiveMessage(
@@ -62,6 +74,8 @@ export async function activate(context: vscode.ExtensionContext) {
                 switch (message.type) {
                     case 'sendMessage':
                         try {
+                            // Removed sending 'showAiParameters' message
+
                             const streamResult = await aiServiceInstance.getAiResponseStream(message.text);
 
                             if (!streamResult) {
@@ -130,31 +144,36 @@ export async function activate(context: vscode.ExtensionContext) {
                                             } else if (prefix === '9') {
                                                 // Handle '9:' prefix - Tool Call Request
                                                 const part = JSON.parse(contentData);
-                                                if (part.toolCallId && part.toolName) {
+                                                // Handle '9:' prefix - Tool Call Request
+                                                if (part.toolCallId && part.toolName && part.args !== undefined) {
                                                     console.log('Tool call request received via "9:" prefix:', part);
+                                                    // Send specific tool call info instead of generic status update
                                                     chatPanel?.webview.postMessage({
-                                                        type: 'toolStatusUpdate',
-                                                        toolCallId: part.toolCallId,
-                                                        toolName: part.toolName,
-                                                        status: 'tool_call_request',
-                                                        message: `Calling tool: ${part.toolName}`
+                                                        type: 'addToolCall', // New message type
+                                                        payload: {
+                                                            toolCallId: part.toolCallId,
+                                                            toolName: part.toolName,
+                                                            args: part.args // Send the arguments
+                                                        }
                                                     });
                                                 } else {
-                                                    console.warn(`Received unexpected JSON structure with prefix '9:':`, part);
+                                                    console.warn(`Received incomplete tool call structure with prefix '9:':`, part);
                                                 }
                                             } else if (prefix === 'a') {
-                                                // Handle 'a:' prefix - Tool Result
+                                                // Handle 'a:' prefix - Tool Result (Sent back to AI)
                                                 const part = JSON.parse(contentData);
-                                                if (part.toolCallId && part.result) {
-                                                    console.log('Tool result received via "a:" prefix:', part);
+                                                // Ensure result exists before sending update
+                                                if (part.toolCallId && part.result !== undefined) {
+                                                    console.log('Tool result received via "a:" prefix (to be sent to AI):', part);
+                                                    // Send the *actual* result to the webview
                                                     chatPanel?.webview.postMessage({
                                                         type: 'toolStatusUpdate',
                                                         toolCallId: part.toolCallId,
-                                                        status: 'tool_result_received',
-                                                        message: `Tool result received.` // Consider adding result summary if safe/useful
+                                                        status: 'complete', // Use 'complete' status when result is available
+                                                        message: part.result // Send the actual result object/value
                                                     });
                                                 } else {
-                                                    console.warn(`Received unexpected JSON structure with prefix 'a:':`, part);
+                                                    console.warn(`Received incomplete tool result structure with prefix 'a:':`, part);
                                                 }
                                             } else if (prefix === 'd') {
                                                 // Handle 'd:' prefix - Data/Metadata (often message annotations)
@@ -254,6 +273,12 @@ export async function activate(context: vscode.ExtensionContext) {
                             console.error('Failed to set model: AiService not ready or invalid modelId', message);
                         }
                         return;
+                    case 'getAvailableModels':
+                        if (aiServiceInstance) {
+                            const models = await aiServiceInstance.resolveAvailableModels();
+                            chatPanel?.webview.postMessage({ type: 'availableModels', payload: models });
+                        }
+                        return;
                 } // End switch (message.type)
             }, // End onDidReceiveMessage handler
             undefined,
@@ -300,27 +325,171 @@ export async function activate(context: vscode.ExtensionContext) {
     registerApiKeyCommand('zencoder.setOpenRouterKey', 'OPENROUTER', 'OpenRouter');
     registerApiKeyCommand('zencoder.setDeepseekKey', 'DEEPSEEK', 'Deepseek');
 
+    // --- Register Settings Command ---
+    const openSettingsCommand = vscode.commands.registerCommand('zencoder.openSettings', () => {
+        console.log('Command "zencoder.openSettings" triggered.'); // Add log
+        // Ensure AiService is ready before opening settings (might need API key status)
+        if (!aiServiceInstance) {
+             vscode.window.showErrorMessage("AI Service is not yet initialized. Please wait a moment and try again.");
+             return;
+        }
+
+        const column = vscode.window.activeTextEditor
+            ? vscode.window.activeTextEditor.viewColumn
+            : undefined;
+
+        if (settingsPanel) {
+            console.log('Settings panel already exists, revealing.'); // Add log
+            settingsPanel.reveal(column);
+            return;
+        }
+        console.log('Creating new settings panel.'); // Add log
+
+        settingsPanel = vscode.window.createWebviewPanel(
+            'zencoderSettings', // Unique ID for the settings panel
+            'Zen Coder Settings', // Title
+            column || vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                // IMPORTANT: Allow loading content ONLY from the settings UI build output directory
+                localResourceRoots: [ vscode.Uri.joinPath(context.extensionUri, 'dist', 'settings') ]
+            }
+        );
+
+        // Use a separate function or adapt getWebviewContent for settings
+        settingsPanel.webview.html = getSettingsWebviewContent(settingsPanel.webview, context.extensionUri, context.extensionMode);
+        console.log('Settings panel HTML set.'); // Add log
+
+        // Handle messages from the settings webview (if needed later)
+        settingsPanel.webview.onDidReceiveMessage(
+            async message => {
+                if (!aiServiceInstance) {
+                    vscode.window.showErrorMessage("AI Service not initialized.");
+                    return;
+                }
+                switch (message.type) {
+                    case 'getProviderStatus': // Changed from getApiKeyStatus
+                        const status = await aiServiceInstance.getProviderStatus(); // Call new method
+                        settingsPanel?.webview.postMessage({ type: 'providerStatus', payload: status }); // Send new type
+                        break;
+                    case 'webviewReady':
+                        console.log('Settings webview is ready');
+                        // Send initial provider status
+                        const initialStatus = await aiServiceInstance.getProviderStatus(); // Call new method
+                        settingsPanel?.webview.postMessage({ type: 'providerStatus', payload: initialStatus }); // Send new type
+                        break;
+                    case 'setProviderEnabled':
+                        if (message.payload && typeof message.payload.provider === 'string' && typeof message.payload.enabled === 'boolean') {
+                            const providerKeyInput = message.payload.provider;
+                            const enabled = message.payload.enabled;
+                            // Validate if the received key is actually part of ApiProviderKey
+                            const validKeys: ApiProviderKey[] = ['ANTHROPIC', 'GOOGLE', 'OPENROUTER', 'DEEPSEEK'];
+                            if (validKeys.includes(providerKeyInput as ApiProviderKey)) {
+                                const providerKey = providerKeyInput as ApiProviderKey;
+                                try {
+                                    const config = vscode.workspace.getConfiguration('zencoder.provider');
+                                    const keyMap: Record<ApiProviderKey, string> = {
+                                        ANTHROPIC: 'anthropic.enabled',
+                                        GOOGLE: 'google.enabled',
+                                        OPENROUTER: 'openrouter.enabled',
+                                        DEEPSEEK: 'deepseek.enabled',
+                                    };
+                                    await config.update(keyMap[providerKey], enabled, vscode.ConfigurationTarget.Global);
+                                    console.log(`Provider ${String(providerKey)} enabled status updated to: ${enabled}`); // Explicit String conversion
+                                    // Optionally send confirmation back to webview
+                                    // settingsPanel?.webview.postMessage({ type: 'providerStatusUpdated', payload: { provider: providerKey, enabled: enabled } });
+                                } catch (error: any) {
+                                    console.error(`Failed to update provider setting for ${String(providerKey)}:`, error); // Explicit String conversion
+                                    vscode.window.showErrorMessage(`Failed to update setting for ${String(providerKey)}: ${error.message}`); // Explicit String conversion
+                                    // Optionally send error back to webview
+                                }
+                            } else {
+                                 console.error(`Invalid provider key received in setProviderEnabled: ${providerKeyInput}`);
+                            }
+                        } else {
+                            console.error("Invalid payload for setProviderEnabled:", message.payload);
+                        }
+                        break;
+                    // Add more cases as needed
+                }
+            },
+            undefined,
+            context.subscriptions
+        );
+
+        settingsPanel.onDidDispose(() => { settingsPanel = undefined; }, null, context.subscriptions);
+        context.subscriptions.push(settingsPanel);
+    });
+    context.subscriptions.push(openSettingsCommand);
+    console.log('Command "zencoder.openSettings" registration pushed to subscriptions.');
+ 
+    // --- Define Tree Data Provider Class FIRST ---
+    class ZenCoderCommandsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+        getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+            return element;
+        }
+ 
+        getChildren(element?: vscode.TreeItem): Thenable<vscode.TreeItem[]> {
+            console.log('[ZenCoderCommandsProvider] getChildren called, element:', element); // Add log
+            if (element) {
+                // No child items for now
+                return Promise.resolve([]);
+            } else {
+                // Root level items
+                const settingsItem = new vscode.TreeItem('Open Settings', vscode.TreeItemCollapsibleState.None);
+                settingsItem.command = {
+                    command: 'zencoder.openSettings',
+                    title: 'Open Zen Coder Settings',
+                    arguments: []
+                };
+                settingsItem.iconPath = new vscode.ThemeIcon('gear'); // Use gear icon
+                settingsItem.tooltip = 'Open the Zen Coder settings page';
+ 
+                // Add more commands here later if needed
+                return Promise.resolve([settingsItem]);
+            }
+        }
+ 
+        // Optional: Add event emitter if tree needs to refresh
+        // private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined | null | void> = new vscode.EventEmitter<vscode.TreeItem | undefined | null | void>();
+        // readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+ 
+        // refresh(): void {
+        //  this._onDidChangeTreeData.fire();
+        // }
+    }
+ 
+    // --- Register Activity Bar View AFTER defining the class ---
+    const zenCoderCommandsProvider = new ZenCoderCommandsProvider(); // Now the class is defined
+    vscode.window.registerTreeDataProvider('zencoder.views.commands', zenCoderCommandsProvider);
+    console.log('Zen Coder Activity Bar view registered.');
+
 } // End of activate function
 
 // --- Helper Functions ---
 
-function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, extensionMode: vscode.ExtensionMode): string {
+function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, extensionMode: vscode.ExtensionMode, webviewType: 'chat' | 'settings'): string {
     const nonce = getNonce();
     const isDevelopment = extensionMode === vscode.ExtensionMode.Development;
-    const viteDevServerUrl = 'http://localhost:5173'; // Default Vite port for webview-ui
+    // Determine Vite port based on webview type
+    const viteDevServerPort = webviewType === 'chat' ? 5173 : 5174; // Assuming 5174 for settings-ui
+    const viteDevServerUrl = `http://localhost:${viteDevServerPort}`;
+    const buildDir = webviewType === 'chat' ? 'webview' : 'settings';
+    const title = webviewType === 'chat' ? 'AI Coder Chat (Dev)' : 'Zen Coder Settings (Dev)';
+    const mainTsxPath = webviewType === 'chat' ? '/src/main.tsx' : '/src/main.tsx'; // Assuming same entry point name
 
     console.log(`Getting webview content. Development mode: ${isDevelopment}`);
 
     if (isDevelopment) {
-        // Development mode: Load from Vite dev server for HMR
-        console.log(`Loading webview from Vite dev server: ${viteDevServerUrl}`);
+        // Development mode: Load from the correct Vite dev server for HMR
+        console.log(`Loading ${webviewType} webview from Vite dev server: ${viteDevServerUrl}`);
         // CSP needs to allow connection to the dev server and inline styles (Vite might inject some)
         return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Coder (Dev)</title>
+    <title>${title}</title>
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'none';
         style-src 'unsafe-inline' ${webview.cspSource} ${viteDevServerUrl};
@@ -330,7 +499,7 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, ex
         font-src ${webview.cspSource} ${viteDevServerUrl};
     ">
     <script type="module" nonce="${nonce}" src="${viteDevServerUrl}/@vite/client"></script>
-    <script type="module" nonce="${nonce}" src="${viteDevServerUrl}/src/main.tsx"></script>
+    <script type="module" nonce="${nonce}" src="${viteDevServerUrl}${mainTsxPath}"></script>
 </head>
 <body>
     <div id="root">Loading UI from Dev Server...</div>
@@ -338,9 +507,9 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, ex
 </html>`;
 
     } else {
-        // Production mode: Load from build output
-        console.log("Loading webview from dist/webview");
-        const buildPath = vscode.Uri.joinPath(extensionUri, 'dist', 'webview');
+        // Production mode: Load from the correct build output directory
+        console.log(`Loading ${webviewType} webview from dist/${buildDir}`);
+        const buildPath = vscode.Uri.joinPath(extensionUri, 'dist', buildDir);
         const htmlPath = vscode.Uri.joinPath(buildPath, 'index.html');
 
         try {
@@ -369,11 +538,24 @@ function getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, ex
 
             return htmlContent;
         } catch (e) {
-            console.error(`Error reading or processing production webview HTML from ${htmlPath.fsPath}: ${e}`);
-            return `<html><body>Error loading webview content. Failed to read or process build output. Check console and ensure 'pnpm run build:webview' has run successfully. Path: ${htmlPath.fsPath} Error: ${e}</body></html>`;
+            console.error(`Error reading or processing production ${webviewType} webview HTML from ${htmlPath.fsPath}: ${e}`);
+            return `<html><body>Error loading ${webviewType} webview content. Failed to read or process build output. Check console and ensure 'pnpm run build:${buildDir}' has run successfully. Path: ${htmlPath.fsPath} Error: ${e}</body></html>`;
         }
+     
+// Class definition moved above registration
     }
 }
+
+// Helper function specifically for settings webview content generation
+function getSettingsWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri, extensionMode: vscode.ExtensionMode): string {
+    // Call the generalized function with 'settings' type
+    return getWebviewContent(webview, extensionUri, extensionMode, 'settings');
+}
+
+// Modify the call in startChat command to specify 'chat' type
+// Find the line: chatPanel.webview.html = getWebviewContent(chatPanel.webview, context.extensionUri, context.extensionMode);
+// Replace with: chatPanel.webview.html = getWebviewContent(chatPanel.webview, context.extensionUri, context.extensionMode, 'chat');
+
 function getNonce() {
     let text = '';
     const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -384,7 +566,6 @@ function getNonce() {
 }
 
 export function deactivate() {
-    if (chatPanel) {
-        chatPanel.dispose();
+    chatPanel?.dispose();
+    settingsPanel?.dispose(); // Dispose settings panel as well
     }
-}

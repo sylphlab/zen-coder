@@ -1,196 +1,398 @@
-import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import './app.css'; // We'll replace this content next
+import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks'; // Added useMemo
+import { JSX } from 'preact/jsx-runtime';
+import './app.css';
+
+// Removed VSCodeProgressRing import
 
 // Define message structure
 interface Message {
+    id: string; // Unique ID for each message/tool call block
     sender: 'user' | 'assistant';
+    content: (TextMessagePart | ToolCallPart | ToolResultPart)[]; // Array to hold text and tool calls/results
+    timestamp: number;
+}
+
+interface TextMessagePart {
+    type: 'text';
     text: string;
 }
- // Define tool status structure
- interface ToolStatus {
-     name: string;
-     status: 'in-progress' | 'complete' | 'error' | 'cancelled' | 'warning'; // Add more statuses as needed
-     message?: string;
- }
- 
 
-// Define available models (matching the previous HTML)
-const availableModels = [
-    { value: 'claude-3-5-sonnet', label: 'Claude 3.5 Sonnet' },
-    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
-    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
-    { value: 'openrouter/claude-3.5-sonnet', label: 'OpenRouter: Claude 3.5 Sonnet' },
-    { value: 'deepseek-coder', label: 'DeepSeek Coder' },
-];
+interface ToolCallPart {
+    type: 'tool-call';
+    toolCallId: string;
+    toolName: string;
+    args: any;
+    status?: 'pending' | 'running' | 'complete' | 'error'; // Status for UI display
+    result?: any; // Store result here for display
+    progress?: string; // For progress updates like UUID generation
+}
 
-// Simple VS Code API shim for type safety
-// @ts-ignore - Assume acquireVsCodeApi() exists globally
-const vscode = acquireVsCodeApi();
+interface ToolResultPart {
+    type: 'tool-result';
+    toolCallId: string;
+    toolName: string; // Include toolName for context
+    result: any;
+    // Note: We might not receive this directly if the AI summarizes,
+    // but we store results linked to calls for potential display.
+}
+
+// Define structure for resolved models from AiService
+type ResolvedModel = {
+    id: string;
+    label: string;
+    provider: ApiProviderKey; // Use the type from AiService if possible, or string
+    source: string;
+};
+
+// Define ApiProviderKey here for UI use (or import if shared)
+type ApiProviderKey = 'ANTHROPIC' | 'GOOGLE' | 'OPENROUTER' | 'DEEPSEEK';
+
+// Helper to get the VS Code API instance
+// @ts-ignore
+const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+
+// Function to post messages to the extension host
+const postMessage = (message: any) => {
+    if (vscode) {
+        vscode.postMessage(message);
+    } else {
+        console.log("VS Code API not available, message not sent:", message);
+        // Mock responses for development
+        if (message.type === 'getAvailableModels') {
+            setTimeout(() => {
+                window.dispatchEvent(new MessageEvent('message', {
+                    data: {
+                        type: 'availableModels',
+                        payload: [
+                            { id: 'claude-3-5-sonnet-20240620', label: 'Claude 3.5 Sonnet', provider: 'ANTHROPIC', source: 'hardcoded' },
+                            { id: 'claude-3-opus-20240229', label: 'Claude 3 Opus', provider: 'ANTHROPIC', source: 'hardcoded' },
+                            { id: 'models/gemini-1.5-pro-latest', label: 'Gemini 1.5 Pro', provider: 'GOOGLE', source: 'hardcoded' },
+                            { id: 'models/gemini-1.5-flash-latest', label: 'Gemini 1.5 Flash', provider: 'GOOGLE', source: 'hardcoded' },
+                            { id: 'openrouter/claude-3.5-sonnet', label: 'OR: Claude 3.5 Sonnet', provider: 'OPENROUTER', source: 'hardcoded' },
+                            { id: 'openrouter/google/gemini-pro-1.5', label: 'OR: Gemini 1.5 Pro', provider: 'OPENROUTER', source: 'hardcoded' },
+                            { id: 'deepseek-coder', label: 'DeepSeek Coder', provider: 'DEEPSEEK', source: 'hardcoded' },
+                            { id: 'deepseek-chat', label: 'DeepSeek Chat', provider: 'DEEPSEEK', source: 'hardcoded' },
+                        ]
+                    }
+                }));
+            }, 300);
+        }
+    }
+};
+
+// Helper function to generate unique IDs
+const generateUniqueId = () => `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+// Helper to get provider key from model ID string
+const getProviderFromModelId = (modelId: string): ApiProviderKey | null => {
+    if (modelId.startsWith('models/')) return 'GOOGLE';
+    if (modelId.startsWith('claude-')) return 'ANTHROPIC';
+    if (modelId.startsWith('openrouter/')) return 'OPENROUTER';
+    if (modelId.startsWith('deepseek-')) return 'DEEPSEEK';
+    // Add more specific checks if needed
+    if (modelId.includes('anthropic/')) return 'OPENROUTER'; // Handle OpenRouter specific format
+    if (modelId.includes('google/')) return 'OPENROUTER';
+     if (modelId.includes('mistralai/')) return 'OPENROUTER';
+    // Fallback or guess based on common patterns if necessary, but might be unreliable
+    return null; // Cannot determine
+};
+
 
 export function App() {
     const [messages, setMessages] = useState<Message[]>([]);
-    const [userInput, setUserInput] = useState('');
-    const [selectedModel, setSelectedModel] = useState(availableModels[0].value); // Default to first model
-    const messageListRef = useRef<HTMLDivElement>(null);
-    const lastAssistantMessageRef = useRef<HTMLDivElement>(null); // Ref for streaming text
-    const [toolStatuses, setToolStatuses] = useState<Record<string, ToolStatus>>({}); // State for tool statuses
+    const [inputValue, setInputValue] = useState('');
+    const [isStreaming, setIsStreaming] = useState(false);
+    const [availableModels, setAvailableModels] = useState<ResolvedModel[]>([]); // State for models
+    const [selectedProvider, setSelectedProvider] = useState<ApiProviderKey | null>(null); // State for selected provider
+    const [currentModelInput, setCurrentModelInput] = useState<string>(''); // Separate state for model input field
+    const messagesEndRef = useRef<null | HTMLDivElement>(null);
+    const currentAssistantMessageId = useRef<string | null>(null);
 
-    // Scroll to bottom when messages change
+     // --- Derived State ---
+     const uniqueProviders = useMemo(() => {
+        const providers = new Set<ApiProviderKey>();
+        availableModels.forEach(model => providers.add(model.provider));
+        return Array.from(providers);
+    }, [availableModels]);
+
+    const filteredModels = useMemo(() => {
+        if (!selectedProvider) return [];
+        return availableModels.filter(model => model.provider === selectedProvider);
+    }, [availableModels, selectedProvider]);
+
+    // --- Effects ---
     useEffect(() => {
-        if (messageListRef.current) {
-            messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-        }
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    // Handle messages from the extension
-    const handleExtensionMessage = useCallback((event: MessageEvent) => {
-        const message = event.data;
-        console.log('Webview received message:', message); // Debug log
-
-        switch (message.type) {
-            case 'addMessage':
-                setMessages(prev => [...prev, { sender: message.sender, text: message.text }]);
-                // If it's a complete assistant message, clear the streaming ref
-                if (message.sender === 'assistant') {
-                    lastAssistantMessageRef.current = null;
-                }
-                break;
-            case 'startAssistantMessage': // New type to prepare for streaming
-                 setMessages(prev => [...prev, { sender: 'assistant', text: '' }]);
-                 // The actual element will be assigned via ref callback below
-                 break;
-            case 'appendMessageChunk':
-                if (lastAssistantMessageRef.current) {
-                    // Directly append text content to the last message element
-                    // Basic escaping for safety, though ideally handled by AI service
-                    const escapedDelta = message.textDelta.replace(/</g, '<').replace(/>/g, '>');
-                    lastAssistantMessageRef.current.innerHTML += escapedDelta; // Append chunk
-                     if (messageListRef.current) {
-                         messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
-                     }
-                } else {
-                     console.warn("No last assistant message ref found for chunk, adding as new message.");
-                     setMessages(prev => [...prev, { sender: 'assistant', text: message.textDelta }]);
-                }
-                break;
-            case 'toolStatusUpdate':
-                console.log('Tool status update:', message);
-                setToolStatuses(prev => ({
-                    ...prev,
-                    [message.toolCallId]: {
-                        name: message.toolName,
-                        status: message.status,
-                        message: message.message,
-                    }
-                }));
-                // Optionally clear 'complete' or 'error' statuses after a delay?
-                // Or maybe just update them and let them persist for a while.
-                break;
-            // Add other message handlers if needed
-        }
-    }, []);
-
     useEffect(() => {
-        window.addEventListener('message', handleExtensionMessage);
-        // Inform the extension that the webview is ready
-        vscode.postMessage({ type: 'webviewReady' });
-        // Request initial model state? Or assume extension sends it.
-        // For now, set the default model on load
-        vscode.postMessage({ type: 'setModel', modelId: selectedModel });
+        postMessage({ type: 'webviewReady' });
+        postMessage({ type: 'getAvailableModels' });
+
+        const handleMessage = (event: MessageEvent) => {
+            const message = event.data;
+            console.log("Chat UI received message:", message);
+
+            switch (message.type) {
+                // (Keep existing message handlers: addMessage, startAssistantMessage, appendMessageChunk, addToolCall, toolStatusUpdate, uuidProgressUpdate)
+                 case 'addMessage': // Simple text message from assistant (e.g., errors)
+                    setMessages(prev => [...prev, { id: generateUniqueId(), sender: message.sender, content: [{ type: 'text', text: message.text }], timestamp: Date.now() }]);
+                    setIsStreaming(false); // Stop streaming on explicit error message
+                    currentAssistantMessageId.current = null;
+                    break;
+                case 'startAssistantMessage': // Signal to start a new assistant message block
+                     setIsStreaming(true);
+                     const newMsgId = generateUniqueId();
+                     currentAssistantMessageId.current = newMsgId;
+                     setMessages(prev => [...prev, { id: newMsgId, sender: 'assistant', content: [], timestamp: Date.now() }]);
+                     break;
+                case 'appendMessageChunk': // Append text chunk to the current assistant message
+                    if (currentAssistantMessageId.current) {
+                        setMessages(prev => prev.map(msg => {
+                            if (msg.id === currentAssistantMessageId.current) {
+                                const lastContent = msg.content[msg.content.length - 1];
+                                if (lastContent?.type === 'text') {
+                                    return { ...msg, content: [...msg.content.slice(0, -1), { ...lastContent, text: lastContent.text + message.textDelta }] };
+                                } else {
+                                    return { ...msg, content: [...msg.content, { type: 'text', text: message.textDelta }] };
+                                }
+                            }
+                            return msg;
+                        }));
+                    }
+                    break;
+                 case 'addToolCall':
+                     if (currentAssistantMessageId.current && message.payload) {
+                         setMessages(prev => prev.map(msg => {
+                             if (msg.id === currentAssistantMessageId.current) {
+                                 return { ...msg, content: [...msg.content, { type: 'tool-call', ...message.payload, status: 'pending' }] };
+                             }
+                             return msg;
+                         }));
+                     }
+                     break;
+                 case 'toolStatusUpdate':
+                     if (message.toolCallId) {
+                         setMessages(prev => prev.map(msg => {
+                             const toolCallIndex = msg.content.findIndex(part => part.type === 'tool-call' && part.toolCallId === message.toolCallId);
+                             if (toolCallIndex !== -1) {
+                                 const updatedContent = [...msg.content];
+                                 const toolCallPart = updatedContent[toolCallIndex] as ToolCallPart;
+                                 updatedContent[toolCallIndex] = {
+                                     ...toolCallPart,
+                                     status: message.status ?? toolCallPart.status,
+                                     result: message.status === 'complete' ? message.message : toolCallPart.result,
+                                     progress: undefined
+                                 };
+                                 return { ...msg, content: updatedContent };
+                             }
+                             return msg;
+                         }));
+                         if (message.status === 'complete' || message.status === 'error') {
+                             const lastMsg = messages[messages.length - 1];
+                             if (lastMsg && lastMsg.id === currentAssistantMessageId.current) {
+                                 const allToolsDone = lastMsg.content
+                                     .filter(part => part.type === 'tool-call')
+                                     .every(part => (part as ToolCallPart).status === 'complete' || (part as ToolCallPart).status === 'error');
+                                 if (allToolsDone) {
+                                     setIsStreaming(false);
+                                     currentAssistantMessageId.current = null;
+                                     console.log("All tools processed, stream considered finished.");
+                                 }
+                             }
+                         }
+                     }
+                     break;
+                 case 'uuidProgressUpdate':
+                     if (message.payload && message.payload.toolCallId) {
+                         setMessages(prev => prev.map(msg => {
+                             const toolCallIndex = msg.content.findIndex(part => part.type === 'tool-call' && part.toolCallId === message.payload.toolCallId);
+                             if (toolCallIndex !== -1) {
+                                 const updatedContent = [...msg.content];
+                                 const toolCallPart = updatedContent[toolCallIndex] as ToolCallPart;
+                                 updatedContent[toolCallIndex] = {
+                                     ...toolCallPart,
+                                     status: 'running',
+                                     progress: `(${message.payload.generated}/${message.payload.total})`
+                                 };
+                                 return { ...msg, content: updatedContent };
+                             }
+                             return msg;
+                         }));
+                     }
+                     break;
+                case 'availableModels':
+                    if (Array.isArray(message.payload)) {
+                        setAvailableModels(message.payload);
+                        // Set initial provider and model if not already set
+                        if (!selectedProvider && message.payload.length > 0) {
+                            const firstModel = message.payload[0];
+                            setSelectedProvider(firstModel.provider);
+                            setCurrentModelInput(firstModel.id); // Set initial model input value
+                            postMessage({ type: 'setModel', modelId: firstModel.id }); // Inform backend
+                        }
+                    }
+                    break;
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
 
         return () => {
-            window.removeEventListener('message', handleExtensionMessage);
+            window.removeEventListener('message', handleMessage);
         };
-    }, [handleExtensionMessage, selectedModel]); // Add selectedModel dependency
+    }, [messages, selectedProvider]); // Add selectedProvider dependency
 
+    // --- Event Handlers ---
+    const handleInputChange = (e: JSX.TargetedEvent<HTMLInputElement>) => {
+        setInputValue(e.currentTarget.value);
+    };
 
-    const handleSendMessage = () => {
-        const text = userInput.trim();
-        if (text) {
-            // Add user message locally
-            setMessages(prev => [...prev, { sender: 'user', text }]);
-            lastAssistantMessageRef.current = null; // Reset streaming ref
-
-            // Send to extension
-            vscode.postMessage({
-                type: 'sendMessage',
-                text: text
-            });
-            setUserInput(''); // Clear input
+    const handleSend = () => {
+        if (inputValue.trim() && !isStreaming && currentModelInput) { // Ensure model is selected/entered
+            const userMessage: Message = {
+                id: generateUniqueId(),
+                sender: 'user',
+                content: [{ type: 'text', text: inputValue }],
+                timestamp: Date.now()
+            };
+            setMessages(prev => [...prev, userMessage]);
+            // Send message with the currently selected/entered model ID
+            postMessage({ type: 'sendMessage', text: inputValue, modelId: currentModelInput });
+            setInputValue('');
+            setIsStreaming(true);
+            currentAssistantMessageId.current = null;
+        } else if (!currentModelInput) {
+             console.warn("Cannot send message: No model selected or entered.");
+             // Optionally show a UI warning
         }
     };
 
-    const handleModelChange = (event: Event) => {
-        const newModelId = (event.target as HTMLSelectElement).value;
-        setSelectedModel(newModelId);
-        // Notify the extension about the model change
-        vscode.postMessage({
-            type: 'setModel',
-            modelId: newModelId
-        });
-         console.log('Selected model:', newModelId); // Debug log
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
     };
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault();
-            handleSendMessage();
+    const handleProviderChange = (e: JSX.TargetedEvent<HTMLSelectElement>) => {
+        const newProvider = e.currentTarget.value as ApiProviderKey | '';
+        if (newProvider === '') {
+            setSelectedProvider(null);
+            setCurrentModelInput(''); // Clear model when provider is cleared
+        } else {
+            setSelectedProvider(newProvider);
+            // Optionally set a default model for the new provider or clear input
+            const defaultModel = availableModels.find(m => m.provider === newProvider);
+            const newModelId = defaultModel ? defaultModel.id : '';
+            setCurrentModelInput(newModelId);
+            if (newModelId) {
+                 postMessage({ type: 'setModel', modelId: newModelId }); // Inform backend
+            }
+        }
+    };
+
+    const handleModelInputChange = (e: JSX.TargetedEvent<HTMLInputElement>) => {
+        const newModelId = e.currentTarget.value;
+        setCurrentModelInput(newModelId); // Update the input field state
+
+        // Optional: Debounce this call if it causes performance issues
+        // Only inform backend if the model ID is likely valid or complete
+        // For simplicity, inform on every change for now.
+         postMessage({ type: 'setModel', modelId: newModelId });
+    };
+
+
+    // --- Rendering Helpers ---
+    const renderContentPart = (part: TextMessagePart | ToolCallPart | ToolResultPart, index: number) => {
+        switch (part.type) {
+            case 'text':
+                const htmlText = part.text.replace(/\n/g, '<br />');
+                return <span key={index} dangerouslySetInnerHTML={{ __html: htmlText }}></span>;
+            case 'tool-call':
+                let statusText = `[${part.toolName} ${part.progress ?? ''}... ]`;
+                if (part.status === 'complete') {
+                    let resultSummary = JSON.stringify(part.result);
+                    if (resultSummary?.length > 100) resultSummary = resultSummary.substring(0, 97) + '...';
+                    statusText = `[${part.toolName} completed. Result: ${resultSummary ?? 'OK'}]`; // Added nullish coalescing
+                } else if (part.status === 'error') {
+                    statusText = `[${part.toolName} failed. Error: ${part.result?.error ?? 'Unknown'}]`;
+                } else if (part.status === 'running') {
+                     statusText = `[${part.toolName} ${part.progress ?? ''} running... ]`;
+                }
+                return <span key={part.toolCallId || index} class="tool-call-summary">{statusText}</span>;
+            default:
+                return null;
         }
     };
 
     return (
-        <div id="app-container">
-            <h1>AI Coder</h1>
+        <div class="chat-container">
+            <div class="model-selector">
+                 {/* Provider Dropdown */}
+                 <label htmlFor="provider-select">Provider: </label>
+                 <select
+                     id="provider-select"
+                     value={selectedProvider ?? ''}
+                     onChange={handleProviderChange}
+                 >
+                     <option value="">-- Select Provider --</option>
+                     {uniqueProviders.map(provider => (
+                         <option key={provider} value={provider}>{provider}</option>
+                     ))}
+                 </select>
 
-            <div id="model-selection-area">
-                <label htmlFor="model-select">Select Model:</label>
-                <select id="model-select" value={selectedModel} onChange={handleModelChange}>
-                    {availableModels.map(model => (
-                        <option key={model.value} value={model.value}>
-                            {model.label}
-                        </option>
-                    ))}
-                </select>
+                 {/* Model Autocomplete Input */}
+                 <label htmlFor="model-input">Model: </label>
+                 <input
+                     list="models-datalist"
+                     id="model-input"
+                     name="model-input"
+                     value={currentModelInput}
+                     onInput={handleModelInputChange}
+                     placeholder={selectedProvider ? "Select or type model ID" : "Select provider first"}
+                     disabled={!selectedProvider} // Disable if no provider selected
+                 />
+                 <datalist id="models-datalist">
+                     {filteredModels.map(model => (
+                         <option key={model.id} value={model.id}>
+                             {model.label}
+                         </option>
+                     ))}
+                 </datalist>
             </div>
-
-            <div id="message-list" ref={messageListRef}>
-                {messages.map((msg, index) => (
-                    <div
-                        key={index}
-                        className={`message ${msg.sender === 'user' ? 'user-message' : 'assistant-message'}`}
-                        // Assign ref to the last assistant message for streaming updates
-                        ref={msg.sender === 'assistant' && index === messages.length - 1 ? lastAssistantMessageRef : null}
-                        // Use dangerouslySetInnerHTML for basic markdown/HTML rendering from assistant
-                        // Ensure proper sanitization happens *before* sending from extension if needed
-                        dangerouslySetInnerHTML={{ __html: msg.text.replace(/```([\s\S]*?)```/g, (match, code) => `<pre><code>${code.trim().replace(/</g, '<').replace(/>/g, '>')}</code></pre>`) }}
-                    >
-                        {/* Render simple text for user messages */}
-                        {/* {msg.sender === 'user' ? msg.text : null} */}
+            <div class="messages-area">
+                {messages.map((msg) => (
+                    <div key={msg.id} class={`message ${msg.sender}`}>
+                        <div class="message-content">
+                            {msg.content.map(renderContentPart)}
+                        </div>
                     </div>
                 ))}
+                {isStreaming && messages[messages.length - 1]?.sender === 'assistant' && (
+                     <div class="message assistant">
+                         <div class="message-content">
+                             <span>Thinking...</span> {/* Replace ProgressRing with simple text */}
+                         </div>
+                     </div>
+                 )}
+                <div ref={messagesEndRef} />
             </div>
-
-            {/* Tool Status Area */}
-            <div id="tool-status-area">
-                {Object.entries(toolStatuses).map(([id, status]) => (
-                    <div key={id} className={`tool-status status-${status.status}`}>
-                        <strong>Tool: {status.name}</strong> ({status.status})
-                        {status.message && `: ${status.message}`}
-                        {/* Add a button to clear status? */}
-                    </div>
-                ))}
-            </div>
-
-            <div id="input-area">
+            <div class="input-area">
                 <textarea
-                    id="user-input"
-                    placeholder="Enter your prompt..."
-                    value={userInput}
-                    onInput={(e) => setUserInput((e.target as HTMLTextAreaElement).value)}
+                    value={inputValue}
+                    onInput={(e) => setInputValue((e.target as HTMLTextAreaElement).value)}
                     onKeyDown={handleKeyDown}
+                    placeholder="Type your message..."
+                    rows={3}
+                    disabled={isStreaming || !currentModelInput} // Also disable if no model selected
                 />
-                <button id="send-button" onClick={handleSendMessage}>Send</button>
+                <button onClick={handleSend} disabled={isStreaming || !inputValue.trim() || !currentModelInput}>
+                    Send
+                </button>
             </div>
         </div>
     );
 }
+
+// Type definitions are now correctly placed at the top of the file.
