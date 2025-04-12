@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { CoreMessage } from 'ai'; // CORRECT: Single import
+import { CoreMessage } from 'ai'; // Single import
 import { AiService, ApiProviderKey } from './ai/aiService';
 import { providerMap } from './ai/providers';
 
@@ -19,7 +19,7 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage("Zen Coder failed to initialize. Please check logs or restart VS Code.");
         return;
     }
-    const provider = new ZenCoderChatViewProvider(context, aiServiceInstance); // Pass full context
+    const provider = new ZenCoderChatViewProvider(context, aiServiceInstance);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(ZenCoderChatViewProvider.viewType, provider)
     );
@@ -28,7 +28,7 @@ export async function activate(context: vscode.ExtensionContext) {
     aiServiceInstance.setPostMessageCallback((message: any) => {
         provider.postMessageToWebview(message);
     });
-    console.log('Removed all command registrations.'); // Kept log for consistency
+    console.log('Removed all command registrations.');
 }
 
 class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
@@ -39,7 +39,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     private _context: vscode.ExtensionContext;
     private _extensionUri: vscode.Uri;
     private _extensionMode: vscode.ExtensionMode;
-    private _chatHistory: CoreMessage[] = []; // CORRECT: Use CoreMessage type, single declaration
+    private _chatHistory: CoreMessage[] = []; // Correct type
 
     constructor(
         context: vscode.ExtensionContext,
@@ -59,8 +59,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     ) {
         this._view = webviewView;
         console.log("Resolving webview view...");
-
-        // CORRECT: Load history with validation/clearing
+        // Load history with validation
         try {
             const loadedHistory = this._context.globalState.get<any[]>('zenCoderChatHistory', []);
             if (loadedHistory.every(msg => msg && typeof msg.role === 'string' && msg.content !== undefined)) {
@@ -103,37 +102,30 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             switch (message.type) {
                 case 'sendMessage':
                     try {
-                        // CORRECT: Convert user message to CoreMessage format
                         const userCoreMessage: CoreMessage = { role: 'user', content: message.text };
-                        if (!Array.isArray(this._chatHistory)) {
-                             console.error("_chatHistory is not an array! Resetting.");
-                             this._chatHistory = [];
-                        }
+                        if (!Array.isArray(this._chatHistory)) { this._chatHistory = []; }
                         this._chatHistory.push(userCoreMessage);
                         await this._context.globalState.update('zenCoderChatHistory', this._chatHistory);
                         console.log(`Saved history after user message. Count: ${this._chatHistory.length}`);
 
                         if (!this._aiService.getCurrentModelId()) {
                             this.postMessageToWebview({ type: 'addMessage', sender: 'assistant', text: 'Please select a model first in the settings.' });
-                            // Remove the user message we just added if we can't proceed
-                            this._chatHistory.pop();
+                            this._chatHistory.pop(); // Remove invalid user message
                             await this._context.globalState.update('zenCoderChatHistory', this._chatHistory);
                             return;
                         }
 
-                        // CORRECT: Pass CoreMessage[] history
                         const streamResult = await this._aiService.getAiResponseStream(message.text, this._chatHistory);
                         if (!streamResult) {
                             console.log("getAiResponseStream returned null, likely handled error.");
-                            // Remove the user message we optimistically added if the stream fails immediately
-                            this._chatHistory.pop();
+                            this._chatHistory.pop(); // Remove user message if stream failed immediately
                             await this._context.globalState.update('zenCoderChatHistory', this._chatHistory);
                             return;
                         }
 
                         this.postMessageToWebview({ type: 'startAssistantMessage', sender: 'assistant' });
 
-                        // --- Stream Processing --- (Corrected access to stream)
+                        // --- Stream Processing ---
                         const reader = streamResult.stream.getReader();
                         const decoder = new TextDecoder();
                         let buffer = '';
@@ -146,7 +138,6 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                 if (done) break;
 
                                 buffer += decoder.decode(value, { stream: true });
-
                                 const lines = buffer.split('\n');
                                 buffer = lines.pop() ?? '';
 
@@ -157,7 +148,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                          const prefix = match[1];
                                          const contentData = match[2];
                                          try {
-                                             if (prefix >= '0' && prefix <= '7') {
+                                             if (prefix >= '0' && prefix <= '7') { // Text/Error Chunks
                                                  const part = JSON.parse(contentData);
                                                  if (typeof part === 'string') {
                                                      this.postMessageToWebview({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part });
@@ -171,17 +162,38 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                                                  if (part.toolCallId && part.toolName && part.args !== undefined) {
                                                      this.postMessageToWebview({ type: 'addToolCall', payload: { toolCallId: part.toolCallId, toolName: part.toolName, args: part.args } });
                                                  }
-                                             } else if (prefix === 'a') { // Tool Result
+                                             } else if (prefix === 'a') { // Tool Result (from SDK internal processing)
                                                  const part = JSON.parse(contentData);
-                                                 if (part.toolCallId && part.result !== undefined) {
-                                                     // TODO: Need to add tool result to history here before sending to AI
-                                                     this.postMessageToWebview({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, status: 'complete', message: part.result });
-                                                 }
-                                             } else if (prefix === 'd') { // Data/Annotations
+                                                 if (part.toolCallId && part.result !== undefined && part.toolName) { // Ensure toolName is present
+                                                     // Send UI update
+                                                     this.postMessageToWebview({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, status: 'complete', message: part.result, toolName: part.toolName });
+                                                     // Add tool result to history
+                                                     const toolResultMessage: CoreMessage = {
+                                                         role: 'tool',
+                                                         content: [{ type: 'tool-result', toolCallId: part.toolCallId, toolName: part.toolName, result: part.result }]
+                                                     };
+                                                     if (!Array.isArray(this._chatHistory)) { this._chatHistory = []; }
+                                                     this._chatHistory.push(toolResultMessage);
+                                                     await this._context.globalState.update('zenCoderChatHistory', this._chatHistory);
+                                                     console.log(`Saved history after tool result for ${part.toolName}. Count: ${this._chatHistory.length}`);
+                                                 } else { console.warn("Received tool result ('a') without complete data:", part); }
+                                             } else if (prefix === 'd') { // Data/Annotations (e.g., custom tool progress/completion)
                                                   const part = JSON.parse(contentData);
                                                   if (part.type === 'message-annotation') {
                                                       const statusMessage = (typeof part.message === 'string') ? part.message : undefined;
+                                                      // Send UI update
                                                       this.postMessageToWebview({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, toolName: part.toolName, status: part.status, message: statusMessage });
+                                                      // Also save tool result history when receiving annotation completion
+                                                      if (part.status === 'complete' && part.toolCallId && part.toolName) {
+                                                           const toolResultMessage: CoreMessage = {
+                                                               role: 'tool',
+                                                               content: [{ type: 'tool-result', toolCallId: part.toolCallId, toolName: part.toolName, result: statusMessage ?? 'Completed' }] // Use statusMessage or default
+                                                           };
+                                                           if (!Array.isArray(this._chatHistory)) { this._chatHistory = []; }
+                                                           this._chatHistory.push(toolResultMessage);
+                                                           await this._context.globalState.update('zenCoderChatHistory', this._chatHistory);
+                                                           console.log(`Saved history after tool annotation result for ${part.toolName}. Count: ${this._chatHistory.length}`);
+                                                      }
                                                   } else if (part.type === 'error') { vscode.window.showErrorMessage(`Stream Error: ${part.error}`); this.postMessageToWebview({ type: 'addMessage', sender: 'assistant', text: `Sorry, a stream error occurred: ${part.error}` }); }
                                              } else if (prefix === 'e') { // Events/Errors
                                                   const part = JSON.parse(contentData);
@@ -201,19 +213,17 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         console.log("[Extension] Stream processing loop finished.");
                         this.postMessageToWebview({ type: 'streamFinished' });
 
-                        // CORRECT: Await final message and save history
                         const finalAssistantMessage = await streamResult.finalMessagePromise;
                         if (finalAssistantMessage) {
-                             if (!Array.isArray(this._chatHistory)) {
-                                 console.error("_chatHistory is not an array before saving assistant message! Resetting.");
-                                 this._chatHistory = [];
-                             }
+                             if (!Array.isArray(this._chatHistory)) { this._chatHistory = []; }
                             this._chatHistory.push(finalAssistantMessage);
-                            // TODO: Add tool results processing here if needed before saving
+                            // Save history *after* assistant message is finalized
                             await this._context.globalState.update('zenCoderChatHistory', this._chatHistory);
                             console.log(`Saved history after assistant message. Count: ${this._chatHistory.length}`);
                         } else {
                             console.warn("[Extension] No final assistant message object received from AiService promise.");
+                            // Save history even if assistant didn't respond (e.g., only tool calls happened)
+                            await this._context.globalState.update('zenCoderChatHistory', this._chatHistory);
                         }
 
                     } catch (error: any) {
@@ -235,7 +245,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         const models = await this._aiService.resolveAvailableModels();
                         this.postMessageToWebview({ type: 'availableModels', payload: models });
                         console.log("[Extension] Sent available models to webview.");
-                        // CORRECT: Send loaded history
+                        // Send loaded history
                         this.postMessageToWebview({ type: 'loadHistory', payload: Array.isArray(this._chatHistory) ? this._chatHistory : [] });
                         console.log("[Extension] Sent loaded history to webview.");
                         const statusList = await this._aiService.getProviderStatus();
@@ -245,11 +255,12 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                          console.error("[Extension] Error fetching initial state for webview:", error);
                          vscode.window.showErrorMessage(`Error fetching initial state: ${error.message}`);
                          this.postMessageToWebview({ type: 'availableModels', payload: [] });
-                         this.postMessageToWebview({ type: 'providerStatus', payload: [] }); // Send empty array for status
-                         this.postMessageToWebview({ type: 'loadHistory', payload: [] }); // Send empty history on error
+                         this.postMessageToWebview({ type: 'providerStatus', payload: [] });
+                         this.postMessageToWebview({ type: 'loadHistory', payload: [] });
                     }
                     break;
-                case 'setModel':
+                // ... (other cases remain the same) ...
+                 case 'setModel':
                     if (typeof message.modelId === 'string') {
                         this._aiService.setModel(message.modelId as any); // Cast might be needed
                         console.log(`Model changed to: ${message.modelId}`);

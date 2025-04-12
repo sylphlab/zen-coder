@@ -1,11 +1,12 @@
 # Active Context
 
 ## Current Focus
-Commit removal of deprecated dependency and prepare for next task (e.g., address TODOs).
+Commit removal of deprecated dependency and prepare for next task (Address TODO for saving tool results).
 
 ## Recent Changes
 - **Removed Deprecated Dependency:** Removed `@vscode/webview-ui-toolkit` from root `package.json`.
 - **Applied UnoCSS Styling:** Added utility classes to `App.tsx` (layout, chat elements) and `SettingPage.tsx` for basic styling and dark mode support. Fixed related JSX errors.
+- **Added Tool Result History Saving:** Modified `extension.ts` stream processing to create and save `role: 'tool'` messages to history when tool results are received.
 - **Fixed History Format Error:** Corrected `_chatHistory` type in `extension.ts` to `CoreMessage[]` and ensured user messages are converted to the correct format before being added, resolving `AI_InvalidPromptError`.
 - **Fixed UI Infinite Loop:** Adjusted `useEffect` dependencies and removed automatic model re-fetch on status update in `App.tsx` to prevent loop.
 - **Implemented Chat History Persistence:**
@@ -124,6 +125,7 @@ Commit removal of deprecated dependency and prepare for next task (e.g., address
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
 - **UI Styled:** Applied basic UnoCSS styling to Chat and Settings pages. Fixed JSX errors caused by diff application.
+- **Tool Results Saved to History:** Added logic in `extension.ts` to persist `role: 'tool'` messages.
 - **History Format Corrected:** Ensured `_chatHistory` in `extension.ts` uses `CoreMessage` format, fixing SDK errors.
 - **UI Loop Fixed:** Changed `useEffect` dependencies in `App.tsx` to prevent infinite state requests.
 - **Chat History Persists:** History is loaded from and saved to global state by the extension host.
