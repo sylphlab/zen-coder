@@ -1,11 +1,17 @@
 # Active Context
 
 ## Current Focus
-Verifying fix for blank webview in development mode by relaxing CSP.
+Implementing routing with `wouter` for Chat and Settings pages in the webview UI.
 
 ## Recent Changes
-- **Relaxed Development CSP:**
-    - Added `'unsafe-eval'` to the `script-src` directive in the development mode Content Security Policy within `src/extension.ts` (`getWebviewContent`). This is to test if Vite's HMR script execution was being blocked, potentially causing the blank webview.
+- **Implemented Routing:**
+    - Installed `wouter`.
+    - Created `SettingPage.tsx` and `ChatPage.tsx` components in `webview-ui/src/pages/`.
+    - Updated `webview-ui/src/app.tsx` to use `wouter`'s `Router`, `Route`, and `Link` components to handle navigation between the Chat (`/`) and Settings (`/settings`) views.
+    - Replaced the settings modal with the `/settings` route.
+    - Updated `showSettings` message handler to navigate to `/settings`.
+- **Relaxed Development CSP:** (Previous change)
+    - Added `'unsafe-eval'` to the `script-src` directive in the development mode Content Security Policy within `src/extension.ts` (`getWebviewContent`). This was to test if Vite's HMR script execution was being blocked.
 - **Fixed Vite Port File Path:**
     - Corrected the path used in `src/extension.ts` (`getWebviewContent`) to read the `.vite.port` file from the project root directory.
 - **Fixed `package.json` Inconsistency:**
@@ -29,15 +35,16 @@ Verifying fix for blank webview in development mode by relaxing CSP.
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Verify if relaxing the development CSP resolves the blank webview issue.
-- **Previous:** Verify the fix for the Vite port file path.
+- **Current Task:** Verify routing implementation and ensure both Chat and Settings pages render correctly.
+- **Previous:** Implement routing with `wouter`.
 - **Future:** Implement API/Web scraping for `resolveAvailableModels`.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
-- **Relaxed Dev CSP:** Added `'unsafe-eval'` to `script-src` for testing HMR compatibility.
+- **Routing Implemented:** Added `wouter` and page components.
+- **Relaxed Dev CSP:** Added `'unsafe-eval'` to `script-src` for testing HMR compatibility (Previous).
 - **Fixed Vite Port File Path:** Corrected path in `src/extension.ts`.
 - **Fixed "No data provider registered" Error:** Resolved by correcting `package.json`.
 - **Fixed Vite 504 Error (Chat UI):** (Resolved previously)
@@ -55,9 +62,9 @@ Verifying fix for blank webview in development mode by relaxing CSP.
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
-- Merged Settings UI into the main Chat Webview.
-- Refactored activation to use `WebviewViewProvider`.
-- Implemented Vite port discovery.
-- Corrected `package.json` contributions.
-- Corrected Vite port file path.
-- Relaxed development CSP for testing.
+- Replaced Settings modal with a dedicated `/settings` route using `wouter`.
+- Refactored activation to use `WebviewViewProvider`. (Previous)
+- Implemented Vite port discovery. (Previous)
+- Corrected `package.json` contributions. (Previous)
+- Corrected Vite port file path. (Previous)
+- Relaxed development CSP for testing. (Previous)

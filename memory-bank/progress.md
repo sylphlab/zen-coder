@@ -26,7 +26,7 @@
 - Corrected `streamText` Usage.
 - `uuidGenerateTool` updated with progress callback.
 - UI Tool Display refined (inline, human-readable summaries, progress).
-- Merged Settings UI into Chat Webview.
+- **Routing Implemented:** Added `wouter` for navigation between Chat (`/`) and Settings (`/settings`) pages. Created basic `SettingPage.tsx` and `ChatPage.tsx`. Replaced settings modal with the `/settings` route.
 - **Vite Port Discovery Implemented & Fixed:** Extension now reads the actual Vite dev server port from the correct file path (`.vite.port` in the project root) during development, ensuring reliable HMR connection even if the default port changes.
 - **`package.json` Corrected:** Contributions (`activationEvents`, `views`) updated and obsolete sections (`menus`, `commands`) removed to align with `WebviewViewProvider` implementation, resolving the "No data provider registered" error.
 - **Development CSP Relaxed (Testing):** Added `'unsafe-eval'` to `script-src` in development mode CSP to test HMR compatibility.
@@ -45,7 +45,7 @@
 ## Current Status
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
 - **Tool Execution:** Tools execute and return results to the AI.
-- **Settings Integration:** Settings UI integrated into the main chat webview via a modal.
+- **Settings Integration:** Settings UI is now a separate page accessible via the `/settings` route.
 - **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
 - **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from the correct file path.
 - **View Provider Registration:** Corrected `package.json` ensures the `WebviewViewProvider` is properly registered.
@@ -60,4 +60,5 @@
 - Model resolver logic (fetching available models dynamically) is not yet implemented.
 - Chat UI model selection persistence is not yet implemented.
 - API Key management needs reimplementation (e.g., via VS Code settings or webview input).
-- **Blank Webview (Development):** Still investigating the cause of the blank webview in development mode, currently testing relaxed CSP.
+- **Blank Webview (Development):** Still investigating the cause of the blank webview in development mode, currently testing relaxed CSP. (Previous issue)
+- **Routing CSS:** Basic navigation links added, but styling (`.app-layout`, `.navigation`, `.content-area`) needs to be implemented in `app.css`.
