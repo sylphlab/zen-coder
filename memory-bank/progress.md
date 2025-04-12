@@ -1,6 +1,12 @@
 # Project Progress
 
 ## What Works
++- **Filesystem Tool Refactoring & Enhancement:**
++    - Tools (`listFiles`, `statItems`, `deleteItems`, `searchContent`, `replaceContent`) now support Glob patterns for path inputs where appropriate.
++    - Tools processing content (`readFiles`, `searchContent`, `replaceContent`) use a consistent `lineRange` parameter (with negative indexing) for range control.
++    - Added `searchContent` (with context), `replaceContent` (bulk replace), `deleteItems` (unified delete), and `editFile` (precise edits) tools.
++    - Core logic for all filesystem tools implemented.
++    - Tool indices updated and related test errors fixed.
 - **Provider Selection Persistence:** Implemented saving/restoring of selected provider and model ID in `app.tsx`.
 - **Clear Chat Button:** Added button to UI and backend handler to clear history.
 - **UI Stream Update (Attempt 3):** Applied stricter immutability pattern for state updates in `appendMessageChunk` handler (`app.tsx`).

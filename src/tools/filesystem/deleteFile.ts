@@ -4,24 +4,45 @@ import * as vscode from 'vscode';
 import { Uri } from 'vscode';
 import path from 'path';
 
+// Define schema for the result of a single file deletion operation
+const deleteFileResultSchema = z.object({
+  path: z.string(),
+  success: z.boolean(),
+  message: z.string().optional(),
+  error: z.string().optional(),
+});
+
 export const deleteFileTool = tool({
-  description: 'Delete a file at the specified path within the workspace. Use relative paths from the workspace root. This action is irreversible.',
+  description: 'Delete one or more files at the specified paths within the workspace. Use relative paths from the workspace root.',
   parameters: z.object({
-    filePath: z.string().describe('The relative path to the file to delete within the workspace.'),
-    useTrash: z.boolean().optional().default(true).describe('If true (default), move the file to the trash/recycle bin. If false, delete permanently.'),
+    filePaths: z.array(z.string()).min(1).describe('An array of relative paths to the files to delete within the workspace.'),
+    useTrash: z.boolean().optional().default(true).describe('If true (default), move the files to the trash/recycle bin. If false, delete permanently.'),
   }),
   // Modify execute signature
-  execute: async ({ filePath, useTrash = true }, { data, toolCallId }: { data?: StreamData, toolCallId?: string }) => {
+  execute: async ({ filePaths, useTrash = true }, { data, toolCallId }: { data?: StreamData, toolCallId?: string }) => {
+    const results: z.infer<typeof deleteFileResultSchema>[] = [];
     const deleteType = useTrash ? 'Moving to trash' : 'Permanently deleting';
+
+    if (!vscode.workspace.workspaceFolders) {
+      // Return a general error if no workspace is open, affecting all files
+      return { success: false, error: 'No workspace is open.', results: [] };
+    }
+    const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
+
     // Send initial status
     if (data && toolCallId) {
-        data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'deleteFileTool', status: 'processing', message: `${deleteType} file: ${filePath}` });
+        data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'deleteFileTool', status: 'processing', message: `${deleteType} ${filePaths.length} file(s)...` });
     }
-    try {
-      if (!vscode.workspace.workspaceFolders) {
-        throw new Error('No workspace is open.');
-      }
-      const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
+
+    for (const filePath of filePaths) {
+        let fileResult: z.infer<typeof deleteFileResultSchema> = { path: filePath, success: false };
+
+        // Send status update for the current file
+        if (data && toolCallId) {
+            data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'deleteFileTool', status: 'processing', message: `${deleteType} file: ${filePath}` });
+        }
+        try {
+          // Workspace check moved outside the loop
 
       // Ensure the path is relative and within the workspace
       const absolutePath = path.resolve(workspaceUri.fsPath, filePath);
@@ -50,7 +71,10 @@ export const deleteFileTool = tool({
         if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
           // If it doesn't exist, consider it successfully "deleted" or handle as error?
           // Let's return success as the state matches the desired outcome.
-           return { success: true, message: `File '${filePath}' does not exist.` };
+           fileResult = { success: true, path: filePath, message: `File '${filePath}' does not exist.` };
+           // Skip to next file in loop if it doesn't exist
+           results.push(fileResult);
+           continue;
            // Alternatively: throw new Error(`File not found at path '${filePath}'.`);
         }
         throw error; // Re-throw other stat errors
@@ -59,23 +83,45 @@ export const deleteFileTool = tool({
       // Delete the file (non-recursive, fails if it's a directory)
       await vscode.workspace.fs.delete(fileUri, { useTrash: useTrash, recursive: false }); // Pass useTrash option, ensure recursive is false for files
 
-      return { success: true, message: `File '${filePath}' ${useTrash ? 'moved to trash' : 'deleted permanently'} successfully.` };
+      fileResult = { success: true, path: filePath, message: `File '${filePath}' ${useTrash ? 'moved to trash' : 'deleted permanently'} successfully.` };
 
-    } catch (error: any) {
-      let errorMessage = `Failed to delete file '${filePath}'.`;
-       if (error.message.includes('Access denied') || error.message.includes('not allowed') || error.message.includes('not a file')) {
-          errorMessage = error.message; // Use the specific error message
-      } else if (error instanceof Error) {
-        errorMessage += ` Reason: ${error.message}`;
-      } else {
-        errorMessage += ` Unknown error: ${String(error)}`;
-      }
-      console.error(`deleteFileTool Error: ${error}`);
-      // Send error status via stream if possible
-      if (data && toolCallId) {
-          data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'deleteFileTool', status: 'error', message: errorMessage });
-      }
-      return { success: false, error: errorMessage };
+        } catch (error: any) {
+          let errorMessage = `Failed to delete file '${filePath}'.`;
+           if (error.message.includes('Access denied') || error.message.includes('not allowed') || error.message.includes('not a file')) {
+              errorMessage = error.message; // Use the specific error message
+          } else if (error instanceof Error) {
+            errorMessage += ` Reason: ${error.message}`;
+          } else {
+            errorMessage += ` Unknown error: ${String(error)}`;
+          }
+          console.error(`deleteFileTool Error for ${filePath}: ${error}`);
+          // Send error status via stream if possible
+          if (data && toolCallId) {
+              data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'deleteFileTool', status: 'error', message: errorMessage });
+          }
+          fileResult = { success: false, path: filePath, error: errorMessage };
+        }
+        results.push(fileResult);
+    } // End loop
+
+    // Send final status
+    const successfulDeletes = results.filter(r => r.success).length;
+    const finalMessage = `Processed ${filePaths.length} file deletion requests. Successful: ${successfulDeletes}.`;
+    if (data && toolCallId) {
+        data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'deleteFileTool', status: 'complete', message: finalMessage });
     }
+
+     // Validate results array before returning
+    const validationResult = z.array(deleteFileResultSchema).safeParse(results);
+    if (!validationResult.success) {
+        console.error("deleteFileTool validation error:", validationResult.error);
+        // Return a general error if validation fails
+        return { success: false, error: "Internal error: Failed to format delete file results.", results: [] };
+    }
+
+    // Determine overall success (e.g., if at least one delete succeeded or file didn't exist)
+    const overallSuccess = results.some(r => r.success);
+
+    return { success: overallSuccess, results: validationResult.data };
   },
 });

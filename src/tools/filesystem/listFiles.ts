@@ -14,35 +14,44 @@ const fileStatSchema = z.object({
 });
 
 export const listFilesTool = tool({
-  description: 'List files and directories within a specified path in the workspace, including basic stats (type, size, mtime). Use relative paths from the workspace root. Defaults to listing the workspace root if no path is provided.',
+  description: 'List files and directories within one or more specified paths in the workspace. Use relative paths. Can list recursively and optionally include stats.',
   parameters: z.object({
-    dirPath: z.string().optional().default('.').describe('The relative path to the directory within the workspace. Defaults to the workspace root.'),
-    recursive: z.boolean().optional().default(false).describe('Whether to list files recursively.'),
+    paths: z.array(z.string()).min(1).describe('An array of relative directory paths within the workspace.'),
+    recursive: z.boolean().optional().default(false).describe('Whether to list files recursively for each path.'),
     maxDepth: z.number().int().positive().optional().default(5).describe('Maximum recursion depth if recursive is true. Defaults to 5.'),
+    includeStats: z.boolean().optional().default(true).describe('Whether to include file status information (type, size, mtime) in the result. Defaults to true.'),
   }),
   // Modify execute signature to accept context including StreamData and toolCallId
-  execute: async ({ dirPath = '.', recursive = false, maxDepth = 5 }, { data, toolCallId }: { data?: StreamData, toolCallId?: string }) => {
-    try {
-      if (!vscode.workspace.workspaceFolders) {
-        throw new Error('No workspace is open.');
-      }
-      const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
+  execute: async ({ paths, recursive = false, maxDepth = 5, includeStats = true }, { data, toolCallId }: { data?: StreamData, toolCallId?: string }) => {
+    const resultsByPath: { [key: string]: { success: boolean; entries?: z.infer<typeof fileStatSchema>[]; error?: string } } = {};
 
-      // Ensure the path is relative and within the workspace
-      const absolutePath = path.resolve(workspaceUri.fsPath, dirPath);
-      if (!absolutePath.startsWith(workspaceUri.fsPath)) {
-          throw new Error(`Access denied: Path '${dirPath}' is outside the workspace.`);
-      }
+    if (!vscode.workspace.workspaceFolders) {
+      return { success: false, error: 'No workspace is open.', results: {} };
+    }
+    const workspaceUri = vscode.workspace.workspaceFolders[0].uri;
 
-      const directoryUri = Uri.joinPath(workspaceUri, dirPath);
+    // Send initial status
+    if (data && toolCallId) {
+        data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'listFilesTool', status: 'processing', message: `Starting listing for ${paths.length} path(s)... (Recursive: ${recursive}, Stats: ${includeStats})` });
+    }
 
-      // Send initial status
-      if (data && toolCallId) {
-          data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'listFilesTool', status: 'processing', message: `Starting listing for: ${dirPath} (Recursive: ${recursive}, Max Depth: ${maxDepth})` });
-      }
+    for (const dirPath of paths) {
+        try {
+            // Ensure the path is relative and within the workspace for each path
+            const absolutePath = path.resolve(workspaceUri.fsPath, dirPath);
+            if (!absolutePath.startsWith(workspaceUri.fsPath)) {
+                throw new Error(`Access denied: Path '${dirPath}' is outside the workspace.`);
+            }
 
-      const allEntries: z.infer<typeof fileStatSchema>[] = [];
-      let totalProcessed = 0;
+            const directoryUri = Uri.joinPath(workspaceUri, dirPath);
+
+            // Send status update for the current path
+            if (data && toolCallId) {
+                data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'listFilesTool', status: 'processing', message: `Listing path: ${dirPath}` });
+            }
+
+            const pathEntries: z.infer<typeof fileStatSchema>[] = [];
+            let pathProcessed = 0;
 
       // Recursive function to list directory contents
       const listDirRecursive = async (currentUri: Uri, currentRelativePath: string, currentDepth: number) => {
@@ -72,32 +81,50 @@ export const listFilesTool = tool({
               let size: number | undefined = undefined;
               let mtime: number | undefined = undefined;
 
-              try {
-                  const stat = await vscode.workspace.fs.stat(entryUri);
-                  switch (stat.type) {
-                      case FileType.File: fileTypeString = 'file'; size = stat.size; break;
-                      case FileType.Directory: fileTypeString = 'directory'; break;
-                      case FileType.SymbolicLink: fileTypeString = 'symbolic_link'; break;
-                      default: fileTypeString = 'unknown';
+              if (includeStats) {
+                  try {
+                      const stat = await vscode.workspace.fs.stat(entryUri);
+                      switch (stat.type) {
+                          case FileType.File: fileTypeString = 'file'; size = stat.size; break;
+                          case FileType.Directory: fileTypeString = 'directory'; break;
+                          case FileType.SymbolicLink: fileTypeString = 'symbolic_link'; break;
+                          default: fileTypeString = 'unknown';
+                      }
+                      mtime = stat.mtime;
+                  } catch (statError) {
+                      console.error(`listFilesTool: Could not stat ${entryRelativePath}: ${statError}`);
+                      // Fallback type determination if stat fails but readDirectory succeeded
+                      switch (type) {
+                          case FileType.File: fileTypeString = 'file'; break;
+                          case FileType.Directory: fileTypeString = 'directory'; break;
+                          case FileType.SymbolicLink: fileTypeString = 'symbolic_link'; break;
+                          default: fileTypeString = 'unknown';
+                      }
                   }
-                  mtime = stat.mtime;
-              } catch (statError) {
-                  console.error(`listFilesTool: Could not stat ${entryRelativePath}: ${statError}`);
-                  switch (type) { // Fallback
-                      case FileType.File: fileTypeString = 'file'; break;
-                      case FileType.Directory: fileTypeString = 'directory'; break;
-                      case FileType.SymbolicLink: fileTypeString = 'symbolic_link'; break;
-                      default: fileTypeString = 'unknown';
-                  }
+              } else {
+                   // Determine type without stat if stats are not included
+                   switch (type) {
+                       case FileType.File: fileTypeString = 'file'; break;
+                       case FileType.Directory: fileTypeString = 'directory'; break;
+                       case FileType.SymbolicLink: fileTypeString = 'symbolic_link'; break;
+                       default: fileTypeString = 'unknown';
+                   }
               }
 
               // Add the entry using the calculated relative path
-              allEntries.push({ name: entryRelativePath, type: fileTypeString, size, mtime });
-              totalProcessed++;
+              // Add the entry using the calculated relative path
+              const entryData: z.infer<typeof fileStatSchema> = {
+                  name: entryRelativePath, // Use relative path as name for uniqueness across recursive calls
+                  type: fileTypeString,
+                  ...(includeStats && { size: size }), // Conditionally include size
+                  ...(includeStats && { mtime: mtime }), // Conditionally include mtime
+              };
+              pathEntries.push(entryData);
+              pathProcessed++;
 
-              // Send progress update periodically
-              if (totalProcessed % 50 === 0 && data && toolCallId) {
-                  data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'listFilesTool', status: 'processing', message: `Processed ${totalProcessed} entries...` });
+              // Send progress update periodically for the current path
+              if (pathProcessed % 50 === 0 && data && toolCallId) {
+                  data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'listFilesTool', status: 'processing', message: `Path ${dirPath}: Processed ${pathProcessed} entries...` });
               }
 
               // Recurse if it's a directory and recursive flag is set
@@ -108,23 +135,24 @@ export const listFilesTool = tool({
       };
 
       // Start the recursive listing from the initial directory URI and relative path
-      await listDirRecursive(directoryUri, dirPath === '.' ? '' : dirPath, 1);
+            // Start the recursive listing for the current path
+            await listDirRecursive(directoryUri, dirPath === '.' ? '' : dirPath, 1);
 
-      // Send final count status
-      if (data && toolCallId) {
-          data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'listFilesTool', status: 'processing', message: `Finished processing. Found ${allEntries.length} total entries.` });
-      }
+            // Validate the output for the current path
+            const validationResult = z.array(fileStatSchema).safeParse(pathEntries);
+            if (!validationResult.success) {
+                console.error(`listFilesTool validation error for path ${dirPath}:`, validationResult.error);
+                throw new Error(`Internal error: Failed to format directory listing for path ${dirPath}.`);
+            }
 
-      // Validate the output against the schema before returning
-      const validationResult = z.array(fileStatSchema).safeParse(allEntries);
-      if (!validationResult.success) {
-          console.error("listFilesTool validation error:", validationResult.error);
-          throw new Error("Internal error: Failed to format directory listing.");
-      }
+            resultsByPath[dirPath] = { success: true, entries: validationResult.data };
 
-      return { success: true, entries: validationResult.data };
+             // Send path completion status
+            if (data && toolCallId) {
+                data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'listFilesTool', status: 'processing', message: `Path ${dirPath}: Finished. Found ${pathEntries.length} entries.` });
+            }
 
-    } catch (error: any) {
+        } catch (error: any) {
       let errorMessage = `Failed to list files in '${dirPath}'.`;
        if (error instanceof vscode.FileSystemError && error.code === 'FileNotFound') {
         errorMessage = `Error: Directory not found at path '${dirPath}'.`;
@@ -135,8 +163,25 @@ export const listFilesTool = tool({
       } else {
         errorMessage += ` Unknown error: ${String(error)}`;
       }
-      console.error(`listFilesTool Error: ${error}`);
-      return { success: false, error: errorMessage };
+            console.error(`listFilesTool Error for path ${dirPath}: ${error}`);
+            resultsByPath[dirPath] = { success: false, error: errorMessage };
+             // Send path error status
+            if (data && toolCallId) {
+                data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'listFilesTool', status: 'error', message: `Error listing path ${dirPath}: ${errorMessage}` });
+            }
+        }
+    } // End loop over paths
+
+    // Send final overall status
+    const successfulPaths = Object.values(resultsByPath).filter(r => r.success).length;
+    const finalMessage = `Finished listing ${successfulPaths}/${paths.length} paths.`;
+     if (data && toolCallId) {
+        data.appendMessageAnnotation({ type: 'tool-status', toolCallId, toolName: 'listFilesTool', status: 'complete', message: finalMessage });
     }
+
+    // Determine overall success (e.g., if at least one path succeeded)
+    const overallSuccess = Object.values(resultsByPath).some(r => r.success);
+
+    return { success: overallSuccess, results: resultsByPath };
   },
 });
