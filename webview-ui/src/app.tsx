@@ -313,6 +313,13 @@ export function App() {
                 case 'showSettings': // Handle command from extension to show settings page
                     setLocation('/settings');
                     break;
+                case 'loadHistory': // Handle receiving history from extension
+                    if (Array.isArray(message.payload)) {
+                        console.log(`Loading ${message.payload.length} messages from history.`);
+                        // TODO: Define a proper type for history messages if different from Message
+                        setMessages(message.payload as Message[]);
+                    }
+                    break;
                 case 'streamFinished': // Handle explicit stream end signal
                     console.log("Stream finished.");
                     setIsStreaming(false);

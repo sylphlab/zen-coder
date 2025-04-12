@@ -1,6 +1,7 @@
 # Project Progress
 
 ## What Works
+- **Chat History Persistence:** History is now loaded from and saved to `context.globalState` by the extension host. Assistant responses are captured via promise resolution after stream completion.
 - **Model Selection Persistence:** Last selected model ID is now saved/restored using webview state API (`vscode.getState`/`setState`).
 - **Stream End Handling Fixed:** Backend now sends an explicit `streamFinished` message, and the UI handles it to reliably stop the streaming indicator.
 - **Nanostores Added:** Installed `nanostores` and `@nanostores/preact`. Ready for state management.
@@ -41,7 +42,7 @@
 - **Development CSP Relaxed (Testing):** Added `'unsafe-eval'` to `script-src` in development mode CSP to test HMR compatibility.
 
 ## What's Left (Potential Future Enhancements)
-- Implement conversation history persistence (Next).
+- Thorough testing and debugging of core chat and tool execution.
 - Thorough testing and debugging of core chat and tool execution.
 - Remove unused `@vscode/webview-ui-toolkit` dependency.
 - Implement actual MCP client integration for tools like `search` (currently placeholder/disabled).
@@ -55,6 +56,7 @@
 - Define and use Nanostores stores for managing shared state (e.g., settings, chat history).
 
 ## Current Status
+- **History Persistence:** Chat history is saved to global state and loaded on webview init.
 - **Model Selection:** Selection persists across webview reloads.
 - **Stream Handling:** Explicit end-of-stream signaling implemented between backend and frontend.
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
@@ -70,7 +72,7 @@
 ## Known Issues
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
 - Search tool functionality relies on the external `search_files` tool (requires environment support).
-- Conversation history is not persisted.
+- `@vscode/webview-ui-toolkit` dependency is unused but still listed.
 - **AI Response Behavior:** AI models might not always explicitly list tool results (e.g., all generated UUIDs) in their text response, even though they receive the results. This depends on the model and prompt.
 - Custom tool execution status updates (beyond the inline display) are currently disabled.
 - Model resolver logic now iterates through all enabled providers using their `getAvailableModels` method. Dynamic fetching is implemented only for OpenRouter currently; others use hardcoded lists within their modules.

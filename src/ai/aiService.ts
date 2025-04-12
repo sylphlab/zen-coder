@@ -182,7 +182,8 @@ export class AiService {
     }
 
     // --- Core AI Interaction ---
-    public async getAiResponseStream(prompt: string): Promise<ReadableStream | null> {
+    // Return type changed to include a promise for the final message
+    public async getAiResponseStream(prompt: string, history: CoreMessage[] = []): Promise<{ stream: ReadableStream; finalMessagePromise: Promise<CoreMessage | null> } | null> {
         // Get model instance asynchronously
         const modelInstance = await this._getProviderInstance(); // Added await
 
@@ -195,7 +196,10 @@ export class AiService {
             return null;
         }
 
-        this.conversationHistory.push({ role: 'user', content: prompt });
+        // Use the passed history, add the new user prompt
+        const messagesForApi: CoreMessage[] = [...history, { role: 'user', content: prompt }];
+        // Note: We are not updating this.conversationHistory here anymore,
+        // the extension host will manage the canonical history.
 
         const activeToolNames = this._getActiveToolNames();
         const activeTools: Record<string, Tool<any, any>> = {};
@@ -268,19 +272,36 @@ export class AiService {
 
         // --- Call streamText ---
         try {
-            const result = await streamText({
+            // Promise setup to capture the final message
+            let resolveFinalMessagePromise: (value: CoreMessage | null) => void;
+            const finalMessagePromise = new Promise<CoreMessage | null>((resolve) => {
+                resolveFinalMessagePromise = resolve;
+            });
+
+            // Call streamText ONCE, configuring the onFinish callback
+            const streamTextResult = await streamText({
                 model: modelInstance,
-                messages: this.conversationHistory,
+                messages: messagesForApi, // Pass the constructed messages array
                 tools: activeTools, // Pass the map containing original and wrapped tools
                 maxSteps: 5, // Adjust as needed
                 onFinish: async (event) => {
-                    if (event.finishReason === 'stop' || event.finishReason === 'tool-calls') {
-                        this.addAssistantResponseToHistory(event.text ?? '');
-                        event.toolCalls?.forEach((tc) => this.addToolCallToHistory(tc));
-                        // Handle toolResults if they exist (might not for callback tools)
-                        event.toolResults?.forEach((tr) => this.addToolResultToHistory(tr));
+                    // Construct the final message object based on the event
+                    const assistantContent: (ToolCallPart | { type: 'text'; text: string })[] = [];
+                    if (event.text) {
+                        assistantContent.push({ type: 'text', text: event.text });
                     }
-                    console.log("Stream finished.");
+                    if (event.toolCalls) {
+                        assistantContent.push(...event.toolCalls);
+                    }
+                    // Note: Tool results are handled in separate 'tool' role messages
+
+                    let finalAssistantMessage: CoreMessage | null = null;
+                    if (assistantContent.length > 0) {
+                         finalAssistantMessage = { role: 'assistant', content: assistantContent };
+                    }
+
+                    console.log("[AiService] Stream finished processing. Final assistant message:", finalAssistantMessage);
+                    resolveFinalMessagePromise(finalAssistantMessage); // Resolve the promise with the final message
                 },
                 experimental_repairToolCall: async ({ toolCall, error, messages, system }) => {
                     console.warn(`Attempting to repair tool call for ${toolCall.toolName} due to error: ${error.message}`);
@@ -291,12 +312,12 @@ export class AiService {
                                 { role: 'assistant', content: [{ type: 'tool-call', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: toolCall.args }] },
                                 { role: 'tool', content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: `Error executing tool: ${error.message}. Please try again.` }] }
                             ],
-                            // IMPORTANT: Use the original allTools for repair, not activeTools which has the wrapper
-                            tools: allTools,
+                            tools: allTools, // Use original tools for repair
                         });
                         const newToolCall = repairResult.toolCalls.find(newTc => newTc.toolName === toolCall.toolName);
                         if (newToolCall) {
                             console.log(`Tool call ${toolCall.toolName} successfully repaired.`);
+                            // Return the structure expected by the SDK for repair
                             return { toolCallType: 'function', toolCallId: toolCall.toolCallId, toolName: newToolCall.toolName, args: JSON.stringify(newToolCall.args) };
                         }
                         console.error(`Tool call repair failed for ${toolCall.toolName}: Model did not generate a new call.`); return null;
@@ -304,8 +325,10 @@ export class AiService {
                         console.error(`Error during tool call repair attempt for ${toolCall.toolName}:`, repairError); return null;
                     }
                 }
-            });
-            return result.toDataStream();
+            }); // End of streamText call
+
+            // Return the stream from the result and the promise
+            return { stream: streamTextResult.toDataStream(), finalMessagePromise };
         } catch (error: any) {
             // Handle specific tool errors
             if (NoSuchToolError.isInstance(error)) {
@@ -330,20 +353,10 @@ export class AiService {
         }
     }
 
-    // --- History Management ---
-    public addAssistantResponseToHistory(content: string | undefined) {
-        if (content) {
-            this.conversationHistory.push({ role: 'assistant', content });
-        }
-    }
-
-    public addToolCallToHistory(toolCall: ToolCallPart) {
-        this.conversationHistory.push({ role: 'assistant', content: [toolCall] });
-    }
-
-    public addToolResultToHistory(toolResult: ToolResultPart) {
-         this.conversationHistory.push({ role: 'tool', content: [toolResult] });
-    }
+    // --- History Management --- (REMOVED - History is now managed by the extension host)
+    // public addAssistantResponseToHistory(content: string | undefined) { ... }
+    // public addToolCallToHistory(toolCall: ToolCallPart) { ... }
+    // public addToolResultToHistory(toolResult: ToolResultPart) { ... }
 
     // --- API Key Management (Delegated to Providers) ---
     public async setApiKey(providerId: string, apiKey: string): Promise<void> {

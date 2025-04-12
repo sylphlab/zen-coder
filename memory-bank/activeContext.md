@@ -1,9 +1,13 @@
 # Active Context
 
 ## Current Focus
-Implement chat history persistence.
+Apply UnoCSS styling to UI components.
 
 ## Recent Changes
+- **Implemented Chat History Persistence:**
+    - Extension (`extension.ts`) now loads/saves history using `context.globalState`.
+    - History is passed to `AiService` and sent to webview (`App.tsx`) on load.
+    - `AiService` refactored to return final assistant message via promise for saving.
 - **Implemented Model Selection Persistence:** Used `vscode.getState()`/`setState()` in `App.tsx` to save and restore the last selected model ID across webview reloads.
 - **Fixed Stream End Handling:** Added explicit `streamFinished` message from backend (`extension.ts`) to frontend (`App.tsx`) to reliably stop the UI streaming indicator.
 - **Fixed State Synchronization:** Ensured Chat UI model list updates correctly after API key changes in Settings UI. (Triggered model re-fetch on provider status change in `App.tsx`).
@@ -106,8 +110,8 @@ Implement chat history persistence.
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit model persistence fix.
-- **Next:** Implement chat history persistence.
+- **Current Task:** Update Memory Bank and commit history persistence implementation.
+- **Next:** Apply UnoCSS styling to UI components.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
 - **Future:** Implement model selection persistence in Chat UI.
@@ -115,6 +119,7 @@ Implement chat history persistence.
 - **Future:** Consider applying progress update pattern to other tools.
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
+- **Chat History Persists:** History is loaded from and saved to global state by the extension host.
 - **Model Selection Persists:** Last selected model is now saved and restored using webview state API.
 - **Streaming Indicator Fixed:** Added explicit `streamFinished` message handling to ensure UI stops indicating streaming reliably.
 - **Model List Refresh Fixed:** Chat UI model list now updates automatically after API keys are set/deleted in Settings.
@@ -147,6 +152,8 @@ Implement chat history persistence.
 - **New Principle:** Tools should support batch operations.
 - Prioritized human-readable, inline tool status summaries.
 - Confirmed tool results are passed back to the AI.
+- Implemented history persistence using `context.globalState` managed by the extension host.
+- Refactored `AiService` to return final assistant message via promise to enable history saving.
 - Used `vscode.getState/setState` for simple webview state persistence (model selection).
 - Added explicit `streamFinished` message from backend to UI to fix streaming indicator persistence.
 - Added logic to `App.tsx` to re-fetch models when provider status changes.
