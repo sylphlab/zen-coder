@@ -10,12 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:zencoder.startChat",
-    "onCommand:zencoder.setAnthropicKey",
-    "onCommand:zencoder.setGoogleKey",
-    "onCommand:zencoder.setOpenRouterKey",
-    "onCommand:zencoder.setDeepseekKey",
-    "onCommand:zencoder.openSettings"
+    "onView:zencoder.views.chat"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -31,59 +26,12 @@
     "views": {
       "zencoder-view-container": [
         {
-          "id": "zencoder.views.commands",
-          "name": "Commands",
-          "type": "tree"
+          "type": "webview",
+          "id": "zencoder.views.chat",
+          "name": "Chat"
         }
       ]
     },
-    "menus": {
-      "view/title": [
-        {
-          "command": "zencoder.openSettings",
-          "when": "view == zencoder.views.commands",
-          "group": "navigation"
-        }
-      ],
-      "commandPalette": [
-         {
-            "command": "zencoder.openSettings",
-            "when": "never"
-         }
-      ]
-    },
-    "commands": [
-      {
-        "command": "zencoder.startChat",
-        "title": "Start Zen Coder Chat"
-      },
-      {
-        "command": "zencoder.setAnthropicKey",
-        "title": "Set Anthropic API Key",
-        "category": "Zen Coder"
-      },
-      {
-        "command": "zencoder.setGoogleKey",
-        "title": "Set Google API Key",
-        "category": "Zen Coder"
-      },
-      {
-        "command": "zencoder.setOpenRouterKey",
-        "title": "Set OpenRouter API Key",
-        "category": "Zen Coder"
-      },
-      {
-        "command": "zencoder.setDeepseekKey",
-        "title": "Set Deepseek API Key",
-        "category": "Zen Coder"
-      },
-      {
-        "command": "zencoder.openSettings",
-        "title": "Open Zen Coder Settings",
-        "category": "Zen Coder",
-        "icon": "$(gear)"
-      }
-    ],
     "configuration": {
       "title": "Zen Coder Settings",
       "properties": {
