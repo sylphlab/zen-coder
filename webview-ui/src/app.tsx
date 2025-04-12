@@ -318,8 +318,8 @@ export function App() {
 
     const handleSend = () => {
         if (inputValue.trim() && !isStreaming && currentModelInput) {
-            // No need to add user message here, backend will add it to persistent history
-            postMessage({ type: 'sendMessage', text: inputValue }); // Just send the text
+            // Send message with text AND the currently selected model ID
+            postMessage({ type: 'sendMessage', text: inputValue, modelId: currentModelInput });
             setInputValue('');
             setIsStreaming(true); // Set streaming immediately for responsiveness
             currentAssistantMessageId.current = null; // Reset before new message stream

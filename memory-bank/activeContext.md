@@ -120,7 +120,7 @@ Commit final fix for UI state persistence (including partial messages and tool s
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update Memory Bank and commit UI state persistence fix.
+- **Current Task:** Update Memory Bank and commit fixes for UI state persistence and model selection handling.
 - **Next:** Apply UnoCSS styling to UI components.
 - **Previous:** Modify `App.tsx` to re-fetch models on status change.
 - **Future:** Implement model selection persistence in Chat UI.
@@ -130,6 +130,7 @@ Commit final fix for UI state persistence (including partial messages and tool s
 - **Future:** Consider refining UI display for complex tool results.
 ## Debugging Notes
 - **UI State Persistence Implemented:** Backend now persists history in UI format (`UiMessage[]`), including partial messages and tool statuses. Frontend loads this state directly.
+- **Model Selection Fixed:** Frontend now sends the selected `modelId` with the `sendMessage` request. Backend (`extension.ts` and `aiService.ts`) now correctly uses the provided `modelId` to instantiate the AI model, resolving the issue where the wrong provider/key was being used.
 - **UI Rendering Fixed:** Correctly handles different `CoreMessage` content types (string/array). Navigation should work again.
 - **UI Styled:** Applied basic UnoCSS styling to Chat and Settings pages. Fixed JSX errors caused by diff application.
 - **Tool Results Saved to History:** Added logic in `extension.ts` to persist `role: 'tool'` messages.
@@ -164,6 +165,7 @@ Commit final fix for UI state persistence (including partial messages and tool s
 
 ## Active Decisions
 - Changed storage strategy: Persist UI state (`UiMessage[]`) directly and translate to `CoreMessage[]` on demand for AI interaction. Removed separate `CoreMessage` history persistence.
+- Ensured `modelId` is passed from frontend through backend to `AiService` for correct model instantiation.
 - Prioritized fixing core stream parsing and removing deprecated API usage.
 - Standardized on documented Vercel AI SDK APIs.
 - **New Principle:** Tools should support batch operations.

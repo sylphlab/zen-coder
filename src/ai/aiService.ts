@@ -26,16 +26,10 @@ import { executeUuidGenerateWithProgress, UuidUpdateCallback, uuidGenerateTool a
 // If IDs change, this might need adjustment or a different approach.
 export type ApiProviderKey = typeof allProviders[number]['id'];
 
-// Model list
-const availableModelIds = [
-    'claude-3-5-sonnet',
-    'gemini-1.5-pro',
-    'gemini-1.5-flash',
-    'openrouter/claude-3.5-sonnet',
-    'deepseek-coder',
-] as const;
+// Model list (Removed as models are resolved dynamically)
+// const availableModelIds = [...]
 
-type ModelId = typeof availableModelIds[number]; // Keep this for known IDs
+// type ModelId = typeof availableModelIds[number]; // Keep this for known IDs (Removed)
 
 // Define structure for resolved models
 type ResolvedModel = {
@@ -49,24 +43,22 @@ type ResolvedModel = {
 type McpToolExecutor = (serverName: string, toolName: string, args: any) => Promise<any>;
 
 export class AiService {
-    private currentModelId: string = 'claude-3-5-sonnet'; // Change to string to allow custom models
-    private conversationHistory: CoreMessage[] = [];
-    // In-memory API key properties removed - fetched JIT via provider modules.
+    // currentModelId is still used for setModel, but not directly by getAiResponseStream
+    private currentModelId: string = 'claude-3-5-sonnet';
+    // conversationHistory is removed, as history is managed by the caller (extension.ts)
+    // private conversationHistory: CoreMessage[] = [];
     private postMessageCallback?: (message: any) => void;
 
     constructor(private context: vscode.ExtensionContext) {}
 
     public async initialize(): Promise<void> {
-        // Initialization no longer needs to pre-load API keys into memory.
-        // Keys will be fetched Just-In-Time (JIT) by the provider modules when needed.
         console.log('[AiService] Initializing... (API keys will be loaded on demand)');
-        // Potential future initialization steps could go here (e.g., warming up caches)
         console.log('[AiService] Initialization complete.');
     }
 
     // --- Getters ---
-    public getCurrentModelId(): string { return this.currentModelId; } // Return type changed to string
-    public getConversationHistory(): CoreMessage[] { return [...this.conversationHistory]; }
+    public getCurrentModelId(): string { return this.currentModelId; }
+    // getConversationHistory removed
     public getActiveToolNames(): ToolName[] { return this._getActiveToolNames(); }
 
     // --- Setters ---
@@ -75,41 +67,35 @@ export class AiService {
         console.log('AiService: postMessage callback registered.');
     }
 
+    // setModel still updates the internal state, which might be used elsewhere or as a default
     public setModel(modelId: string) {
-        // Allow setting any string, but log a warning if it's not in the known/resolved list (implement later)
         this.currentModelId = modelId;
         console.log(`AI Model set to: ${modelId}`);
-        // TODO: Add check against resolved models and log warning if not found
-        this.conversationHistory = []; // Reset history when model changes
+        // Resetting conversationHistory here is no longer needed as it's managed externally
     }
 
     // --- Private Helpers ---
-    // _isProviderEnabled removed - handled by provider.isEnabled() now.
- 
-    // Now returns a Promise as it needs to fetch the API key asynchronously
-    private async _getProviderInstance(): Promise<LanguageModel | null> {
-        console.log(`[AiService] _getProviderInstance called for model: ${this.currentModelId}`);
-        const modelId = this.currentModelId;
-        let providerId: string | null = null; // Use provider ID (string)
-        let actualModelId = modelId;
+
+    // Modified signature to accept modelId
+    private async _getProviderInstance(modelId: string): Promise<LanguageModel | null> {
+        console.log(`[AiService] _getProviderInstance called for model: ${modelId}`);
+        // Use the passed modelId directly
+        let providerId: string | null = null;
+        let actualModelId = modelId; // Use the passed modelId for creating the instance
 
         // 1. Determine Provider ID based on modelId pattern
-        //    This logic remains largely the same, but assigns to providerId (string)
         if (modelId.startsWith('claude-')) {
             providerId = 'anthropic';
         } else if (modelId.startsWith('models/')) {
             providerId = 'google';
+            // Keep the full 'models/...' ID for Gemini
         } else if (modelId.startsWith('deepseek-')) {
             providerId = 'deepseek';
         } else if (modelId.includes('/')) { // Assume OpenRouter if it contains a slash
             providerId = 'openrouter';
-            // OpenRouter model IDs often include the original provider, e.g., 'anthropic/claude-3.5-sonnet'
-            // We pass the full ID to the OpenRouter provider.
+            // Keep the full ID like 'openrouter/google/gemini-pro-1.5'
         } else {
             console.error(`[AiService] Cannot determine provider for model ID: ${modelId} using pattern matching.`);
-            // Consider trying to find the provider by checking which provider lists this model ID?
-            // This would require calling getAvailableModels on all enabled providers first.
-            // For now, fail if pattern doesn't match.
         }
 
         console.log(`[AiService] Determined provider ID: ${providerId}`);
@@ -126,7 +112,7 @@ export class AiService {
             return null;
         }
 
-        // 3. Check if the provider is enabled (using the provider's own method)
+        // 3. Check if the provider is enabled
         const isEnabled = provider.isEnabled();
         console.log(`[AiService] Provider ${provider.name} enabled status from provider.isEnabled(): ${isEnabled}`);
         if (!isEnabled) {
@@ -134,7 +120,7 @@ export class AiService {
             return null;
         }
 
-        // 4. Get API Key if required (using the provider's own method)
+        // 4. Get API Key if required
         let apiKey: string | undefined;
         if (provider.requiresApiKey) {
             try {
@@ -153,12 +139,10 @@ export class AiService {
              console.log(`[AiService] Provider ${provider.name} does not require an API key.`);
         }
 
-
-        // 5. Create Model Instance
+        // 5. Create Model Instance using the correct modelId
         try {
             console.log(`[AiService] Creating model instance using provider '${provider.id}' for model '${actualModelId}'`);
-            // Pass the potentially undefined apiKey (provider handles the check if required)
-            const modelInstance = provider.createModel(apiKey, actualModelId);
+            const modelInstance = provider.createModel(apiKey, actualModelId); // Use actualModelId
             console.log(`[AiService] Successfully created model instance for ${provider.id}/${actualModelId}`);
             return modelInstance;
         } catch (error: any) {
@@ -172,7 +156,6 @@ export class AiService {
         const config = vscode.workspace.getConfiguration('zencoder.tools');
         const activeToolNames: ToolName[] = [];
         for (const toolName of Object.keys(allTools) as ToolName[]) {
-            // Check if the tool exists in allTools before checking config
             if (allTools[toolName] && config.get<boolean>(`${toolName}.enabled`, true)) {
                 activeToolNames.push(toolName);
             }
@@ -182,24 +165,26 @@ export class AiService {
     }
 
     // --- Core AI Interaction ---
-    // Return type changed to include a promise for the final message
-    public async getAiResponseStream(prompt: string, history: CoreMessage[] = []): Promise<{ stream: ReadableStream; finalMessagePromise: Promise<CoreMessage | null> } | null> {
-        // Get model instance asynchronously
-        const modelInstance = await this._getProviderInstance(); // Added await
+    // Modified signature to accept modelId
+    public async getAiResponseStream(prompt: string, history: CoreMessage[] = [], modelId: string): Promise<{ stream: ReadableStream; finalMessagePromise: Promise<CoreMessage | null> } | null> {
+        // Get model instance asynchronously, passing the specific modelId
+        const modelInstance = await this._getProviderInstance(modelId); // Pass modelId
 
         if (!modelInstance) {
-            // Error handling remains the same, message already sent by _getProviderInstance if needed
-            // Ensure history is cleaned up if needed and streaming state is reset in UI
-             if (this.conversationHistory[this.conversationHistory.length - 1]?.role === 'user') {
-                 this.conversationHistory.pop(); // Remove last user message if it exists
-             }
+            // Error handled in _getProviderInstance
+            // History is managed by the caller (extension.ts)
             return null;
         }
 
         // Use the passed history, add the new user prompt
-        const messagesForApi: CoreMessage[] = [...history, { role: 'user', content: prompt }];
-        // Note: We are not updating this.conversationHistory here anymore,
-        // the extension host will manage the canonical history.
+        const messagesForApi: CoreMessage[] = [...history]; // Use the translated history directly
+        // The prompt is already included in the translated history by the caller (extension.ts) if it's the last message
+        // If history is empty or last message isn't user, add prompt (though caller should handle this)
+        if (messagesForApi.length === 0 || messagesForApi[messagesForApi.length - 1].role !== 'user') {
+             console.warn("[AiService] History passed to getAiResponseStream doesn't end with user message. Adding prompt explicitly.");
+             messagesForApi.push({ role: 'user', content: prompt });
+        }
+
 
         const activeToolNames = this._getActiveToolNames();
         const activeTools: Record<string, Tool<any, any>> = {};
@@ -210,53 +195,28 @@ export class AiService {
             if (!originalToolDefinition) continue;
 
             if (toolName === 'uuidGenerateTool') {
-                // Create the wrapped tool definition that conforms to the Tool type
                 activeTools[toolName] = {
                     description: uuidGenerateToolDefinition.description,
                     parameters: uuidGenerateToolDefinition.parameters,
-                    // This execute function is the wrapper
-                    execute: async (args: any, options: ToolExecutionOptions): Promise<any> => { // Ensure return type matches SDK expectation
+                    execute: async (args: any, options: ToolExecutionOptions): Promise<any> => {
                         const toolCallId = options?.toolCallId;
                         if (!toolCallId) {
                             console.error("Wrapper Error: Missing toolCallId for uuidGenerateTool");
                             return { success: false, error: "Internal wrapper error: Missing toolCallId" };
                         }
-
-                        // Check if the callback is available to send progress updates
                         if (this.postMessageCallback) {
-                            // Create the updateCallback that uses postMessage
                             const updateCallback: UuidUpdateCallback = (update) => {
-                                this.postMessageCallback!({ // Use non-null assertion
-                                    type: 'uuidProgressUpdate', // Specific type for UI
-                                    payload: update
-                                });
+                                this.postMessageCallback!({ type: 'uuidProgressUpdate', payload: update });
                             };
-                            // Call the function designed for progress updates
                             console.log(`Calling executeUuidGenerateWithProgress for ${toolCallId}`);
-                            // IMPORTANT: Return the result from the progress function
-                            const progressResult = await executeUuidGenerateWithProgress(args, { toolCallId, updateCallback });
-                            // The progress function returns {success, error?}.
-                            // We might need to return a placeholder or the final UUID array if the SDK expects it.
-                            // For now, let's return the success/error status. The actual UUIDs are sent via callback.
-                            // If SDK complains about missing result data later, we might need to adjust this return.
-                            return progressResult;
+                            return await executeUuidGenerateWithProgress(args, { toolCallId, updateCallback });
                         } else {
-                             // If no callback, execute the standard tool definition as a fallback
                              console.warn("postMessageCallback not set. Executing standard uuidGenerateTool.");
                              try {
-                                 // Ensure the standard execute exists before calling
                                  if (typeof uuidGenerateToolDefinition.execute === 'function') {
-                                     // Call the standard execute, which expects only args
-                                     // Pass a minimal valid ToolExecutionOptions object for the fallback
-                                     const fallbackOptions: ToolExecutionOptions = {
-                                         toolCallId: options?.toolCallId || `fallback-${Date.now()}`, // Use original toolCallId if available, else generate one
-                                         messages: [] // Provide empty messages array
-                                     };
-                                     const fallbackResult = await uuidGenerateToolDefinition.execute(args, fallbackOptions);
-                                     return fallbackResult; // Return the final array of UUIDs
-                                 } else {
-                                     throw new Error("Standard execute function not found on uuidGenerateToolDefinition.");
-                                 }
+                                     const fallbackOptions: ToolExecutionOptions = { toolCallId: options?.toolCallId || `fallback-${Date.now()}`, messages: [] };
+                                     return await uuidGenerateToolDefinition.execute(args, fallbackOptions);
+                                 } else { throw new Error("Standard execute function not found."); }
                              } catch (e: any) {
                                  console.error("Error during fallback execution:", e);
                                  return { success: false, error: e.message || "Fallback execution failed" };
@@ -265,43 +225,32 @@ export class AiService {
                     }
                 };
             } else {
-                // For other tools, use the original definition directly
                 activeTools[toolName] = originalToolDefinition;
             }
         } // End of for loop
 
         // --- Call streamText ---
         try {
-            // Promise setup to capture the final message
             let resolveFinalMessagePromise: (value: CoreMessage | null) => void;
             const finalMessagePromise = new Promise<CoreMessage | null>((resolve) => {
                 resolveFinalMessagePromise = resolve;
             });
 
-            // Call streamText ONCE, configuring the onFinish callback
             const streamTextResult = await streamText({
                 model: modelInstance,
-                messages: messagesForApi, // Pass the constructed messages array
-                tools: activeTools, // Pass the map containing original and wrapped tools
-                maxSteps: 5, // Adjust as needed
+                messages: messagesForApi,
+                tools: activeTools,
+                maxSteps: 5,
                 onFinish: async (event) => {
-                    // Construct the final message object based on the event
                     const assistantContent: (ToolCallPart | { type: 'text'; text: string })[] = [];
-                    if (event.text) {
-                        assistantContent.push({ type: 'text', text: event.text });
-                    }
-                    if (event.toolCalls) {
-                        assistantContent.push(...event.toolCalls);
-                    }
-                    // Note: Tool results are handled in separate 'tool' role messages
-
+                    if (event.text) { assistantContent.push({ type: 'text', text: event.text }); }
+                    if (event.toolCalls) { assistantContent.push(...event.toolCalls); }
                     let finalAssistantMessage: CoreMessage | null = null;
                     if (assistantContent.length > 0) {
                          finalAssistantMessage = { role: 'assistant', content: assistantContent };
                     }
-
                     console.log("[AiService] Stream finished processing. Final assistant message:", finalAssistantMessage);
-                    resolveFinalMessagePromise(finalAssistantMessage); // Resolve the promise with the final message
+                    resolveFinalMessagePromise(finalAssistantMessage);
                 },
                 experimental_repairToolCall: async ({ toolCall, error, messages, system }) => {
                     console.warn(`Attempting to repair tool call for ${toolCall.toolName} due to error: ${error.message}`);
@@ -312,12 +261,11 @@ export class AiService {
                                 { role: 'assistant', content: [{ type: 'tool-call', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: toolCall.args }] },
                                 { role: 'tool', content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: `Error executing tool: ${error.message}. Please try again.` }] }
                             ],
-                            tools: allTools, // Use original tools for repair
+                            tools: allTools,
                         });
                         const newToolCall = repairResult.toolCalls.find(newTc => newTc.toolName === toolCall.toolName);
                         if (newToolCall) {
                             console.log(`Tool call ${toolCall.toolName} successfully repaired.`);
-                            // Return the structure expected by the SDK for repair
                             return { toolCallType: 'function', toolCallId: toolCall.toolCallId, toolName: newToolCall.toolName, args: JSON.stringify(newToolCall.args) };
                         }
                         console.error(`Tool call repair failed for ${toolCall.toolName}: Model did not generate a new call.`); return null;
@@ -325,12 +273,10 @@ export class AiService {
                         console.error(`Error during tool call repair attempt for ${toolCall.toolName}:`, repairError); return null;
                     }
                 }
-            }); // End of streamText call
+            });
 
-            // Return the stream from the result and the promise
             return { stream: streamTextResult.toDataStream(), finalMessagePromise };
         } catch (error: any) {
-            // Handle specific tool errors
             if (NoSuchToolError.isInstance(error)) {
                  console.error("Tool Error: Unknown tool:", error.toolName);
                  vscode.window.showErrorMessage(`Error: Unknown tool: ${error.toolName}`);
@@ -345,18 +291,10 @@ export class AiService {
                  console.error('Error calling AI SDK:', error);
                  vscode.window.showErrorMessage(`Error interacting with AI: ${error.message}`);
             }
-            // Ensure history is cleaned up on general SDK errors too
-            if (this.conversationHistory[this.conversationHistory.length - 1]?.role === 'user') {
-                 this.conversationHistory.pop();
-            }
+            // History is managed by the caller (extension.ts)
             return null;
         }
     }
-
-    // --- History Management --- (REMOVED - History is now managed by the extension host)
-    // public addAssistantResponseToHistory(content: string | undefined) { ... }
-    // public addToolCallToHistory(toolCall: ToolCallPart) { ... }
-    // public addToolResultToHistory(toolResult: ToolResultPart) { ... }
 
     // --- API Key Management (Delegated to Providers) ---
     public async setApiKey(providerId: string, apiKey: string): Promise<void> {
@@ -368,7 +306,6 @@ export class AiService {
         }
         if (!provider.requiresApiKey) {
              console.warn(`[AiService] Attempted to set API key for provider '${providerId}' which does not require one.`);
-             // Optionally show a message or just ignore
              return;
         }
         try {
@@ -381,8 +318,6 @@ export class AiService {
             vscode.window.showErrorMessage(`Failed to store API key for ${provider.name} securely: ${error.message}`);
         }
     }
-
-    // getApiKey is no longer needed here, as keys are fetched JIT by _getProviderInstance
 
     public async deleteApiKey(providerId: string): Promise<void> {
          const provider = providerMap.get(providerId);
@@ -407,20 +342,19 @@ export class AiService {
      }
 
     // --- API Key Status ---
-     // This method now needs to iterate through providers and call their getApiKey method
      public async getApiKeyStatus(): Promise<Record<string, boolean>> {
          const status: Record<string, boolean> = {};
          for (const provider of allProviders) {
              if (provider.requiresApiKey) {
                  try {
                      const key = await provider.getApiKey(this.context.secrets);
-                     status[provider.id] = !!key; // Store boolean indicating if key is set
+                     status[provider.id] = !!key;
                  } catch (error) {
                      console.error(`[AiService] Error checking API key status for ${provider.name}:`, error);
-                     status[provider.id] = false; // Assume not set if error occurs
+                     status[provider.id] = false;
                  }
              } else {
-                 status[provider.id] = true; // Always true if no key is required
+                 status[provider.id] = true;
              }
          }
          console.log("[AiService] Calculated API Key Status:", status);
@@ -428,14 +362,13 @@ export class AiService {
      }
 
     // --- Provider Status ---
-    // Now returns an array of objects containing both static info and dynamic status
     public async getProviderStatus(): Promise<ProviderInfoAndStatus[]> {
-        const apiKeyStatusMap = await this.getApiKeyStatus(); // Fetches current key status map { providerId: boolean }
+        const apiKeyStatusMap = await this.getApiKeyStatus();
         const combinedStatusList: ProviderInfoAndStatus[] = [];
 
         for (const provider of allProviders) {
-            const isEnabled = provider.isEnabled(); // Use provider's own method
-            const hasApiKey = apiKeyStatusMap[provider.id] ?? false; // Get status from fetched map
+            const isEnabled = provider.isEnabled();
+            const hasApiKey = apiKeyStatusMap[provider.id] ?? false;
 
             combinedStatusList.push({
                 id: provider.id,
@@ -446,82 +379,53 @@ export class AiService {
                 apiKeySet: hasApiKey,
             });
         }
-        // Sort alphabetically by name for consistent UI order
         combinedStatusList.sort((a, b) => a.name.localeCompare(b.name));
-
         console.log("[AiService] Calculated Combined Provider Status List:", combinedStatusList);
         return combinedStatusList;
     }
 
     // --- Model Resolver ---
-    // The hardcodedModels property has been removed.
-    // Model resolution is now handled dynamically by iterating through providers
-    // in the resolveAvailableModels method.
-
     public async resolveAvailableModels(): Promise<ResolvedModel[]> {
         const allResolvedModels: ResolvedModel[] = [];
-        // Get the combined status list first
         const providerInfoList = await this.getProviderStatus();
 
-        // Iterate through the combined list
         for (const providerInfo of providerInfoList) {
-            // Use the status directly from the combined object
             const status = { enabled: providerInfo.enabled, apiKeySet: providerInfo.apiKeySet };
-            const provider = providerMap.get(providerInfo.id); // Get the provider implementation if needed
+            const provider = providerMap.get(providerInfo.id);
 
             if (!provider) {
                  console.warn(`[AiService] Provider implementation not found for ID '${providerInfo.id}' during model resolution. Skipping.`);
-                 continue; // Skip if provider implementation is missing for some reason
+                 continue;
             }
 
-            // Check if the provider is enabled and has an API key if required
             if (status?.enabled && (status.apiKeySet || !provider.requiresApiKey)) {
                 try {
                     console.log(`[AiService] Fetching models for provider: ${provider.name}`);
-                    // Get the API key for this provider using its own method
                     let apiKey: string | undefined;
                     if (provider.requiresApiKey) {
-                        // Fetch the key only if required
                         apiKey = await provider.getApiKey(this.context.secrets);
-                        // No need to check if apiKey is set here, as getAvailableModels handles it
                     }
-
-                    // Call the provider's method to get models
                     const modelsFromProvider: ModelDefinition[] = await provider.getAvailableModels(apiKey);
-
-                    // Map the result to the ResolvedModel structure
                     const resolvedPortion: ResolvedModel[] = modelsFromProvider.map(m => ({
                         id: m.id,
-                        label: m.name, // Use the name from ModelDefinition
-                        provider: provider.id as ApiProviderKey, // Store the provider ID
-                        // Determine source based on provider implementation (OpenRouter fetches, others are hardcoded for now)
+                        label: m.name,
+                        provider: provider.id as ApiProviderKey,
                         source: provider.id === 'openrouter' ? 'api' : 'hardcoded',
                     }));
-
                     allResolvedModels.push(...resolvedPortion);
                     console.log(`[AiService] Successfully fetched/retrieved ${resolvedPortion.length} models from ${provider.name}.`);
-
                 } catch (error) {
                     console.error(`[AiService] Failed to fetch models for provider ${provider.name}:`, error);
                     vscode.window.showWarningMessage(`無法從 ${provider.name} 獲取模型列表。`);
-                    // Optionally add hardcoded fallbacks specifically for this provider if needed
-                    // e.g., addHardcodedForProvider(provider.id, allResolvedModels);
                 }
             } else {
                  console.log(`[AiService] Skipping model fetch for disabled/keyless provider: ${provider.name}`);
             }
         }
 
-        // Remove duplicates (e.g., if a hardcoded list contained something also fetched)
-        // Using Map ensures the last occurrence wins if IDs collide, which is fine here.
         const uniqueModels = Array.from(new Map(allResolvedModels.map(m => [m.id, m])).values());
-
-        // Sort the final list by label
         uniqueModels.sort((a, b) => a.label.localeCompare(b.label));
-
-        console.log("[AiService] Final resolved available models:", uniqueModels.length); // Log count for brevity
-        // console.log("[AiService] Final resolved available models:", uniqueModels); // Uncomment for full list if needed
+        console.log("[AiService] Final resolved available models:", uniqueModels.length);
         return uniqueModels;
     }
-    // --- Helper to fetch OpenRouter Models --- (REMOVED - Logic now in openRouterProvider.ts)
 } // End of AiService class

@@ -137,8 +137,16 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                         const coreMessagesForAi = translateUiHistoryToCoreMessages(this._history);
                         console.log(`Translated ${this._history.length} UI messages to ${coreMessagesForAi.length} CoreMessages for AI.`);
 
-                        // --- Get AI Response Stream using translated history ---
-                        const streamResult = await this._aiService.getAiResponseStream(message.text, coreMessagesForAi); // Pass translated history
+                        // --- Get AI Response Stream using translated history AND the modelId from the message ---
+                        const modelId = message.modelId; // Get modelId from the message payload
+                        if (!modelId) {
+                             console.error("sendMessage handler did not receive a modelId.");
+                             this.postMessageToWebview({ type: 'addMessage', sender: 'assistant', text: 'Error: No model ID specified in the request.' });
+                             this._history.pop(); // Remove user message
+                             await this._context.globalState.update(this.UI_HISTORY_KEY, this._history);
+                             return; // Stop processing
+                        }
+                        const streamResult = await this._aiService.getAiResponseStream(message.text, coreMessagesForAi, modelId); // Pass modelId
                         if (!streamResult) {
                             console.log("getAiResponseStream returned null, likely handled error.");
                             this._history.pop(); // Remove user message if stream failed immediately
