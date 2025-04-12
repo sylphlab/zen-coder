@@ -2,7 +2,7 @@
 
 ## What Works
 - **UI Initialization Loop Fixed:** Corrected `useEffect` dependencies in `App.tsx` to prevent infinite requests on startup.
-- **Chat History Persistence:** History is now loaded from and saved to `context.globalState` by the extension host. Assistant responses are captured via promise resolution after stream completion.
+- **Chat History Persistence:** History is loaded/saved using `CoreMessage` format in `context.globalState`. User/Assistant messages are saved; Tool results saving is incomplete.
 - **Model Selection Persistence:** Last selected model ID is now saved/restored using webview state API (`vscode.getState`/`setState`).
 - **Stream End Handling Fixed:** Backend now sends an explicit `streamFinished` message, and the UI handles it to reliably stop the streaming indicator.
 - **Nanostores Added:** Installed `nanostores` and `@nanostores/preact`. Ready for state management.
@@ -58,7 +58,7 @@
 
 ## Current Status
 - **Initialization:** Webview initializes correctly without infinite loops, loads history and model state.
-- **History Persistence:** Chat history is saved to global state and loaded on webview init.
+- **History Persistence:** User/Assistant messages saved to global state and loaded on init. Tool result saving needs implementation.
 - **Model Selection:** Selection persists across webview reloads.
 - **Stream Handling:** Explicit end-of-stream signaling implemented between backend and frontend.
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
@@ -72,6 +72,7 @@
 - **Styling:** UnoCSS is set up but not yet applied to components. Existing CSS (`app.css`, `index.css`) might conflict or be redundant.
 
 ## Known Issues
+- Saving tool results to chat history is not yet implemented in `extension.ts`.
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.
 - Search tool functionality relies on the external `search_files` tool (requires environment support).
 - `@vscode/webview-ui-toolkit` dependency is unused but still listed.

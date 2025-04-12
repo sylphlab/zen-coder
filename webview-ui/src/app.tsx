@@ -443,33 +443,36 @@ export function App() {
     // Main application layout with routing
     return (
         <Router>
-            <div class="app-layout">
-                <nav class="navigation">
-                    <Link href="/">Chat</Link>
-                    <Link href="/settings">Settings</Link>
+            {/* Apply UnoCSS classes via the 'class' attribute */}
+            <div class="app-layout h-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+                <nav class="navigation flex items-center p-2 bg-gray-200 dark:bg-gray-800 shadow">
+                    <Link href="/" class="px-3 py-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700 mr-2">Chat</Link>
+                    <Link href="/settings" class="px-3 py-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700">Settings</Link>
                 </nav>
-                <main class="content-area">
+                <main class="content-area flex-1 overflow-y-auto p-4">
                     <Route path="/">
                         {/* Existing Chat UI Logic */}
-                        <div class="chat-container">
-                            <div class="header-controls">
-                                {/* <button class="settings-button" onClick={() => setLocation('/settings')}>⚙️ Settings</button> */} {/* Replaced by nav link */}
-                                <div class="model-selector">
+                        {/* Apply flex to chat container */}
+                        <div class="chat-container flex flex-col h-full">
+                            {/* Style header controls */}
+                            <div class="header-controls p-2 border-b border-gray-300 dark:border-gray-700">
+                                <div class="model-selector flex items-center space-x-2">
                                     {/* Provider Dropdown */}
-                                    <label htmlFor="provider-select">Provider: </label>
+                                    <label htmlFor="provider-select" class="text-sm font-medium">Provider:</label>
                                     <select
                                         id="provider-select"
                                         value={selectedProvider ?? ''}
                                         onChange={handleProviderChange}
+                                        class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm"
                                     >
-                                        <option value="">-- Select Provider --</option>
+                                        <option value="">-- Select --</option>
                                         {uniqueProviders.map(provider => (
                                             <option key={provider} value={provider}>{provider}</option>
                                         ))}
                                     </select>
 
                                     {/* Model Autocomplete Input */}
-                                    <label htmlFor="model-input">Model: </label>
+                                    <label htmlFor="model-input" class="text-sm font-medium">Model:</label>
                                     <input
                                         list="models-datalist"
                                         id="model-input"
@@ -478,6 +481,7 @@ export function App() {
                                         onInput={handleModelInputChange}
                                         placeholder={selectedProvider ? "Select or type model ID" : "Select provider first"}
                                         disabled={!selectedProvider} // Disable if no provider selected
+                                        class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm flex-1 min-w-40" // Added flex-1 and min-width
                                     />
                                     <datalist id="models-datalist">
                                         {filteredModels.map(model => (
@@ -486,23 +490,27 @@ export function App() {
                                             </option>
                                         ))}
                                     </datalist>
+                                </div> {/* Closing tag for model-selector */}
+                            </div> {/* Closing tag for header-controls */}
                                 </div>
-                            </div>
-                            <div class="messages-area">
+                            {/* Style messages area */}
+                            <div class="messages-area flex-1 overflow-y-auto p-4 space-y-4">
                                 {messages.map((msg) => (
-                                    <div key={msg.id} class={`message ${msg.sender}`}>
-                                        <div class="message-content">
+                                    // Style individual messages
+                                    <div key={msg.id} class={`message flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        <div class={`message-content p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
                                             {msg.content.map(renderContentPart)}
                                         </div>
                                     </div>
                                 ))}
-                                {isStreaming && messages[messages.length - 1]?.sender === 'assistant' && (
-                                    <div class="message assistant">
-                                        <div class="message-content">
-                                            <span>Thinking...</span> {/* Replace ProgressRing with simple text */}
-                                        </div>
-                                    </div>
-                                )}
+                                {/* Style thinking indicator */}
+                                {isStreaming && (
+                                     <div class="message flex justify-start">
+                                         <div class="message-content p-3 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 italic">
+                                             <span>Thinking...</span>
+                                         </div>
+                                     </div>
+                                 )}
                                 <div ref={messagesEndRef} />
                             </div>
                             <div class="input-area">
