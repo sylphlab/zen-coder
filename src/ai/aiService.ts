@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 // Import Output and the new schema
 // Import necessary types, remove non-exported ones
-import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel, Output, TextStreamPart } from 'ai';
+import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel, Output, TextStreamPart, ToolSet } from 'ai';
 import { structuredAiResponseSchema, StructuredAiResponse } from '../common/types';
 import { allTools, ToolName } from '../tools';
 import { allProviders, providerMap, AiProvider, ModelDefinition } from './providers'; // Import new provider structure
@@ -158,17 +158,18 @@ export class AiService {
     // --- Core AI Interaction ---
     // Modified signature to accept modelId
     // Return StreamTextResult directly
-    public async getAiResponseStream(
+    public async getAiResponseStream<TOOLS extends ToolSet, PARTIAL_OUTPUT>(
         prompt: string,
         history: CoreMessage[] = [],
         modelId: string
-    ): Promise<any | null> { // Change return type to any
+    ) {
         const modelInstance = await this._getProviderInstance(modelId); // Pass modelId
 
         if (!modelInstance) {
             // Error handled in _getProviderInstance
             // History is managed by the caller (extension.ts)
-            return null;
+            console.error("[AiService] Failed to get model instance. Cannot proceed with AI request.");
+            throw new Error("Failed to get model instance. Cannot proceed with AI request.");
         }
 
         // Use the passed history, add the new user prompt
@@ -182,49 +183,16 @@ export class AiService {
 
 
         const activeToolNames = this._getActiveToolNames();
-        const activeTools: Record<string, Tool<any, any>> = {};
-
-        // --- Build activeTools, wrapping uuidGenerateTool ---
-        for (const toolName of activeToolNames) {
-            const originalToolDefinition = allTools[toolName];
-            if (!originalToolDefinition) {
-                continue;
-            }
-
-            if (toolName === 'uuidGenerateTool') {
-                activeTools[toolName] = {
-                    description: uuidGenerateToolDefinition.description,
-                    parameters: uuidGenerateToolDefinition.parameters,
-                    execute: async (args: any, options: ToolExecutionOptions): Promise<any> => {
-                        const toolCallId = options?.toolCallId;
-                        if (!toolCallId) {
-                            console.error("Wrapper Error: Missing toolCallId for uuidGenerateTool");
-                            return { success: false, error: "Internal wrapper error: Missing toolCallId" };
-                        }
-                        if (this.postMessageCallback) {
-                            const updateCallback: UuidUpdateCallback = (update) => {
-                                this.postMessageCallback!({ type: 'uuidProgressUpdate', payload: update });
-                            };
-                            console.log(`Calling executeUuidGenerateWithProgress for ${toolCallId}`);
-                            return await executeUuidGenerateWithProgress(args, { toolCallId, updateCallback });
-                        } else {
-                             console.warn("postMessageCallback not set. Executing standard uuidGenerateTool.");
-                             try {
-                                 if (typeof uuidGenerateToolDefinition.execute === 'function') {
-                                     const fallbackOptions: ToolExecutionOptions = { toolCallId: options?.toolCallId || `fallback-${Date.now()}`, messages: [] };
-                                     return await uuidGenerateToolDefinition.execute(args, fallbackOptions);
-                                 } else { throw new Error("Standard execute function not found."); }
-                             } catch (e: any) {
-                                 console.error("Error during fallback execution:", e);
-                                 return { success: false, error: e.message || "Fallback execution failed" };
-                             }
-                        }
-                    }
-                };
+        const activeTools = activeToolNames.reduce((acc, toolName) => {
+            const toolDefinition = allTools[toolName];
+            if (toolDefinition) {
+                acc[toolName] = toolDefinition;
             } else {
-                activeTools[toolName] = originalToolDefinition;
+                console.warn(`Tool ${toolName} not found in allTools.`);
             }
-        } // End of for loop
+            return acc;
+        }
+        , {} as Record<ToolName, Tool>);
 
         // --- Call streamText ---
         try {
@@ -286,7 +254,7 @@ export class AiService {
                   console.error('Error calling AI SDK:', error);
                   vscode.window.showErrorMessage(`Error interacting with AI: ${error.message}`);
              }
-             return null;
+             throw error; // Rethrow the error to be handled by the caller
         }
     }
 

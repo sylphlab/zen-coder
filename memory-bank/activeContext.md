@@ -4,12 +4,21 @@
 Completed cleanup of redundant interaction tools and updated memory banks. Ready for next implementation step or further tool discussion.
 
 ## Recent Changes
+- **Removed `main_content` from Structured Output:** Based on user feedback regarding redundancy and potential token cost increase, completely removed the `main_content` field from `structuredAiResponseSchema` in `src/common/types.ts`. The schema now only defines `suggested_actions`.
+- **Corrected Final Text Handling (User Guided):** Implemented the robust approach based on user feedback, prioritizing accumulated text for history.
+    - `src/webview/handlers/SendMessageHandler.ts` no longer awaits `streamResult.text`. It passes `null` for the text argument to `reconcileFinalAssistantMessage`.
+    - `src/historyManager.ts` (`reconcileFinalAssistantMessage`) now correctly uses the text accumulated via `appendTextChunk` (from the `textStream`) as the definitive final text content for the assistant message history. This ensures accurate recording even if the stream is interrupted. `streamResult.text` is not used for history updates. It only uses `finalCoreMessage` (if provided by the SDK) to get the final list of tool calls.
+- **Code Simplification & TypeScript Reliance (User Guided):**
+    - Removed unnecessary runtime checks (e.g., `streamResult` null check, `isPromise` checks) in `src/streamProcessor.ts` and `src/webview/handlers/SendMessageHandler.ts`, trusting the TypeScript type definitions provided by the Vercel AI SDK.
+    - Improved error handling in `src/ai/aiService.ts`: Methods like `getAiResponseStream` now throw errors on failure (e.g., failed to get model instance) instead of returning null, allowing centralized error handling in the caller (`SendMessageHandler`).
+- **Improved Type Safety (User Guided):** Addressed previous use of `any` type based on user feedback:
+    - **`src/streamProcessor.ts`:**
+        - Replaced `any` type for `streamResult` parameter in `process` method with generics (`StreamTextResult<TOOLS, PARTIAL_OUTPUT>`).
+        - Used `util/types.isPromise` for checking `toolCalls` and `toolResults` instead of `typeof ... .then === 'function'`.
+    - **`src/ai/aiService.ts`:**
+        - Corrected return type annotation for `getAiResponseStream` (implicitly `Promise<StreamTextResult<...> | null>`).
+        - Refactored `activeTools` construction using `reduce` for better readability.
 - **Fixed Streaming TypeError & Final Message Handling (Attempt 6 - User Guided):** Corrected previous incorrect fixes based on user feedback.
-    - Reverted `aiService.ts` to return `Promise<any | null>` and call `streamText` without generics.
-    - Corrected `streamProcessor.ts` based on user input:
-        - Fixed `allTools` import path to `./tools`.
-        - Simplified `textStream` iteration, directly using the iterated `part` as `textDelta`.
-        - Kept runtime checks for stream properties due to using `any` type for `streamResult`.
 - **Cleaned Up Redundant Tools:** Deleted unused interaction tool files (`showInformationMessage.ts`, `showWarningMessage.ts`, `showErrorMessage.ts`, `showInputBox.ts`, `showQuickPick.ts`) from `src/tools/vscode/` and updated `src/tools/vscode/index.ts` accordingly. Confirmed `src/tools/index.ts` requires no changes.
 - **Finalized Suggested Actions Design:** Agreed to abandon tool-based approach (`presentOptionsTool`, `show...Tool`) for AI-suggested actions. Will instead use **Structured Output** from the AI model. The AI response schema will include `main_content` (string) and an optional `suggested_actions` array. This leverages Vercel AI SDK's structured data generation capabilities (`streamObject` or `streamText` with `experimental_output`).
 - **Corrected Toolset Understanding:** Focused analysis on core VS Code interaction tools, excluding filesystem tools from this specific discussion and clarifying the role of existing interaction tools before deciding on the structured output approach.
@@ -191,7 +200,7 @@ Completed cleanup of redundant interaction tools and updated memory banks. Ready
 - Activity Bar Entry Changed.
 
 ## Active Decisions
-- **Suggested Actions Implementation:** Use **Structured Output** from AI (defining a schema with `main_content` and optional `suggested_actions` array) instead of dedicated interaction tools. Leverage Vercel AI SDK's structured data capabilities.
+- **Suggested Actions Implementation:** Use **Structured Output** from AI (defining a schema with only optional `suggested_actions` array in `src/common/types.ts`) instead of dedicated interaction tools. Leverage Vercel AI SDK's structured data capabilities. `main_content` was removed. Final text for history is correctly sourced from the accumulated `textStream` content managed by `HistoryManager`, ensuring robustness against stream interruptions.
 - **VS Code Tool Enhancements (Future):** Plan to add `goToDefinitionTool`, `findReferencesTool`, `renameSymbolTool`, `getConfigurationTool`, debugging tools, and enhance `runCommandTool` (exit code).
 - **VS Code Tool Confirmation:** Need to verify `replaceInActiveEditorTool` insertion capability.
 - **UI Fixes:**

@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
-import { Tool, CoreMessage, StreamTextResult, TextStreamPart, ToolCallPart, ToolResultPart } from 'ai'; // Import necessary types
+import { Tool, CoreMessage, StreamTextResult, TextStreamPart, ToolCallPart, ToolResultPart, ToolSet } from 'ai'; // Import necessary types
 // AiServiceResponse import removed
 import { structuredAiResponseSchema, StructuredAiResponse } from './common/types';
 import { allTools } from './tools'; // Correct path for allTools
 import { HistoryManager } from './historyManager';
+import { isPromise } from 'util/types';
 
 /**
  * Processes the AI response stream, updates history, and posts messages to the webview.
@@ -23,36 +24,26 @@ export class StreamProcessor {
      * @param assistantMessageId The ID of the UI message frame for this response.
      */
     // Update parameter type to StreamTextResult with both generics
-    public async process(streamResult: any, assistantMessageId: string): Promise<StructuredAiResponse | null> { // Change streamResult type to any
+    public async process<TOOLS extends ToolSet, PARTIAL_OUTPUT>(streamResult: StreamTextResult<TOOLS, PARTIAL_OUTPUT>, assistantMessageId: string): Promise<StructuredAiResponse | null> { // Change streamResult type to any
         console.log(`[StreamProcessor] Starting processing for message ID: ${assistantMessageId}`);
         let accumulatedStructuredResponse: Partial<StructuredAiResponse> = {}; // Initialize accumulator
 
         // --- Process Text Stream ---
         try {
-            // Check if textStream exists and is iterable
-            // Check if textStream exists and is iterable
-            if (streamResult && typeof streamResult.textStream?.[Symbol.asyncIterator] === 'function') {
-                // Iterate directly over textStream, assuming each part is the text delta string
-                for await (const textDelta of streamResult.textStream) {
-                    this._postMessageCallback({ type: 'appendMessageChunk', sender: 'assistant', textDelta: textDelta });
-                    await this._historyManager.appendTextChunk(assistantMessageId, textDelta);
-                }
-                console.log("[StreamProcessor] Finished processing textStream.");
-            } else {
-                 console.warn("[StreamProcessor] streamResult.textStream is not iterable or does not exist.");
+            // Iterate directly over textStream, assuming each part is the text delta string
+            for await (const textDelta of streamResult.textStream) {
+                this._postMessageCallback({ type: 'appendMessageChunk', sender: 'assistant', textDelta: textDelta });
+                await this._historyManager.appendTextChunk(assistantMessageId, textDelta);
             }
+            console.log("[StreamProcessor] Finished processing textStream.");
         } catch (error) { // Corrected catch block placement
-             console.error("[StreamProcessor] Error processing textStream:", error);
-             // Handle error appropriately, maybe post to UI
+            console.error("[StreamProcessor] Error processing textStream:", error);
+            // Handle error appropriately, maybe post to UI
         }
 
         // --- Process Tool Calls (Await the promise) ---
         try {
-            // Check if toolCalls exists and is a promise before awaiting
-            // Check if toolCalls exists and is a promise before awaiting
-            const toolCalls = (streamResult && typeof streamResult.toolCalls?.then === 'function')
-                ? await streamResult.toolCalls
-                : (streamResult?.toolCalls || []);
+            const toolCalls = await streamResult.toolCalls;
             if (toolCalls && toolCalls.length > 0) {
                 console.log("[StreamProcessor] Processing toolCalls:", toolCalls);
                 for (const part of toolCalls) {
@@ -70,11 +61,7 @@ export class StreamProcessor {
 
         // --- Process Tool Results (Await the promise) ---
          try {
-            // Check if toolResults exists and is a promise before awaiting
-            // Check if toolResults exists and is a promise before awaiting
-            const toolResults = (streamResult && typeof streamResult.toolResults?.then === 'function')
-                ? await streamResult.toolResults
-                : (streamResult?.toolResults || []);
+            const toolResults = await streamResult.toolResults;
              if (toolResults && toolResults.length > 0) {
                  console.log("[StreamProcessor] Processing toolResults:", toolResults);
                  for (const part of toolResults) {
@@ -93,17 +80,12 @@ export class StreamProcessor {
         // --- Process Partial Structured Output Stream ---
         try {
             // Check if experimental_partialOutputStream exists before iterating
-            // Check if experimental_partialOutputStream exists and is iterable
-            if (streamResult && typeof streamResult.experimental_partialOutputStream?.[Symbol.asyncIterator] === 'function') {
-                for await (const partial of streamResult.experimental_partialOutputStream) {
-                    // console.log("[StreamProcessor] Received partial structured output:", partial);
-                    // Basic accumulation: merge properties. More sophisticated merging might be needed.
-                    accumulatedStructuredResponse = { ...accumulatedStructuredResponse, ...partial };
-                }
-                console.log("[StreamProcessor] Finished processing experimental_partialOutputStream.");
-            } else {
-                 console.warn("[StreamProcessor] streamResult.experimental_partialOutputStream is not iterable or does not exist.");
+            for await (const partial of streamResult.experimental_partialOutputStream) {
+                // console.log("[StreamProcessor] Received partial structured output:", partial);
+                // Basic accumulation: merge properties. More sophisticated merging might be needed.
+                accumulatedStructuredResponse = { ...accumulatedStructuredResponse, ...partial };
             }
+            console.log("[StreamProcessor] Finished processing experimental_partialOutputStream.");
         } catch (error) {
              console.error("[StreamProcessor] Error processing experimental_partialOutputStream:", error);
         }

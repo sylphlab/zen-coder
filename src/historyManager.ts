@@ -168,15 +168,16 @@ export class HistoryManager {
     }
 
      /**
-     * Reconciles the final state of an assistant message based on the CoreMessage received
-     * after the stream ends. Ensures text and tool calls match the final AI output. Accepts null if no final message was generated.
+     * Reconciles the final state of an assistant message. It uses the text accumulated
+     * via `appendTextChunk` as the primary source for the final text content, ensuring
+     * that even interrupted streams are recorded correctly. It uses the optional
+     * `finalCoreMessage` (if provided by the SDK upon successful completion) primarily
+     * to get the definitive list of tool calls intended by the AI.
+     * @param assistantMessageId The ID of the assistant message to reconcile.
+     * @param finalCoreMessage The final CoreMessage from the SDK (can be null if stream failed or didn't produce one).
      */
     public async reconcileFinalAssistantMessage(assistantMessageId: string, finalCoreMessage: CoreMessage | null): Promise<void> {
-        if (!finalCoreMessage || finalCoreMessage.role !== 'assistant') {
-            console.warn(`[HistoryManager] Cannot reconcile: No valid final assistant CoreMessage provided for ID ${assistantMessageId}.`);
-            return;
-        }
-
+        // Find the UI message frame
         const uiMessageIndex = this._history.findIndex(msg => msg.id === assistantMessageId);
         if (uiMessageIndex === -1) {
             console.warn(`[HistoryManager] Could not find UI message frame (ID: ${assistantMessageId}) to reconcile final state.`);
@@ -184,20 +185,26 @@ export class HistoryManager {
         }
 
         const finalUiMessage = this._history[uiMessageIndex];
-        let finalCoreText = "";
-        let finalCoreToolCalls: CoreToolCallPart[] = [];
+        let finalCoreToolCalls: CoreToolCallPart[] = []; // Get tool calls from finalCoreMessage if available
 
-        // Extract text and tool calls from the final CoreMessage
-        if (typeof finalCoreMessage.content === 'string') {
-            finalCoreText = finalCoreMessage.content;
-        } else if (Array.isArray(finalCoreMessage.content)) {
+        // 1. Extract accumulated text from the existing UI message content parts
+        // This is the most reliable source, especially for interrupted streams.
+        const finalAccumulatedText = finalUiMessage.content.filter(part => part.type === 'text').map(part => part.text).join('');
+
+        // 2. Extract tool calls ONLY from the finalCoreMessage (if provided and valid)
+        //    We trust the finalCoreMessage for the definitive list of tool calls the AI intended.
+        if (finalCoreMessage && finalCoreMessage.role === 'assistant' && Array.isArray(finalCoreMessage.content)) {
             finalCoreMessage.content.forEach(part => {
-                if (part.type === 'text') { finalCoreText += part.text; }
-                else if (part.type === 'tool-call') { finalCoreToolCalls.push(part); }
+                if (part.type === 'tool-call') {
+                    finalCoreToolCalls.push(part);
+                }
+                // We IGNORE text parts from finalCoreMessage now
             });
+        } else if (finalCoreMessage) {
+             console.warn(`[HistoryManager] Received finalCoreMessage for reconcile, but it's not a valid assistant message with array content. ID: ${assistantMessageId}. Tool calls might be missing.`);
         }
 
-        // Reconstruct the UI content based *only* on the final CoreMessage parts
+        // 3. Reconstruct the UI content
         const reconstructedUiContent: UiMessageContentPart[] = [];
 
         // Add tool calls first, preserving their last known status/result from the UI history
@@ -208,16 +215,19 @@ export class HistoryManager {
                 toolCallId: coreToolCall.toolCallId,
                 toolName: coreToolCall.toolName,
                 args: coreToolCall.args,
-                // Preserve status/result if available, otherwise assume complete
-                status: existingUiToolCall?.status ?? 'complete',
+                status: existingUiToolCall?.status ?? 'complete', // Preserve status/result if available
                 result: existingUiToolCall?.result,
-                progress: undefined // Clear progress in final state
+                progress: undefined // Clear progress
             });
         });
 
-        // Add the final text content
-        if (finalCoreText) {
-            reconstructedUiContent.push({ type: 'text', text: finalCoreText });
+        // Add the final accumulated text content (from appendTextChunk)
+        if (finalAccumulatedText) {
+            reconstructedUiContent.push({ type: 'text', text: finalAccumulatedText });
+        } else {
+            // If somehow no text was accumulated, log a warning.
+            // We won't use finalText from streamResult.text as it might be unreliable on interruption.
+            console.warn(`[HistoryManager] No accumulated text found for message ID: ${assistantMessageId} during reconcile.`);
         }
 
         // Replace the old content with the reconciled content
@@ -225,7 +235,7 @@ export class HistoryManager {
 
         // Save the final reconciled UI message state
         await this.saveHistoryIfNeeded();
-        console.log(`[HistoryManager] Reconciled final UI state for message ID: ${assistantMessageId}`);
+        console.log(`[HistoryManager] Reconciled final UI state for message ID: ${assistantMessageId} using accumulated text.`);
     }
 
 

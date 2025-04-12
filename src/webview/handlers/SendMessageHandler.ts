@@ -48,12 +48,6 @@ export class SendMessageHandler implements MessageHandler {
                 modelId
             );
 
-            if (!streamResult) {
-                console.log("[SendMessageHandler] getAiResponseStream returned null, AI service likely handled error.");
-                // HistoryManager keeps the user message; error was likely shown by AiService
-                return;
-            }
-
             // Add assistant message frame via HistoryManager
             // assistantUiMsgId is already created above
 
@@ -68,23 +62,20 @@ export class SendMessageHandler implements MessageHandler {
             try {
                 console.log(`[SendMessageHandler] Received final StructuredResponse from processor:`, finalStructuredResponse);
 
-                let finalCoreMessage: CoreMessage | null = null;
-                if (finalStructuredResponse) {
-                    // Create a CoreMessage containing only the main_content for history
-                    finalCoreMessage = {
-                        role: 'assistant',
-                        content: finalStructuredResponse.main_content || '', // Use main_content, fallback to empty string
-                    };
-                    // Handle suggested_actions - send them to the UI separately
-                    if (finalStructuredResponse.suggested_actions && finalStructuredResponse.suggested_actions.length > 0) {
-                         console.log("[SendMessageHandler] Received suggested actions:", finalStructuredResponse.suggested_actions);
-                         context.postMessage({ type: 'addSuggestedActions', payload: { messageId: assistantUiMsgId, actions: finalStructuredResponse.suggested_actions } });
-                    }
-                } else {
-                     console.warn(`[SendMessageHandler] Stream processor returned null final structured response for ID: ${assistantUiMsgId}`);
+                // We no longer await streamResult.text here.
+                // HistoryManager will use the accumulated text from appendTextChunk.
+
+                // Handle suggested actions if they exist in the structured response
+                if (finalStructuredResponse?.suggested_actions && finalStructuredResponse.suggested_actions.length > 0) {
+                    console.log("[SendMessageHandler] Received suggested actions:", finalStructuredResponse.suggested_actions);
+                    context.postMessage({ type: 'addSuggestedActions', payload: { messageId: assistantUiMsgId, actions: finalStructuredResponse.suggested_actions } });
+                } else if (!finalStructuredResponse) {
+                     console.warn(`[SendMessageHandler] Stream processor returned null final structured response for ID: ${assistantUiMsgId}. Suggested actions might be missing.`);
                 }
 
-                await context.historyManager.reconcileFinalAssistantMessage(assistantUiMsgId, finalCoreMessage);
+                // Reconcile history using the accumulated text (handled internally by HistoryManager)
+                // and passing null for finalCoreMessage as we only need it for tool calls.
+                await context.historyManager.reconcileFinalAssistantMessage(assistantUiMsgId, null);
 
                 // Optionally await the final promise from AiServiceResponse for usage/finishReason
                 // const finalDetails = await streamResult.finalPromise;

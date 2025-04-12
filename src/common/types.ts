@@ -71,7 +71,7 @@ export type SuggestedAction = z.infer<typeof suggestedActionSchema>;
  * text content and optional suggested actions.
  */
 export const structuredAiResponseSchema = z.object({
-  main_content: z.string().describe('The primary text response from the AI.'),
+  // main_content removed as text is handled by textStream
   suggested_actions: z.array(suggestedActionSchema).optional()
     .describe('An optional list of actions the user can take next, to be rendered as interactive elements (e.g., buttons).')
 });
