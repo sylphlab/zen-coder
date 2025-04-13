@@ -45,35 +45,6 @@ export class OllamaProvider implements AiProvider { // Add export back to class
         return Promise.resolve();
     }
 
-    // --- SDK Instance Handling (Placeholder) ---
-    // This needs adjustment based on whether a Vercel AI SDK compatible package exists
-    // or if we need to implement the LanguageModel interface manually using fetch.
-    private async _getSdkInstance(): Promise<OllamaInstance | null> {
-        if (!this.isEnabled()) {
-            console.log("Ollama provider is disabled.");
-            return null;
-        }
-        if (this._ollamaInstance) {
-            return this._ollamaInstance;
-        }
-        try {
-            // Option 1: Use a hypothetical SDK package
-            // this._ollamaInstance = createOllama({ baseURL: this._ollamaEndpoint });
-
-            // Option 2: Implement manually (more likely needed)
-            // We would return an object implementing the LanguageModel interface
-            // using fetch calls to the Ollama API (e.g., /api/generate, /api/chat)
-            console.log(`Creating Ollama instance proxy for endpoint: ${this._ollamaEndpoint}`);
-            // For now, return a placeholder indicating manual implementation needed
-            this._ollamaInstance = { provider: this.id, endpoint: this._ollamaEndpoint, manual: true }; // Placeholder
-            return this._ollamaInstance;
-
-        } catch (error) {
-            console.error("Failed to create Ollama SDK instance/proxy:", error);
-            return null;
-        }
-    }
-
     // --- createModel Implementation ---
     createModel(apiKey: string | undefined, modelId: string, options?: any): LanguageModel {
         // Since Ollama doesn't use API keys, apiKey is ignored.
@@ -82,19 +53,19 @@ export class OllamaProvider implements AiProvider { // Add export back to class
              throw new Error("Ollama provider is disabled.");
         }
         try {
+            
             // Create the Ollama provider instance, configuring the base URL
             const ollamaInstance = createOllama({
-                baseURL: this._ollamaEndpoint
+                baseURL: this._ollamaEndpoint + '/api', // Set the base URL for the Ollama API
             });
 
-            // The ollamaInstance itself should provide the model factory or be the LanguageModel
-            // Assuming it's a factory that takes the model ID:
-            // return ollamaInstance(modelId);
+            console.log(`Creating Ollama model instance for ${modelId} at ${this._ollamaEndpoint}`);
 
-            // Or, more likely, the instance itself conforms to LanguageModel and handles modelId internally
-            // We cast it, similar to the OpenAI provider approach.
-            return ollamaInstance as unknown as LanguageModel;
-
+            // The ollamaInstance function takes the modelId and options directly
+            return ollamaInstance(modelId, {
+                ...options,
+                simulateStreaming: true, // Enable streaming simulation if needed
+            }); // Pass modelId and options to the instance
         } catch (error: any) {
             console.error(`Failed to create Ollama model instance for ${modelId} at ${this._ollamaEndpoint}:`, error);
             throw new Error(`Failed to create Ollama model instance: ${error.message || error}`);
