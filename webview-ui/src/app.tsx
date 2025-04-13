@@ -3,6 +3,8 @@ import { JSX } from 'preact/jsx-runtime';
 import { Router, Route, Link, useLocation } from "wouter"; // Import wouter components
 import ReactMarkdown from 'react-markdown'; // Import ReactMarkdown
 import remarkGfm from 'remark-gfm'; // Import remark-gfm
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'; // Import SyntaxHighlighter
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'; // Import a style (e.g., vscDarkPlus)
 import './app.css';
 import { SettingPage } from './pages/SettingPage'; // Import SettingPage
 import { ChatPage } from './pages/ChatPage'; // Import ChatPage
@@ -143,31 +145,31 @@ export function App() {
     }, [messages]); // Scroll when messages change
 
     useEffect(() => {
-        // Restore saved state (provider and model ID) when the webview loads
-        const savedState = vscode?.getState();
-        const initialModelId = savedState?.selectedModelId;
-        const initialProvider = savedState?.selectedProvider; // Restore provider too
-        let restoredState = false;
+        // // Restore saved state (provider and model ID) when the webview loads
+        // const savedState = vscode?.getState();
+        // const initialModelId = savedState?.selectedModelId;
+        // const initialProvider = savedState?.selectedProvider; // Restore provider too
+        let restoredState = false; // Keep this variable, but it will remain false for now
 
-        if (initialProvider) {
-            console.log("Restoring saved provider:", initialProvider);
-            setSelectedProvider(initialProvider);
-            if (initialModelId) {
-                console.log("Restoring saved model ID:", initialModelId);
-                setCurrentModelInput(initialModelId);
-            }
-            restoredState = true;
-        } else if (initialModelId) { // Fallback if only model ID was saved previously
-             console.log("Restoring saved model ID (fallback):", initialModelId);
-             setCurrentModelInput(initialModelId);
-             const restoredProvider = getProviderFromModelId(initialModelId);
-             if (restoredProvider) {
-                 setSelectedProvider(restoredProvider);
-                 // Save the provider now that we've derived it
-                 vscode?.setState({ ...savedState, selectedProvider: restoredProvider });
-             }
-             restoredState = true;
-        }
+        // if (initialProvider) {
+        //     console.log("Restoring saved provider:", initialProvider);
+        //     setSelectedProvider(initialProvider);
+        //     if (initialModelId) {
+        //         console.log("Restoring saved model ID:", initialModelId);
+        //         setCurrentModelInput(initialModelId);
+        //     }
+        //     restoredState = true;
+        // } else if (initialModelId) { // Fallback if only model ID was saved previously
+        //      console.log("Restoring saved model ID (fallback):", initialModelId);
+        //      setCurrentModelInput(initialModelId);
+        //      const restoredProvider = getProviderFromModelId(initialModelId);
+        //      if (restoredProvider) {
+        //          setSelectedProvider(restoredProvider);
+        //          // Save the provider now that we've derived it
+        //          vscode?.setState({ ...savedState, selectedProvider: restoredProvider });
+        //      }
+        //      restoredState = true;
+        // }
 
         // --- Message Handling Logic ---
         const handleMessage = (event: MessageEvent) => {
@@ -290,15 +292,15 @@ export function App() {
                     if (Array.isArray(message.payload)) {
                         const models = message.payload as AvailableModel[]; // Use correct type
                         setAvailableModels(models);
-                        // Set initial provider and model ONLY if not restored from saved state
-                        if (!restoredState && models.length > 0) {
-                            const firstModel = models[0];
-                            const initialProviderId = firstModel.providerId as ApiProviderKey; // Use providerId
-                            console.log("Setting initial provider and model (no saved state):", initialProviderId, firstModel.id);
-                            setSelectedProvider(initialProviderId);
-                            setCurrentModelInput(firstModel.id);
-                            // Save the initial state (both provider and model)
-                            vscode?.setState({ selectedProvider: initialProviderId, selectedModelId: firstModel.id });
+                        // Set initial provider and model (always do this now since restore is disabled)
+                        if (models.length > 0) {
+                             const firstModel = models[0];
+                             const initialProviderId = firstModel.providerId as ApiProviderKey; // Use providerId
+                             console.log("Setting initial provider and model:", initialProviderId, firstModel.id);
+                             setSelectedProvider(initialProviderId);
+                             setCurrentModelInput(firstModel.id);
+                             // Save the initial state (both provider and model)
+                             // vscode?.setState({ selectedProvider: initialProviderId, selectedModelId: firstModel.id }); // Don't save state for now
                         }
                     }
                     break;
@@ -602,9 +604,35 @@ export function App() {
                 // Wrap ReactMarkdown in a div to apply prose styles
                 return (
                     <div key={`text-${index}`} className="prose dark:prose-invert prose-sm max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {part.text}
-                        </ReactMarkdown>
+                         <ReactMarkdown
+                             remarkPlugins={[remarkGfm]}
+                             components={{
+                                 code({ node, className, children, ...props }) {
+                                     const match = /language-(\w+)/.exec(String(className || '')); // Ensure className is a string
+                                     const language = match ? match[1] : undefined;
+                                     const codeText = String(children).replace(/\n$/, ''); // Get text content
+
+                                     return language ? (
+                                         <SyntaxHighlighter
+                                             style={vscDarkPlus as any} // Apply the imported style (cast to any to bypass strict type check)
+                                             language={language}
+                                             PreTag="div"
+                                             // @ts-ignore - props might not perfectly match, but it works
+                                             {...props}
+                                         >
+                                             {codeText}
+                                         </SyntaxHighlighter>
+                                     ) : (
+                                         // Render inline code normally (or add custom styling)
+                                         <code className={className} {...props}>
+                                             {children}
+                                         </code>
+                                     );
+                                 }
+                             }}
+                         >
+                             {part.text}
+                         </ReactMarkdown>
                     </div>
                 );
             case 'image':
