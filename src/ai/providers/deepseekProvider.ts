@@ -46,54 +46,58 @@ export class DeepseekProvider implements AiProvider {
      * Retrieves the list of known available DeepSeek models.
      */
     async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
-        // Use provided key or fetch from storage
         const keyToUse = apiKey || await this.getApiKey(this._secretStorage);
         if (!keyToUse) {
-            console.warn("API key not available for fetching DeepSeek models.");
+            console.warn("[DeepseekProvider] API key not available for fetching models.");
             return [];
         }
+        return await this._fetchModelsFromApi(keyToUse);
+    }
 
+    /**
+     * Fetches the model list from the DeepSeek API.
+     */
+    private async _fetchModelsFromApi(apiKey: string): Promise<ModelDefinition[]> {
         const endpoint = 'https://api.deepseek.com/models';
-        const timeoutMs = 10000; // 10 seconds timeout
+        const timeoutMs = 10000;
+        console.log(`[DeepseekProvider] Fetching from endpoint: ${endpoint}`);
         try {
-            const response = await fetch(endpoint, { // Use native fetch
+            const response = await fetch(endpoint, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
-                    'Authorization': `Bearer ${keyToUse}`,
+                    'Authorization': `Bearer ${apiKey}`,
                 },
-                signal: AbortSignal.timeout(timeoutMs) // Use AbortSignal for timeout
+                signal: AbortSignal.timeout(timeoutMs)
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`Failed to fetch DeepSeek models: ${response.status} ${response.statusText}`, errorText);
+                console.error(`[DeepseekProvider] Failed to fetch models: ${response.status} ${response.statusText}`, errorText);
                 return [];
             }
 
             const jsonResponse: any = await response.json();
-
-            // According to docs, response structure is { object: 'list', data: [{ id, object, owned_by }] }
             if (!jsonResponse || !Array.isArray(jsonResponse.data)) {
-                 console.error("Invalid response format from DeepSeek /models:", jsonResponse);
+                 console.error("[DeepseekProvider] Invalid API response format:", jsonResponse);
                  return [];
             }
 
             const models: ModelDefinition[] = jsonResponse.data
                 .map((model: any) => ({
                     id: model.id,
-                    name: model.id, // Use ID as name, API doesn't provide a display name
+                    name: model.id, // Use ID as name
                 }))
-                 // Optional: Filter based on 'owned_by' or other properties if needed
-                .sort((a: ModelDefinition, b: ModelDefinition) => a.id.localeCompare(b.id)); // Sort by id
+                .sort((a: ModelDefinition, b: ModelDefinition) => a.id.localeCompare(b.id));
 
+            console.log(`[DeepseekProvider] Parsed ${models.length} models.`);
             return models;
 
         } catch (error: any) {
             if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-                 console.error(`Error fetching DeepSeek models: Request timed out after ${timeoutMs}ms`);
+                 console.error(`[DeepseekProvider] Error fetching models: Request timed out after ${timeoutMs}ms`);
             } else {
-                 console.error("Error fetching available DeepSeek models:", error);
+                 console.error("[DeepseekProvider] Error fetching models:", error);
             }
             return [];
         }

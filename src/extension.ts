@@ -26,6 +26,8 @@ import { ExecuteToolActionHandler } from './webview/handlers/ExecuteToolActionHa
 import { GetMcpConfiguredStatusHandler } from './webview/handlers/GetMcpConfiguredStatusHandler';
 import { TestMcpConnectionHandler } from './webview/handlers/TestMcpConnectionHandler'; // This handler is now defunct
 import { RetryMcpConnectionHandler } from './webview/handlers/RetryMcpConnectionHandler'; // Import the new retry handler
+import { openOrCreateMcpConfigFile } from './utils/configUtils'; // Import the helper function
+
 let aiServiceInstance: AiService | undefined = undefined;
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -225,83 +227,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
 // Helper functions translateUiHistoryToCoreMessages, getWebviewContent, and getNonce
 // have been moved to historyManager.ts and webview/webviewContent.ts respectively.
 
-// --- Helper Function to Open/Create MCP Config Files ---
-
-async function openOrCreateMcpConfigFile(context: vscode.ExtensionContext, isGlobal: boolean): Promise<void> {
-    let configPath: string | undefined;
-    let configUri: vscode.Uri | undefined;
-    const defaultContent = JSON.stringify({ mcpServers: {} }, null, 4); // Updated default content
-
-    if (isGlobal) {
-        // Use settings subdirectory within global storage
-        const settingsDirUri = vscode.Uri.joinPath(context.globalStorageUri, 'settings');
-        try {
-            // Check if the settings directory exists, create if not
-            await vscode.workspace.fs.stat(settingsDirUri);
-        } catch (error) {
-            // If stat fails (likely doesn't exist), create the directory
-            console.log(`Global settings directory not found, creating: ${settingsDirUri.fsPath}`);
-            await vscode.workspace.fs.createDirectory(settingsDirUri);
-        }
-        configUri = vscode.Uri.joinPath(settingsDirUri, 'mcp_settings.json'); // Updated filename and path
-        configPath = configUri.fsPath;
-        console.log(`Global MCP config path: ${configPath}`);
-    } else {
-        // Project-specific config
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (!workspaceFolders || workspaceFolders.length === 0) {
-            vscode.window.showWarningMessage("Please open a project folder to configure project-specific MCP servers.");
-            return;
-        }
-        // Use the first workspace folder for simplicity
-        const projectRootUri = workspaceFolders[0].uri;
-        const vscodeFolderUri = vscode.Uri.joinPath(projectRootUri, '.vscode');
-        configUri = vscode.Uri.joinPath(vscodeFolderUri, 'mcp_servers.json');
-        configPath = configUri.fsPath;
-        console.log(`Project MCP config path: ${configPath}`);
-
-        // Ensure .vscode directory exists
-        try {
-            await vscode.workspace.fs.stat(vscodeFolderUri);
-        } catch (error) {
-            console.log(`.vscode directory not found, creating: ${vscodeFolderUri.fsPath}`);
-            await vscode.workspace.fs.createDirectory(vscodeFolderUri);
-        }
-    }
-
-    if (!configUri || !configPath) {
-        vscode.window.showErrorMessage("Could not determine the path for the MCP configuration file.");
-        return;
-    }
-
-    try {
-        // Check if file exists
-        await vscode.workspace.fs.stat(configUri);
-        console.log(`Config file found: ${configPath}`);
-    } catch (error) {
-        // File does not exist, create it
-        console.log(`Config file not found, creating: ${configPath}`);
-        try {
-            const writeData = Buffer.from(defaultContent, 'utf8');
-            await vscode.workspace.fs.writeFile(configUri, writeData);
-            console.log(`Successfully created config file: ${configPath}`);
-        } catch (writeError) {
-            console.error(`Error creating config file ${configPath}:`, writeError);
-            vscode.window.showErrorMessage(`Failed to create MCP configuration file at ${configPath}. Check permissions or logs.`);
-            return;
-        }
-    }
-
-    // Open the file in the editor
-    try {
-        const document = await vscode.workspace.openTextDocument(configUri);
-        await vscode.window.showTextDocument(document);
-        console.log(`Opened config file: ${configPath}`);
-    } catch (openError) {
-        console.error(`Error opening config file ${configPath}:`, openError);
-        vscode.window.showErrorMessage(`Failed to open MCP configuration file at ${configPath}.`);
-    }
-}
+// Helper function moved to src/utils/configUtils.ts
 
 
 export function deactivate() {}

@@ -123,6 +123,34 @@ export class AiService {
         return activeToolNames;
     }
 
+    /**
+     * Prepares the combined toolset including enabled built-in tools and MCP tools.
+     */
+    private _prepareToolSet(): ToolSet {
+        // Get active built-in tools
+        const activeBuiltInTools = this._getActiveToolNames().reduce((acc, toolName) => {
+            const toolDefinition = allTools[toolName];
+            if (toolDefinition) {
+                acc[toolName] = toolDefinition;
+            }
+            return acc;
+        }, {} as Record<ToolName, Tool>);
+
+        // Get MCP Tools from McpManager
+        const mcpToolsMap = this.mcpManager.getMcpServerTools();
+        let allMcpTools: ToolSet = {};
+        console.log(`[AiService] Getting tools from ${mcpToolsMap.size} connected MCP clients managed by McpManager...`);
+        for (const [serverName, tools] of mcpToolsMap.entries()) {
+             console.log(`[AiService] Using ${Object.keys(tools).length} cached tools from McpManager for: ${serverName}`);
+             allMcpTools = { ...allMcpTools, ...tools }; // Merge tools
+        }
+        console.log(`[AiService] Total MCP tools obtained from McpManager: ${Object.keys(allMcpTools).length}`);
+
+        const allAvailableTools: ToolSet = { ...activeBuiltInTools, ...allMcpTools };
+        console.log(`[AiService] Total tools available for AI (built-in + MCP): ${Object.keys(allAvailableTools).length}`);
+        return allAvailableTools;
+    }
+
     // --- Core AI Interaction ---
     public async getAiResponseStream(
         history: CoreMessage[] = [],
@@ -137,26 +165,7 @@ export class AiService {
         }
 
         const messagesForApi: CoreMessage[] = [...history];
-        const activeTools = this._getActiveToolNames().reduce((acc, toolName) => {
-            const toolDefinition = allTools[toolName];
-            if (toolDefinition) {
-                acc[toolName] = toolDefinition;
-            }
-            return acc;
-        }, {} as Record<ToolName, Tool>);
-
-        // --- Get MCP Tools from McpManager ---
-        const mcpToolsMap = this.mcpManager.getMcpServerTools();
-        let allMcpTools: ToolSet = {};
-        console.log(`[AiService] Getting tools from ${mcpToolsMap.size} connected MCP clients managed by McpManager...`);
-        for (const [serverName, tools] of mcpToolsMap.entries()) {
-             console.log(`[AiService] Using ${Object.keys(tools).length} cached tools from McpManager for: ${serverName}`);
-             allMcpTools = { ...allMcpTools, ...tools }; // Merge tools
-        }
-        console.log(`[AiService] Total MCP tools obtained from McpManager: ${Object.keys(allMcpTools).length}`);
-
-        const allAvailableTools: ToolSet = { ...activeTools, ...allMcpTools };
-        console.log(`[AiService] Total tools available for AI (built-in + MCP): ${Object.keys(allAvailableTools).length}`);
+        const allAvailableTools = this._prepareToolSet();
 
         // --- Call streamText ---
         try {

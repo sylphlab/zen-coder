@@ -77,59 +77,73 @@ export class OllamaProvider implements AiProvider { // Add export back to class
         if (!this.isEnabled()) {
             return [];
         }
-        const endpoint = `${this._ollamaEndpoint}/api/tags`;
-        const timeoutMs = 5000; // Shorter timeout for local service
+        // apiKey is ignored for Ollama
+        return await this._fetchModelsFromApi();
+    }
 
+    /**
+     * Fetches the list of locally available models from the Ollama API.
+     */
+    private async _fetchModelsFromApi(): Promise<ModelDefinition[]> {
+        const endpoint = `${this._ollamaEndpoint}/api/tags`;
+        const timeoutMs = 5000;
+        console.log(`[OllamaProvider] Fetching from endpoint: ${endpoint}`);
         try {
-            console.log(`Fetching Ollama models from: ${endpoint}`);
             const response = await fetch(endpoint, {
                 method: 'GET',
-                headers: {
-                    'Accept': 'application/json',
-                },
+                headers: { 'Accept': 'application/json' },
                 signal: AbortSignal.timeout(timeoutMs)
             });
 
             if (!response.ok) {
-                // Handle common case where Ollama server isn't running
-                if (response.status === 404 || response.status === 503) {
-                     console.warn(`Ollama server not responding at ${this._ollamaEndpoint}. Status: ${response.status}`);
-                     // Optionally notify user once?
-                } else {
-                    const errorText = await response.text();
-                    console.error(`Failed to fetch Ollama models: ${response.status} ${response.statusText}`, errorText);
-                }
-                return []; // Return empty list on error
+                this._handleFetchError(response); // Use helper for error logging
+                return [];
             }
 
             const jsonResponse: any = await response.json();
-
             if (!jsonResponse || !Array.isArray(jsonResponse.models)) {
-                 console.error("Invalid response format from Ollama /api/tags:", jsonResponse);
+                 console.error("[OllamaProvider] Invalid API response format:", jsonResponse);
                  return [];
             }
 
             const models: ModelDefinition[] = jsonResponse.models
                 .map((model: any) => ({
-                    id: model.name, // Ollama uses 'name' which includes tag, e.g., "llama3:latest"
-                    name: model.name, // Use the full name as display name
-                    // Add other details if needed, e.g., model.details.parameter_size
+                    id: model.name,
+                    name: model.name,
                 }))
                 .sort((a: ModelDefinition, b: ModelDefinition) => a.name.localeCompare(b.name));
 
-            console.log(`Found ${models.length} Ollama models.`);
+            console.log(`[OllamaProvider] Found ${models.length} models.`);
             return models;
 
         } catch (error: any) {
-             if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-                 console.warn(`Error fetching Ollama models: Request timed out after ${timeoutMs}ms. Is Ollama running at ${this._ollamaEndpoint}?`);
-             } else if (error.code === 'ECONNREFUSED') {
-                 console.warn(`Error fetching Ollama models: Connection refused. Is Ollama running at ${this._ollamaEndpoint}?`);
-             }
-             else {
-                 console.error("Error fetching available Ollama models:", error);
-             }
+            this._handleFetchException(error, timeoutMs); // Use helper for exception logging
             return [];
+        }
+    }
+
+    /** Helper to log fetch errors */
+    private async _handleFetchError(response: Response): Promise<void> {
+        if (response.status === 404 || response.status === 503) {
+             console.warn(`[OllamaProvider] Server not responding at ${this._ollamaEndpoint}. Status: ${response.status}`);
+        } else {
+            try {
+                const errorText = await response.text();
+                console.error(`[OllamaProvider] Failed to fetch models: ${response.status} ${response.statusText}`, errorText);
+            } catch { // Handle cases where reading text fails
+                 console.error(`[OllamaProvider] Failed to fetch models: ${response.status} ${response.statusText}. Could not read error body.`);
+            }
+        }
+    }
+
+     /** Helper to log fetch exceptions */
+    private _handleFetchException(error: any, timeoutMs: number): void {
+        if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+            console.warn(`[OllamaProvider] Error fetching models: Request timed out after ${timeoutMs}ms. Is Ollama running at ${this._ollamaEndpoint}?`);
+        } else if (error.code === 'ECONNREFUSED') { // Check error code for connection refused
+            console.warn(`[OllamaProvider] Error fetching models: Connection refused. Is Ollama running at ${this._ollamaEndpoint}?`);
+        } else {
+            console.error("[OllamaProvider] Error fetching models:", error);
         }
     }
 }

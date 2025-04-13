@@ -31,81 +31,7 @@ export class StreamProcessor {
         // --- Process Full Stream ---
         try {
             for await (const part of streamResult.fullStream) {
-                // console.log("[StreamProcessor] Received part:", part.type, part); // DEBUG: Log received part type and content
-                switch (part.type) {
-                    case 'text-delta':
-                        this._postMessageCallback({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
-                        await this._historyManager.appendTextChunk(assistantMessageId, part.textDelta);
-                        break;
-                    case 'tool-call':
-                        // Handle full tool call information (might appear after streaming deltas)
-                        this._postMessageCallback({ type: 'addToolCall', payload: { toolCallId: part.toolCallId, toolName: part.toolName, args: part.args } });
-                        await this._historyManager.addToolCall(assistantMessageId, part.toolCallId, part.toolName, part.args);
-                        break;
-                    case 'tool-call-streaming-start':
-                        // Optional: Indicate tool call is starting (UI might show placeholder)
-                        console.log(`[StreamProcessor] Tool call streaming start: ${part.toolName} (${part.toolCallId})`);
-                        // You might want to add a placeholder in the UI here
-                        // this._postMessageCallback({ type: 'toolCallStart', payload: { toolCallId: part.toolCallId, toolName: part.toolName } });
-                        // HistoryManager might need an update if you want to store partial tool calls
-                        break;
-                    case 'tool-call-delta':
-                        // Optional: Update UI with streaming arguments
-                        // console.log(`[StreamProcessor] Tool call delta: ${part.toolName} (${part.toolCallId}), Args Delta: ${part.argsTextDelta}`);
-                        // this._postMessageCallback({ type: 'toolCallDelta', payload: { toolCallId: part.toolCallId, argsTextDelta: part.argsTextDelta } });
-                        // HistoryManager might need an update
-                        break;
-                    case 'tool-result':
-                        // Handle the result returned from executing a tool
-                        this._postMessageCallback({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, status: 'complete', message: part.result, toolName: part.toolName });
-                        await this._historyManager.updateToolStatus(part.toolCallId, 'complete', part.result);
-                        break;
-                    case 'reasoning':
-                        // Handle reasoning steps: send to UI for display
-                        console.log("[StreamProcessor] Reasoning Part Received:", part.textDelta); // Add detailed log
-                        // Send the thinking chunk to the UI
-                        const thinkingMessage = { type: 'appendThinkingChunk', sender: 'assistant', textDelta: part.textDelta };
-                        console.log("[StreamProcessor] Posting thinking chunk to UI:", JSON.stringify(thinkingMessage)); // Log the message being sent
-                        this._postMessageCallback(thinkingMessage);
-                        // Note: We might not want to save reasoning steps to the main history
-                        // await this._historyManager.appendReasoningChunk(assistantMessageId, part.textDelta); // Requires HistoryManager update if needed
-                        break;
-                    case 'reasoning-signature':
-                        console.log("[StreamProcessor] Reasoning Signature:", part.signature);
-                        break;
-                    case 'redacted-reasoning':
-                        console.log("[StreamProcessor] Redacted Reasoning:", part.data);
-                        break;
-                    case 'source':
-                        console.log("[StreamProcessor] Source:", part.source);
-                        // Handle source information (e.g., display citations)
-                        // this._postMessageCallback({ type: 'addSource', source: part.source });
-                        break;
-                    case 'file':
-                        console.log("[StreamProcessor] File:", part);
-                        // Handle generated file information
-                        // this._postMessageCallback({ type: 'addFile', file: part });
-                        break;
-                    case 'step-start':
-                        console.log("[StreamProcessor] Step Start:", part.messageId, part.request);
-                        break;
-                    case 'step-finish':
-                        console.log("[StreamProcessor] Step Finish:", part.messageId, part.finishReason, part.usage);
-                        // Final tool calls might be available here if not streamed earlier
-                        // Note: The main `toolCalls` promise on streamResult might still be the primary source for final tool calls
-                        break;
-                    case 'finish':
-                        console.log("[StreamProcessor] Stream Finished. Reason:", part.finishReason, "Usage:", part.usage);
-                        // This indicates the end of the fullStream iteration
-                        break;
-                    case 'error':
-                        console.error("[StreamProcessor] Error part received in stream:", part.error);
-                        this._postMessageCallback({ type: 'streamError', error: part.error });
-                        // Decide how to handle stream errors (e.g., stop processing, notify user)
-                        throw new Error(`Stream error: ${part.error}`); // Re-throw to stop processing?
-                    default:
-                        console.warn("[StreamProcessor] Unhandled stream part type:", (part as any).type);
-                }
+                await this._handleStreamPart(part, assistantMessageId);
             }
             console.log("[StreamProcessor] Finished processing fullStream.");
         } catch (error) {
@@ -114,6 +40,8 @@ export class StreamProcessor {
             if (!(error instanceof Error && error.message.startsWith('Stream error:'))) {
                  this._postMessageCallback({ type: 'streamError', error: error instanceof Error ? error.message : String(error) });
             }
+            // Re-throw the error to signal failure to the caller (SendMessageHandler)
+            throw error;
         }
 
         // --- experimental_partialOutputStream processing removed ---
@@ -135,7 +63,111 @@ export class StreamProcessor {
         // This logic is moved to SendMessageHandler after streamResult.final() resolves.
     // Removed extra closing brace for process method here
 
-    // handleStreamPart method is no longer needed as logic is moved into the main process loop
+    /**
+     * Handles a single part from the AI stream.
+     */
+    private async _handleStreamPart(part: any, assistantMessageId: string): Promise<void> {
+        // console.log("[StreamProcessor] Handling part:", part.type); // DEBUG
+        switch (part.type) {
+            case 'text-delta':
+                await this._handleTextDelta(part, assistantMessageId);
+                break;
+            case 'tool-call':
+                await this._handleToolCall(part, assistantMessageId);
+                break;
+            case 'tool-call-streaming-start':
+                this._handleToolCallStreamingStart(part);
+                break;
+            case 'tool-call-delta':
+                this._handleToolCallDelta(part);
+                break;
+            case 'tool-result':
+                await this._handleToolResult(part);
+                break;
+            case 'reasoning':
+                this._handleReasoning(part);
+                break;
+            case 'reasoning-signature':
+                console.log("[StreamProcessor] Reasoning Signature:", part.signature);
+                break;
+            case 'redacted-reasoning':
+                console.log("[StreamProcessor] Redacted Reasoning:", part.data);
+                break;
+            case 'source':
+                this._handleSource(part);
+                break;
+            case 'file':
+                this._handleFile(part);
+                break;
+            case 'step-start':
+                console.log("[StreamProcessor] Step Start:", part.messageId, part.request);
+                break;
+            case 'step-finish':
+                console.log("[StreamProcessor] Step Finish:", part.messageId, part.finishReason, part.usage);
+                break;
+            case 'finish':
+                console.log("[StreamProcessor] Stream Finished. Reason:", part.finishReason, "Usage:", part.usage);
+                break;
+            case 'error':
+                this._handleError(part);
+                break; // Throwing error is handled in the main loop now
+            default:
+                console.warn("[StreamProcessor] Unhandled stream part type:", part.type);
+        }
+    }
+
+    // --- Private Handlers for Specific Stream Part Types ---
+
+    private async _handleTextDelta(part: any, assistantMessageId: string): Promise<void> { // Use any for part type
+        this._postMessageCallback({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
+        await this._historyManager.appendTextChunk(assistantMessageId, part.textDelta);
+    }
+
+    private async _handleToolCall(part: ToolCallPart, assistantMessageId: string): Promise<void> {
+        this._postMessageCallback({ type: 'addToolCall', payload: { toolCallId: part.toolCallId, toolName: part.toolName, args: part.args } });
+        await this._historyManager.addToolCall(assistantMessageId, part.toolCallId, part.toolName, part.args);
+    }
+
+    private _handleToolCallStreamingStart(part: { type: 'tool-call-streaming-start', toolCallId: string, toolName: string }): void {
+        console.log(`[StreamProcessor] Tool call streaming start: ${part.toolName} (${part.toolCallId})`);
+        // Optional UI update: this._postMessageCallback({ type: 'toolCallStart', payload: { toolCallId: part.toolCallId, toolName: part.toolName } });
+    }
+
+    private _handleToolCallDelta(part: { type: 'tool-call-delta', toolCallId: string, toolName: string, argsTextDelta: string }): void {
+        // Optional UI update: console.log(`[StreamProcessor] Tool call delta: ${part.toolName} (${part.toolCallId}), Args Delta: ${part.argsTextDelta}`);
+        // Optional UI update: this._postMessageCallback({ type: 'toolCallDelta', payload: { toolCallId: part.toolCallId, argsTextDelta: part.argsTextDelta } });
+    }
+
+    private async _handleToolResult(part: ToolResultPart): Promise<void> {
+        this._postMessageCallback({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, status: 'complete', message: part.result, toolName: part.toolName });
+        await this._historyManager.updateToolStatus(part.toolCallId, 'complete', part.result);
+    }
+
+    private _handleReasoning(part: { type: 'reasoning', textDelta: string }): void {
+        console.log("[StreamProcessor] Reasoning Part Received:", part.textDelta);
+        const thinkingMessage = { type: 'appendThinkingChunk', sender: 'assistant', textDelta: part.textDelta };
+        console.log("[StreamProcessor] Posting thinking chunk to UI:", JSON.stringify(thinkingMessage));
+        this._postMessageCallback(thinkingMessage);
+        // Note: Reasoning steps are not saved to history by default.
+    }
+
+    private _handleSource(part: { type: 'source', source: any }): void {
+        console.log("[StreamProcessor] Source:", part.source);
+        // Optional UI update: this._postMessageCallback({ type: 'addSource', source: part.source });
+    }
+
+    private _handleFile(part: { type: 'file', name: string, content: string, encoding: string }): void {
+        console.log("[StreamProcessor] File:", part);
+        // Optional UI update: this._postMessageCallback({ type: 'addFile', file: part });
+    }
+
+    private _handleError(part: { type: 'error', error: any }): void {
+        console.error("[StreamProcessor] Error part received in stream:", part.error);
+        this._postMessageCallback({ type: 'streamError', error: part.error });
+        // Throw error to stop processing in the main loop
+        throw new Error(`Stream error: ${part.error}`);
+    }
+
 } // End of StreamProcessor class
 
 // --- Helper Function Removed ---

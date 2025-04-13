@@ -47,30 +47,35 @@ export class AnthropicProvider implements AiProvider {
      * Retrieves the list of known available Anthropic models.
      */
     async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
-        console.log(`[AnthropicProvider] getAvailableModels called. Provided apiKey: ${!!apiKey}`); // Log entry
-        // Use the provided API key or fetch from storage
+        console.log(`[AnthropicProvider] getAvailableModels called. Provided apiKey: ${!!apiKey}`);
         const keyToUse = apiKey || await this.getApiKey(this._secretStorage);
-        console.log(`[AnthropicProvider] Using API key: ${keyToUse ? '******' + keyToUse.slice(-4) : 'Not found'}`); // Log key usage (masked)
+        console.log(`[AnthropicProvider] Using API key: ${keyToUse ? '******' + keyToUse.slice(-4) : 'Not found'}`);
         if (!keyToUse) {
             console.warn("[AnthropicProvider] API key not available for fetching Anthropic models.");
             return [];
         }
+        return await this._fetchModelsFromApi(keyToUse);
+    }
 
+    /**
+     * Fetches the model list from the Anthropic API.
+     */
+    private async _fetchModelsFromApi(apiKey: string): Promise<ModelDefinition[]> {
         const endpoint = 'https://api.anthropic.com/v1/models';
         const timeoutMs = 10000;
-        console.log(`[AnthropicProvider] Fetching from endpoint: ${endpoint}`); // Log endpoint
+        console.log(`[AnthropicProvider] Fetching from endpoint: ${endpoint}`);
         try {
-            const response = await fetch(endpoint, { // Use native fetch
+            const response = await fetch(endpoint, {
                 method: 'GET',
                 headers: {
-                    'x-api-key': keyToUse,
-                    'anthropic-version': '2023-06-01', // Required header
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01',
                     'Content-Type': 'application/json',
                 },
-                signal: AbortSignal.timeout(timeoutMs) // Use AbortSignal for timeout
+                signal: AbortSignal.timeout(timeoutMs)
             });
 
-            console.log(`[AnthropicProvider] API Response Status: ${response.status}`); // Log status
+            console.log(`[AnthropicProvider] API Response Status: ${response.status}`);
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error(`Failed to fetch Anthropic models: ${response.status} ${response.statusText}`, errorText);
@@ -78,22 +83,19 @@ export class AnthropicProvider implements AiProvider {
             }
 
             const jsonResponse: any = await response.json();
-            // console.log("[AnthropicProvider] API Response JSON:", JSON.stringify(jsonResponse, null, 2)); // Log raw response (optional, can be large)
-
             if (!jsonResponse || !Array.isArray(jsonResponse.data)) {
                  console.error("[AnthropicProvider] Invalid response format from Anthropic /v1/models:", jsonResponse);
-                 console.error("Invalid response format from Anthropic /v1/models:", jsonResponse);
                  return [];
             }
 
             const models: ModelDefinition[] = jsonResponse.data
                 .map((model: any) => ({
                     id: model.id,
-                    name: model.display_name || model.id, // Use display_name if available
+                    name: model.display_name || model.id,
                 }))
-                .sort((a: ModelDefinition, b: ModelDefinition) => a.name.localeCompare(b.name)); // Sort by name
+                .sort((a: ModelDefinition, b: ModelDefinition) => a.name.localeCompare(b.name));
 
-            console.log(`[AnthropicProvider] Parsed ${models.length} models.`); // Log count
+            console.log(`[AnthropicProvider] Parsed ${models.length} models.`);
             return models;
 
         } catch (error: any) {

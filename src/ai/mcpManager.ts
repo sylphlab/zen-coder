@@ -2,27 +2,16 @@ import * as vscode from 'vscode';
 import { ToolSet, experimental_createMCPClient } from 'ai';
 import { Experimental_StdioMCPTransport } from 'ai/mcp-stdio';
 
-// --- Interfaces (Copied from AiService) ---
+import {
+    McpServerConfig,
+    McpConfigFile, // Keep if needed internally, maybe not
+    loadAndMergeMcpConfigs,
+    setupMcpConfigWatchers
+} from './mcpConfigUtils'; // Import helpers and types
 
-interface McpServerConfig {
-    command?: string;
-    args?: string[];
-    cwd?: string;
-    env?: Record<string, string>;
-    url?: string;
-    headers?: Record<string, string>;
-    alwaysAllow?: string[];
-    disabled?: boolean;
-}
-
-interface McpConfigFile {
-    mcpServers: {
-        [serverName: string]: McpServerConfig;
-    };
-}
-
+// Interface for status remains here as it's exported by McpManager
 export interface McpServerStatus {
-    config: McpServerConfig;
+    config: McpServerConfig; // Use imported type
     enabled: boolean;
     isConnected: boolean;
     tools?: ToolSet;
@@ -32,8 +21,7 @@ export interface McpServerStatus {
 // --- McpManager Class ---
 
 export class McpManager {
-    private _mcpConfigWatcher: vscode.FileSystemWatcher | undefined;
-    private _globalMcpConfigWatcher: vscode.FileSystemWatcher | undefined;
+    private _configWatchers: vscode.Disposable[] = []; // Store watcher disposables
     private _mergedMcpConfigs: { [serverName: string]: McpServerConfig } = {};
     private _activeMcpClients: Map<string, any> = new Map(); // { serverName: clientInstance }
     private _mcpServerTools: Map<string, ToolSet> = new Map(); // { serverName: ToolSet }
@@ -43,8 +31,8 @@ export class McpManager {
         private context: vscode.ExtensionContext,
         private postMessageCallback?: (message: any) => void // Optional callback for UI updates
     ) {
-        // Initial load of MCP configs
-        this._loadAndMergeMcpConfigs().then(configs => {
+        // Initial load of MCP configs using imported function
+        loadAndMergeMcpConfigs(context).then(configs => {
             this._mergedMcpConfigs = configs;
             const activeCount = Object.values(configs).filter(c => !c.disabled).length;
             console.log(`[McpManager] Initial MCP configs loaded: ${Object.keys(configs).length} total servers, ${activeCount} active.`);
@@ -52,8 +40,17 @@ export class McpManager {
             this._initializeMcpClients(); // Don't await here, let it run in background
         });
 
-        // Setup file watchers
-        this._setupMcpConfigWatchers();
+        // Setup file watchers using imported function
+        const reloadCallback = async (uri?: vscode.Uri) => {
+            console.log(`[McpManager] MCP config file changed (${uri?.fsPath || 'unknown'}), reloading and re-initializing clients...`);
+            await this._closeAllMcpClients();
+            this._mergedMcpConfigs = await loadAndMergeMcpConfigs(this.context); // Use imported function
+            await this._initializeMcpClients(); // Await here to ensure re-init completes
+            // Notify UI about the reload so it can refresh the status display
+            this.postMessageCallback?.({ type: 'mcpConfigReloaded' });
+        };
+        this._configWatchers = setupMcpConfigWatchers(context, reloadCallback);
+        this.context.subscriptions.push(...this._configWatchers); // Add watchers to subscriptions
     }
 
     // --- Public Accessors ---
@@ -62,80 +59,7 @@ export class McpManager {
         return this._mcpServerTools;
     }
 
-    // --- Config Loading and Watching ---
-
-    private async _readMcpConfigFile(uri: vscode.Uri): Promise<{ [serverName: string]: McpServerConfig }> {
-        try {
-            const fileContent = await vscode.workspace.fs.readFile(uri);
-            const jsonData = JSON.parse(Buffer.from(fileContent).toString('utf8')) as McpConfigFile;
-            if (jsonData && typeof jsonData.mcpServers === 'object' && jsonData.mcpServers !== null) {
-                return jsonData.mcpServers;
-            }
-            console.warn(`[McpManager] Invalid format (expected mcpServers object) in MCP config file: ${uri.fsPath}`);
-            return {};
-        } catch (error: any) {
-            if (error.code !== 'FileNotFound') {
-                console.error(`[McpManager] Error reading or parsing MCP config file ${uri.fsPath}:`, error);
-                vscode.window.showWarningMessage(`Error reading MCP config ${uri.fsPath}. Check format.`);
-            }
-            return {};
-        }
-    }
-
-    private async _loadAndMergeMcpConfigs(): Promise<{ [serverName: string]: McpServerConfig }> {
-        console.log("[McpManager] Loading and merging MCP server configurations...");
-        const globalConfigUri = vscode.Uri.joinPath(this.context.globalStorageUri, 'settings', 'mcp_settings.json');
-        const globalConfigs = await this._readMcpConfigFile(globalConfigUri);
-        console.log(`[McpManager] Read ${Object.keys(globalConfigs).length} servers from global config: ${globalConfigUri.fsPath}`);
-
-        let projectConfigs: { [serverName: string]: McpServerConfig } = {};
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length > 0) {
-            const projectConfigUri = vscode.Uri.joinPath(workspaceFolders[0].uri, '.vscode', 'mcp_servers.json');
-            projectConfigs = await this._readMcpConfigFile(projectConfigUri);
-            console.log(`[McpManager] Read ${Object.keys(projectConfigs).length} servers from project config: ${projectConfigUri.fsPath}`);
-        }
-
-        const mergedConfigs = { ...globalConfigs, ...projectConfigs }; // Project overrides global
-        const finalConfigCount = Object.keys(mergedConfigs).length;
-        const activeCount = Object.values(mergedConfigs).filter(c => !c.disabled).length;
-        console.log(`[McpManager] Merged MCP configs. Total servers: ${finalConfigCount}, Active servers: ${activeCount}`);
-        return mergedConfigs;
-    }
-
-    private _setupMcpConfigWatchers(): void {
-        const reloadConfigs = async (uri?: vscode.Uri) => {
-            console.log(`[McpManager] MCP config file changed (${uri?.fsPath || 'unknown'}), reloading and re-initializing clients...`);
-            await this._closeAllMcpClients();
-            this._mergedMcpConfigs = await this._loadAndMergeMcpConfigs();
-            await this._initializeMcpClients(); // Await here to ensure re-init completes
-            // Notify UI about the reload so it can refresh the status display
-            this.postMessageCallback?.({ type: 'mcpConfigReloaded' });
-        };
-
-        // Watch global config file
-        const globalSettingsDirUri = vscode.Uri.joinPath(this.context.globalStorageUri, 'settings');
-        const globalConfigPath = vscode.Uri.joinPath(globalSettingsDirUri, 'mcp_settings.json').fsPath;
-        const globalWatcherPattern = new vscode.RelativePattern(globalSettingsDirUri, 'mcp_settings.json');
-        this._globalMcpConfigWatcher = vscode.workspace.createFileSystemWatcher(globalWatcherPattern);
-        this._globalMcpConfigWatcher.onDidChange(reloadConfigs);
-        this._globalMcpConfigWatcher.onDidCreate(reloadConfigs);
-        this._globalMcpConfigWatcher.onDidDelete(reloadConfigs);
-        this.context.subscriptions.push(this._globalMcpConfigWatcher);
-        console.log(`[McpManager] Watching global MCP config: ${globalConfigPath}`);
-
-        // Watch project config file
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-        if (workspaceFolders && workspaceFolders.length > 0) {
-            const projectConfigPattern = new vscode.RelativePattern(workspaceFolders[0], '.vscode/mcp_servers.json');
-            this._mcpConfigWatcher = vscode.workspace.createFileSystemWatcher(projectConfigPattern);
-            this._mcpConfigWatcher.onDidChange(reloadConfigs);
-            this._mcpConfigWatcher.onDidCreate(reloadConfigs);
-            this._mcpConfigWatcher.onDidDelete(reloadConfigs);
-            this.context.subscriptions.push(this._mcpConfigWatcher);
-            console.log(`[McpManager] Watching project MCP config: ${projectConfigPattern.baseUri.fsPath}/${projectConfigPattern.pattern}`);
-        }
-    }
+    // Config loading and watching logic moved to mcpConfigUtils.ts
 
     // --- MCP Client Initialization and Management ---
 
@@ -160,55 +84,86 @@ export class McpManager {
         this.postMessageCallback?.({ type: 'updateMcpConfiguredStatus', payload: this.getMcpServerConfiguredStatus() });
     }
 
-    // Helper to connect and fetch tools for a single server
-    private async _connectAndFetchTools(serverName: string, config: McpServerConfig): Promise<boolean> {
-        this._mcpConnectionErrors.delete(serverName); // Clear previous error for this server
-        let transport: Experimental_StdioMCPTransport | { type: 'sse'; url: string; headers?: Record<string, string> } | undefined;
-        let serverType: 'stdio' | 'sse' | 'unknown' = 'unknown';
+    /**
+     * Creates the appropriate transport object based on server config.
+     * Returns null and records error if config is invalid.
+     */
+    private _createMcpTransport(serverName: string, config: McpServerConfig): { transport: Experimental_StdioMCPTransport | { type: 'sse'; url: string; headers?: Record<string, string> }, type: 'stdio' | 'sse' } | null {
+        let transport: Experimental_StdioMCPTransport | { type: 'sse'; url: string; headers?: Record<string, string> };
+        let serverType: 'stdio' | 'sse';
 
-        if (config.command) serverType = 'stdio';
-        else if (config.url) serverType = 'sse';
-        else {
+        if (config.command) {
+            serverType = 'stdio';
+            transport = new Experimental_StdioMCPTransport({
+                command: config.command!, args: config.args || [], cwd: config.cwd, env: config.env,
+            });
+        } else if (config.url) {
+            serverType = 'sse';
+            transport = { type: 'sse', url: config.url!, headers: config.headers };
+        } else {
             const errorMsg = `MCP server '${serverName}' has neither 'command' nor 'url' defined.`;
             console.error(`[McpManager] ${errorMsg}`);
             this._mcpConnectionErrors.set(serverName, errorMsg);
-            return false;
+            return null;
         }
+        return { transport, type: serverType };
+    }
 
+    /**
+     * Attempts to establish an MCP connection with a timeout.
+     * Returns the client instance on success, null on failure (and records error).
+     */
+    private async _attemptMcpConnection(serverName: string, transportInfo: { transport: any, type: 'stdio' | 'sse' }): Promise<any | null> {
         try {
-            console.log(`[McpManager] Attempting connection to MCP server: ${serverName} (${serverType})`);
-            if (serverType === 'stdio') {
-                transport = new Experimental_StdioMCPTransport({
-                    command: config.command!, args: config.args || [], cwd: config.cwd, env: config.env,
-                });
-            } else { // sse
-                transport = { type: 'sse', url: config.url!, headers: config.headers };
-            }
-
-            const connectPromise = experimental_createMCPClient({ transport });
-            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out (15s)')), 15000));
-
+            console.log(`[McpManager] Attempting connection to MCP server: ${serverName} (${transportInfo.type})`);
+            const connectPromise = experimental_createMCPClient({ transport: transportInfo.transport });
+            // Increased timeout slightly to 20s
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out (20s)')), 20000));
             const client = await Promise.race([connectPromise, timeoutPromise]);
-            console.log(`[McpManager] Successfully connected MCP client for: ${serverName}. Fetching tools...`);
-            this._activeMcpClients.set(serverName, client);
-
-            // Fetch and store tools
-            try {
-                const tools = await (client as any).tools(); // Cast client to any to access tools()
-                this._mcpServerTools.set(serverName, tools);
-                console.log(`[McpManager] Fetched and stored ${Object.keys(tools).length} tools for ${serverName}.`);
-                return true; // Connection and tool fetch successful
-            } catch (toolError: any) {
-                const errorMsg = `Failed to fetch tools: ${toolError.message || toolError}`;
-                console.error(`[McpManager] Connection succeeded for '${serverName}', but ${errorMsg}`);
-                this._mcpConnectionErrors.set(serverName, errorMsg);
-                // Keep client active, but record the error
-                return false; // Indicate partial failure (connected but no tools)
-            }
+            console.log(`[McpManager] Successfully connected MCP client for: ${serverName}.`);
+            return client;
         } catch (error: any) {
             const errorMsg = `Connection failed: ${error.message || error}`;
             console.error(`[McpManager] ${errorMsg} for MCP server '${serverName}'`);
             this._mcpConnectionErrors.set(serverName, errorMsg);
+            return null;
+        }
+    }
+
+    /**
+     * Fetches tools from a connected client and stores them.
+     * Returns true on success, false on failure (and records error).
+     */
+    private async _fetchAndStoreMcpTools(serverName: string, client: any): Promise<boolean> {
+        try {
+            console.log(`[McpManager] Fetching tools for ${serverName}...`);
+            const tools = await (client as any).tools(); // Cast client to any to access tools()
+            this._mcpServerTools.set(serverName, tools);
+            console.log(`[McpManager] Fetched and stored ${Object.keys(tools).length} tools for ${serverName}.`);
+            return true; // Tool fetch successful
+        } catch (toolError: any) {
+            const errorMsg = `Failed to fetch tools: ${toolError.message || toolError}`;
+            console.error(`[McpManager] Connection succeeded for '${serverName}', but ${errorMsg}`);
+            this._mcpConnectionErrors.set(serverName, errorMsg);
+            return false; // Indicate tool fetch failed
+        }
+    }
+
+
+    /**
+     * Helper to connect and fetch tools for a single server, using sub-helpers.
+     * Returns true if the connection attempt was made and client stored (even if tool fetch failed),
+     * false if the connection itself failed or config was invalid.
+     */
+    private async _connectAndFetchTools(serverName: string, config: McpServerConfig): Promise<boolean> {
+        this._mcpConnectionErrors.delete(serverName); // Clear previous error
+
+        const transportInfo = this._createMcpTransport(serverName, config);
+        if (!transportInfo) return false; // Error handled in _createMcpTransport
+
+        const client = await this._attemptMcpConnection(serverName, transportInfo);
+        if (!client) {
+            // Error handled in _attemptMcpConnection
             // Ensure client isn't left in maps if connection failed
             if (this._activeMcpClients.has(serverName)) {
                  const clientToClose = this._activeMcpClients.get(serverName);
@@ -218,6 +173,15 @@ export class McpManager {
             }
             return false; // Connection failed
         }
+
+        // Connection successful, store client
+        this._activeMcpClients.set(serverName, client);
+
+        // Fetch and store tools
+        await this._fetchAndStoreMcpTools(serverName, client); // We store the client even if tool fetch fails
+
+        // Return true because the connection itself was successful (or at least attempted and client stored)
+        return true;
     }
 
 
@@ -329,9 +293,9 @@ export class McpManager {
     // Dispose watchers on deactivation
     public dispose(): void {
         console.log("[McpManager] Disposing McpManager...");
-        // Dispose watchers
-        this._mcpConfigWatcher?.dispose();
-        this._globalMcpConfigWatcher?.dispose();
+        // Dispose watchers returned by setupMcpConfigWatchers
+        this._configWatchers.forEach(watcher => watcher.dispose());
+        this._configWatchers = [];
         console.log("[McpManager] MCP config watchers disposed.");
         // Close active MCP clients
         this._closeAllMcpClients(); // Call the closing method (no await needed in sync dispose)

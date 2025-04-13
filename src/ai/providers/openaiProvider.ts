@@ -149,58 +149,60 @@ export class OpenAiProvider implements AiProvider { // Add export back to class
     // Match interface: remove secretStorage param, apiKey is optional
     // Match interface: apiKey is optional
     async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
-        // Use the provided API key or fetch from storage
-        // Use the provided API key or fetch from storage using the stored secretStorage
-        // Use the provided API key or fetch from storage using the stored _secretStorage
         const keyToUse = apiKey || await this.getApiKey(this._secretStorage);
         if (!keyToUse) {
-            // If key is required but not found, return empty or throw error?
-            // Interface implies it might be optional for fetching. Let's return empty.
-            console.log("API key not available for fetching OpenAI models.");
+            console.warn("[OpenAIProvider] API key not available for fetching models.");
             return [];
         }
+        return await this._fetchModelsFromApi(keyToUse);
+    }
 
-        const timeoutMs = 10000; // 10 seconds timeout
+    /**
+     * Fetches the model list from the OpenAI API.
+     */
+    private async _fetchModelsFromApi(apiKey: string): Promise<ModelDefinition[]> {
+        const endpoint = 'https://api.openai.com/v1/models';
+        const timeoutMs = 10000;
+        console.log(`[OpenAIProvider] Fetching from endpoint: ${endpoint}`);
         try {
-            const response = await fetch('https://api.openai.com/v1/models', {
+            const response = await fetch(endpoint, {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${keyToUse}`,
+                    'Authorization': `Bearer ${apiKey}`,
                 },
-                signal: AbortSignal.timeout(timeoutMs) // Use AbortSignal for timeout
+                signal: AbortSignal.timeout(timeoutMs)
             });
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`Failed to fetch OpenAI models: ${response.status} ${response.statusText}`, errorText);
-                // Don't throw here, return empty array as per previous logic
-                // throw new Error(`API request failed with status ${response.status}: ${errorText}`);
+                console.error(`[OpenAIProvider] Failed to fetch models: ${response.status} ${response.statusText}`, errorText);
                 return [];
             }
 
             const jsonResponse: any = await response.json();
-
             if (!jsonResponse || !Array.isArray(jsonResponse.data)) {
-                 console.error("Invalid response format from OpenAI /v1/models:", jsonResponse);
+                 console.error("[OpenAIProvider] Invalid API response format:", jsonResponse);
                  return [];
             }
 
-            const models: ModelDefinition[] = jsonResponse.data // Use ModelDefinition
+            const models: ModelDefinition[] = jsonResponse.data
+                // Basic filtering for likely chat models
+                .filter((model: any) => model.id.includes('gpt') || model.id.includes('instruct'))
                 .map((model: any) => ({
                     id: model.id,
-                    name: model.id, // Use ID as name for now, OpenAI API doesn't provide a display name
+                    name: model.id, // Use ID as name
                 }))
                 .sort((a: ModelDefinition, b: ModelDefinition) => a.id.localeCompare(b.id));
 
+            console.log(`[OpenAIProvider] Parsed ${models.length} models.`);
             return models;
 
-        } catch (error: any) { // Catch specific error type if known
+        } catch (error: any) {
             if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-                 console.error(`Error fetching OpenAI models: Request timed out after ${timeoutMs}ms`);
+                 console.error(`[OpenAIProvider] Error fetching models: Request timed out after ${timeoutMs}ms`);
             } else {
-                 console.error("Error fetching available OpenAI models:", error);
+                 console.error("[OpenAIProvider] Error fetching models:", error);
             }
-            // Don't show vscode error message here, let caller handle UI feedback
             return [];
         }
     }

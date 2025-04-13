@@ -1,7 +1,12 @@
 import * as vscode from 'vscode';
 import { CoreMessage, ToolCallPart as CoreToolCallPart, ToolResultPart as CoreToolResultPart, AssistantContent, UserContent } from 'ai'; // Import UserContent
-import { UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, UiImagePart, structuredAiResponseSchema } from './common/types'; // Import UI types and schema
-
+import { UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, UiImagePart } from './common/types'; // Import UI types
+import {
+    parseAndValidateSuggestedActions,
+    reconstructUiContent,
+    translateUserMessageToCore,
+    translateAssistantMessageToCore
+} from './utils/historyUtils'; // Import history helpers
 /**
  * Manages the chat history, including persistence and translation
  * between UI format (UiMessage) and AI SDK format (CoreMessage).
@@ -173,18 +178,14 @@ export class HistoryManager {
         }
     }
 
-     /**
-     * Reconciles the final state of an assistant message. It uses the text accumulated
-     * via `appendTextChunk` as the primary source for the final text content, ensuring
-     * that even interrupted streams are recorded correctly. It uses the optional
-     * `finalCoreMessage` (if provided by the SDK upon successful completion) primarily
-     * to get the definitive list of tool calls intended by the AI.
-     * @param assistantMessageId The ID of the assistant message to reconcile.
-     * @param finalCoreMessage The final CoreMessage from the SDK (can be null if stream failed or didn't produce one).
-     * @param postMessageCallback Callback function to send messages (like suggested actions) to the webview.
+   // Helper functions moved to src/utils/historyUtils.ts
+
+
+    /**
+     * Reconciles the final state of an assistant message.
+     * Parses suggested actions, reconstructs content, saves history, and sends actions to UI.
      */
     public async reconcileFinalAssistantMessage(assistantMessageId: string, finalCoreMessage: CoreMessage | null, postMessageCallback: (message: any) => void): Promise<void> {
-        // Find the UI message frame
         const uiMessageIndex = this._history.findIndex(msg => msg.id === assistantMessageId);
         if (uiMessageIndex === -1) {
             console.warn(`[HistoryManager] Could not find UI message frame (ID: ${assistantMessageId}) to reconcile final state.`);
@@ -192,93 +193,32 @@ export class HistoryManager {
         }
 
         const finalUiMessage = this._history[uiMessageIndex];
-        let finalCoreToolCalls: CoreToolCallPart[] = []; // Get tool calls from finalCoreMessage if available
+        let finalCoreToolCalls: CoreToolCallPart[] = [];
 
-        // 1. Extract accumulated text from the existing UI message content parts
-        // This is the most reliable source, especially for interrupted streams.
+        // Extract accumulated text
         let finalAccumulatedText = finalUiMessage.content.filter(part => part.type === 'text').map(part => part.text).join('');
-        let textToSave = finalAccumulatedText; // Default to full text
-        let parsedActions: any[] | null = null;
 
-        // 2. Extract tool calls ONLY from the finalCoreMessage (if provided and valid)
-        //    We trust the finalCoreMessage for the definitive list of tool calls the AI intended.
+        // Extract tool calls from finalCoreMessage
         if (finalCoreMessage && finalCoreMessage.role === 'assistant' && Array.isArray(finalCoreMessage.content)) {
             finalCoreMessage.content.forEach(part => {
-                if (part.type === 'tool-call') {
-                    finalCoreToolCalls.push(part);
-                }
-                // We IGNORE text parts from finalCoreMessage now
+                if (part.type === 'tool-call') { finalCoreToolCalls.push(part); }
             });
         } else if (finalCoreMessage) {
-             console.warn(`[HistoryManager] Received finalCoreMessage for reconcile, but it's not a valid assistant message with array content. ID: ${assistantMessageId}. Tool calls might be missing.`);
+             console.warn(`[HistoryManager] Received finalCoreMessage for reconcile, but it's not a valid assistant message. ID: ${assistantMessageId}.`);
         }
 
-        // --- Reverted: Parse for trailing JSON block for suggested actions ---
-        const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```$/;
-        const match = finalAccumulatedText.match(jsonBlockRegex);
+        // Parse suggested actions and get text without the JSON block using imported helper
+        const { actions: parsedActions, textWithoutBlock } = parseAndValidateSuggestedActions(finalAccumulatedText);
 
-        if (match && match[1]) {
-            const jsonString = match[1].trim();
-            console.log("[HistoryManager] Found potential JSON block:", jsonString);
-            try {
-                const parsedJson = JSON.parse(jsonString);
-                // Validate against the schema (which now only expects suggested_actions)
-                const validationResult = structuredAiResponseSchema.safeParse(parsedJson);
-
-                if (validationResult.success && validationResult.data.suggested_actions && validationResult.data.suggested_actions.length > 0) {
-                    console.log("[HistoryManager] Successfully parsed and validated suggested actions:", validationResult.data.suggested_actions);
-                    parsedActions = validationResult.data.suggested_actions; // Store actions
-                    // Remove JSON block from the text to be saved
-                    textToSave = finalAccumulatedText.substring(0, match.index).trimEnd();
-                    console.log("[HistoryManager] JSON block will be removed from saved history.");
-                } else {
-                    console.warn("[HistoryManager] Parsed JSON block failed validation or missing suggested_actions:", validationResult.success ? 'Missing/empty actions' : validationResult.error);
-                    // Keep the block in the text if validation fails
-                }
-            } catch (parseError) {
-                console.error("[HistoryManager] Error parsing JSON block:", parseError);
-                // Keep the block in the text if parsing fails
-            }
-        } else {
-             console.log("[HistoryManager] No JSON block found at the end of the message.");
-        }
-        // --- End Reverted Parsing Logic ---
-        // Removed extra closing brace here
-
-        // 3. Reconstruct the UI content
-        const reconstructedUiContent: UiMessageContentPart[] = [];
-
-        // Add tool calls first, preserving their last known status/result from the UI history
-        finalCoreToolCalls.forEach(coreToolCall => {
-            const existingUiToolCall = finalUiMessage.content.find(p => p.type === 'tool-call' && p.toolCallId === coreToolCall.toolCallId) as UiToolCallPart | undefined;
-            reconstructedUiContent.push({
-                type: 'tool-call',
-                toolCallId: coreToolCall.toolCallId,
-                toolName: coreToolCall.toolName,
-                args: coreToolCall.args,
-                status: existingUiToolCall?.status ?? 'complete', // Preserve status/result if available
-                result: existingUiToolCall?.result,
-                progress: undefined // Clear progress
-            });
-        });
-
-        // Add the final text content (either full or from <content> tag)
-        if (textToSave) {
-            reconstructedUiContent.push({ type: 'text', text: textToSave });
-        } else {
-            // If somehow no text was accumulated, log a warning.
-            // We won't use finalText from streamResult.text as it might be unreliable on interruption.
-            console.warn(`[HistoryManager] No text content found or extracted for message ID: ${assistantMessageId} during reconcile.`);
-        }
-
-        // Replace the old content with the reconciled content
+        // Reconstruct UI content using imported helper
+        const reconstructedUiContent = reconstructUiContent(finalCoreToolCalls, finalUiMessage.content, textWithoutBlock);
         finalUiMessage.content = reconstructedUiContent;
 
         // Save the final reconciled UI message state
         await this.saveHistoryIfNeeded();
         console.log(`[HistoryManager] Reconciled final UI state for message ID: ${assistantMessageId}.`);
 
-        // --- NEW: Send parsed actions to UI ---
+        // Send parsed actions to UI
         if (parsedActions && parsedActions.length > 0) {
             postMessageCallback({ type: 'addSuggestedActions', payload: { messageId: assistantMessageId, actions: parsedActions } });
             console.log(`[HistoryManager] Sent suggested actions to UI for message ${assistantMessageId}.`);
@@ -307,80 +247,20 @@ export class HistoryManager {
      * Includes user messages, assistant messages (text/tool calls),
      * and corresponding tool results derived from the UI state.
      */
+    // Helper functions moved to src/utils/historyUtils.ts
+
+
     public translateUiHistoryToCoreMessages(): CoreMessage[] {
         const coreMessages: CoreMessage[] = [];
         for (const uiMsg of this._history) {
             if (uiMsg.sender === 'user') {
-                // User message: Translate content parts
-                const userContent: UserContent = [];
-                let hasContentForAi = false;
-                for (const part of uiMsg.content) {
-                    if (part.type === 'text') {
-                        if (part.text) {
-                            userContent.push({ type: 'text', text: part.text });
-                            hasContentForAi = true;
-                        }
-                    } else if (part.type === 'image') {
-                        // Convert UI image part to CoreMessage image part
-                        userContent.push({
-                            type: 'image',
-                            image: Buffer.from(part.data, 'base64'), // Convert base64 string to Buffer
-                            mimeType: part.mediaType
-                        });
-                        hasContentForAi = true;
-                    }
-                }
-                if (hasContentForAi && userContent.length > 0) {
-                     coreMessages.push({ role: 'user', content: userContent });
-                } else {
-                     console.log(`[HistoryManager] Skipping user message (ID: ${uiMsg.id}) with no AI-relevant content during translation.`);
+                const coreMsg = translateUserMessageToCore(uiMsg); // Use imported helper
+                if (coreMsg) {
+                    coreMessages.push(coreMsg);
                 }
             } else if (uiMsg.sender === 'assistant') {
-                // Assistant message: Translate content parts and generate tool results
-                const assistantContent: AssistantContent = []; // Use SDK's AssistantContent type
-                const toolResultsForThisMsg: CoreToolResultPart[] = [];
-                let hasContentForAi = false; // Track if this message should be sent to AI
-
-                for (const part of uiMsg.content) {
-                    if (part.type === 'text') {
-                        if (part.text) { // Only add non-empty text parts
-                            // Send the reconciled text part (which might have had JSON block removed)
-                            assistantContent.push({ type: 'text', text: part.text });
-                            hasContentForAi = true;
-                        }
-                    } else if (part.type === 'tool-call') {
-                        // Add the tool call part (without UI status/result)
-                        assistantContent.push({
-                            type: 'tool-call',
-                            toolCallId: part.toolCallId,
-                            toolName: part.toolName,
-                            args: part.args
-                        });
-                        hasContentForAi = true; // Tool call itself is content for AI
-                        // If the tool call is marked complete/error in UI state, generate a tool result message
-                        if (part.status === 'complete' || part.status === 'error') {
-                            toolResultsForThisMsg.push({
-                                type: 'tool-result',
-                                toolCallId: part.toolCallId,
-                                toolName: part.toolName,
-                                result: part.result ?? (part.status === 'complete' ? 'Completed' : 'Error') // Use stored result or default
-                            });
-                        }
-                        // Ignore pending/running tool calls for AI history translation
-                    }
-                    // Ignore image parts for assistant messages
-                }
-
-                // Only add assistant message if it has relevant content for the AI
-                if (hasContentForAi && assistantContent.length > 0) {
-                     coreMessages.push({ role: 'assistant', content: assistantContent });
-                     // Add any corresponding tool results immediately after
-                     if (toolResultsForThisMsg.length > 0) {
-                         coreMessages.push({ role: 'tool', content: toolResultsForThisMsg });
-                     }
-                } else if (!hasContentForAi) {
-                     console.log(`[HistoryManager] Skipping assistant message (ID: ${uiMsg.id}) with no AI-relevant content during translation.`);
-                }
+                const coreMsgs = translateAssistantMessageToCore(uiMsg); // Use imported helper
+                coreMessages.push(...coreMsgs);
             }
         }
         return coreMessages;

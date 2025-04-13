@@ -83,70 +83,74 @@ export class OpenRouterProvider implements AiProvider {
     async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
         const now = Date.now();
         if (cachedModels && cacheTimestamp && (now - cacheTimestamp < CACHE_DURATION_MS)) {
-            console.log('Returning cached OpenRouter models.');
+            console.log('[OpenRouterProvider] Returning cached models.');
             return Promise.resolve(cachedModels);
         }
 
-        // Use provided key or fetch from storage
         const keyToUse = apiKey || await this.getApiKey(this._secretStorage);
-
-        // Unlike other providers, OpenRouter listing might work without a key,
-        // but let's keep the pattern of requiring it if the provider needs one for usage.
         if (!keyToUse && this.requiresApiKey) {
-            console.warn('OpenRouter API key needed to fetch models (design choice). Returning empty list.');
+            console.warn('[OpenRouterProvider] API key needed to fetch models. Returning empty list.');
             return Promise.resolve([]);
         }
 
-        console.log('Fetching OpenRouter models from API...');
-        const timeoutMs = 15000; // Slightly longer timeout for external API
+        const models = await this._fetchModelsFromApi(keyToUse);
+        if (models.length > 0) {
+            cachedModels = models;
+            cacheTimestamp = now;
+            console.log(`[OpenRouterProvider] Fetched and cached ${models.length} models.`);
+        } else {
+            // Clear cache if fetch failed
+            cachedModels = null;
+            cacheTimestamp = null;
+        }
+        return models;
+    }
+
+    /**
+     * Fetches the model list from the OpenRouter API.
+     */
+    private async _fetchModelsFromApi(apiKey: string | undefined): Promise<ModelDefinition[]> {
+        console.log('[OpenRouterProvider] Fetching models from API...');
+        const timeoutMs = 15000;
         try {
-            // Use dynamic import for node-fetch as it might still be needed if native fetch isn't available/suitable
-            // Or switch to native fetch with AbortSignal if preferred and available
-            // Let's try native fetch first
             const response = await fetch('https://openrouter.ai/api/v1/models', {
                 method: 'GET',
                 headers: {
-                    // Include Auth header even if not strictly required for listing, good practice
-                    ...(keyToUse ? { 'Authorization': `Bearer ${keyToUse}` } : {}),
+                    ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}),
                     'Content-Type': 'application/json',
                 },
-                signal: AbortSignal.timeout(timeoutMs) // Use AbortSignal
+                signal: AbortSignal.timeout(timeoutMs)
             });
 
             if (!response.ok) {
                  const errorText = await response.text();
-                 console.error(`Failed to fetch OpenRouter models: ${response.status} ${response.statusText}`, errorText);
-                 // Clear cache on error
-                 cachedModels = null;
-                 cacheTimestamp = null;
-                 return []; // Return empty list on error
+                 console.error(`[OpenRouterProvider] Failed to fetch models: ${response.status} ${response.statusText}`, errorText);
+                 return [];
             }
 
             const data = (await response.json()) as OpenRouterApiResponse;
+            if (!data || !Array.isArray(data.data)) {
+                console.error('[OpenRouterProvider] Invalid API response format:', data);
+                return [];
+            }
 
-            // Filter out potential null/undefined entries and map to ModelDefinition
             const models: ModelDefinition[] = data.data
                 .filter((model): model is OpenRouterApiModel => !!model && !!model.id && !!model.name)
                 .map((model) => ({
                     id: model.id,
-                    name: model.name, // Use the human-friendly name
+                    name: model.name,
                 }))
-                .sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically by name
+                .sort((a, b) => a.name.localeCompare(b.name));
 
-            cachedModels = models;
-            cacheTimestamp = now;
-            console.log(`Fetched and cached ${models.length} OpenRouter models.`);
             return models;
 
         } catch (error: any) {
             if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-                 console.error(`Error fetching OpenRouter models: Request timed out after ${timeoutMs}ms`);
+                 console.error(`[OpenRouterProvider] Error fetching models: Request timed out after ${timeoutMs}ms`);
             } else {
-                 console.error('Error fetching OpenRouter models:', error);
+                 console.error('[OpenRouterProvider] Error fetching models:', error);
             }
-            cachedModels = null; // Clear cache on error
-            cacheTimestamp = null;
-            return Promise.resolve([]); // Return empty list on error
+            return [];
         }
     }
     // --- Interface methods using stored secretStorage ---
