@@ -63,7 +63,7 @@
 // - Implement saving of tool results to chat history (TODO in `extension.ts`). // Addressed in latest extension.ts write
 - Implement actual MCP client integration for tools like `search` (currently placeholder/disabled).
 - Refine Preact component structure.
-- Improve Markdown rendering in Preact UI.
+- **Markdown & Syntax Highlighting:** Implemented using `react-markdown` and `react-syntax-highlighter` (`vscDarkPlus` theme) in the Preact UI. Initial webview loading/TS errors resolved by fixing root `tsconfig.json` references.
 - Improve error handling in Preact UI.
 - Re-implement tool status updates using recommended Vercel AI SDK APIs (if desired).
 - If relaxing CSP works, investigate if a more specific CSP rule can be used instead of `'unsafe-eval'`.
@@ -97,5 +97,5 @@
 - Model resolver logic now iterates through all enabled providers using their `getAvailableModels` method. Dynamic model fetching implemented for OpenRouter, Anthropic, DeepSeek, OpenAI, and Ollama (local tags).
 // - Conversation history is not persisted. // Implemented (Persistence works, Clear button added)
 - API Key management is now handled by individual provider modules, interacting with `vscode.SecretStorage`. `AiService` delegates these operations. Input fields remain in the Settings page webview.
-- **Blank Webview (Development):** Still investigating the cause of the blank webview in development mode, currently testing relaxed CSP. (Previous issue)
+- **Blank Webview (Development):** Resolved by adding a reference to `webview-ui/tsconfig.json` in the root `tsconfig.json`.
 - **Routing CSS:** Basic navigation links added, but styling (`.app-layout`, `.navigation`, `.content-area`) needs to be implemented in `app.css`.

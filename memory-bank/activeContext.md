@@ -13,7 +13,8 @@ Implementing image upload functionality. Task was interrupted after updating `Hi
     - Updated `renderContentPart` to display `image` type content parts.
     - Updated `UiMessageContentPart` import to include `UiImagePart`.
     - Integrated `react-markdown` for proper Markdown rendering in text parts.
-- **Installed Dependencies:** Added `react-markdown` and `remark-gfm` to `webview-ui`.
+    - **Integrated `react-syntax-highlighter`:** Modified `ReactMarkdown` component to use `SyntaxHighlighter` for fenced code blocks, applying the `vscDarkPlus` theme.
+- **Installed Dependencies:** Added `react-markdown`, `remark-gfm`, `react-syntax-highlighter`, `@types/react-syntax-highlighter` to `webview-ui`.
 - **Updated `src/webview/handlers/SendMessageHandler.ts`:**
     - Changed message handling to expect a `content: UiMessageContentPart[]` array instead of `text: string`.
     - Updated import for `UiMessageContentPart` to use `../../common/types`.
@@ -179,7 +180,7 @@ Implementing image upload functionality. Task was interrupted after updating `Hi
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Update `AiService.ts` to handle `UiMessageContentPart[]` in `getAiResponseStream`.
+- **Current Task:** Syntax highlighting implemented and working. Next is to update `AiService.ts` to handle `UiMessageContentPart[]` in `getAiResponseStream` for image uploads.
 - **Future:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, `renameSymbol`, `getConfiguration`, debugging tools, `runCommandTool` exit code).
 - **Future:** Confirm `replaceInActiveEditorTool` insertion capability.
 - **Future:** Test structured output and suggested actions thoroughly.
@@ -224,7 +225,7 @@ Implementing image upload functionality. Task was interrupted after updating `Hi
 
 ## Active Decisions
 - **Image Upload:** Implemented UI and basic frontend logic. Backend needs updating (`SendMessageHandler`, `HistoryManager`, `AiService`).
-- **Markdown Rendering:** Implemented using `react-markdown` in the frontend.
+- **Markdown & Syntax Highlighting:** Implemented using `react-markdown` and `react-syntax-highlighter` (`vscDarkPlus` theme) in the frontend. Fixed initial webview loading issues by correcting root `tsconfig.json` references.
 - **Suggested Actions Implementation:** New strategy: AI appends JSON block with `suggested_actions` to the end of its text response. `StreamProcessor` parses this post-stream, sends actions to UI, and removes the block from history. Schema (`structuredAiResponseSchema`) only defines `suggested_actions`. `experimental_output` is not used. Text streaming relies on standard `text-delta` parts.
 - **VS Code Tool Enhancements (Future):** Plan to add `goToDefinitionTool`, `findReferencesTool`, `renameSymbolTool`, `getConfigurationTool`, debugging tools, and enhance `runCommandTool` (exit code).
 - **VS Code Tool Confirmation:** Need to verify `replaceInActiveEditorTool` insertion capability.
