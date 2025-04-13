@@ -15,9 +15,6 @@
 		// "noUnusedParameters": true,  /* Report errors on unused parameters. */
 	},
 	"include": [
-		"src/**/*" // Only include files within the src directory for the main extension
-	],
-	"references": [
-		{ "path": "./webview-ui/tsconfig.json" } // Add reference to the webview UI project
+		"src/**/*" // Only include files within the src directory
 	]
 }

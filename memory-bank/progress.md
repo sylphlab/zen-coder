@@ -1,6 +1,12 @@
 # Project Progress
 
 ## What Works
++- **MCP Server Configuration:**
++    - Defined `zencoder.mcp.servers` setting in `package.json`.
++    - `AiService.ts` updated to dynamically load MCP servers based on settings.
++        - Corrected SSE transport configuration method (object literal).
++    - Settings UI (`SettingPage.tsx`) updated with a section to manage MCP server configurations (add/edit/delete/toggle).
++        - Fixed initialization error causing blank page.
 +- **Stream Processing Refactoring:** Refactored `src/streamProcessor.ts` to correctly handle mixed stream parts by iterating over `fullStream`.
 +- **Filesystem Tool Refactoring & Enhancement:**
 +    - Tools (`listFiles`, `statItems`, `deleteItems`, `searchContent`, `replaceContent`) now support Glob patterns for path inputs where appropriate.
@@ -61,7 +67,7 @@
 ## What's Left (Potential Future Enhancements)
 - Thorough testing and debugging of core chat and tool execution.
 // - Implement saving of tool results to chat history (TODO in `extension.ts`). // Addressed in latest extension.ts write
-- Implement actual MCP client integration for tools like `search` (currently placeholder/disabled).
+// - Implement actual MCP client integration for tools like `search` (currently placeholder/disabled). // Addressed by dynamic loading
 - Refine Preact component structure.
 - **Markdown & Syntax Highlighting:** Implemented using `react-markdown` and `react-syntax-highlighter` (`vscDarkPlus` theme) in the Preact UI. Initial webview loading/TS errors resolved by fixing root `tsconfig.json` references.
 - Improve error handling in Preact UI.
@@ -79,7 +85,7 @@
 - **Stream Handling:** Explicit end-of-stream signaling implemented between backend and frontend.
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
-- **Tool Execution:** Tools execute and return results to the AI.
+- **Tool Execution:** Tools execute and return results to the AI. MCP tools are now dynamically loaded based on configuration.
 - **Streaming & Structured Output:** Refactored `streamProcessor.ts` to iterate over `fullStream`, correctly handling mixed stream part types and order. Kept separate handling for `experimental_partialOutputStream`.
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
 - **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
@@ -97,5 +103,6 @@
 - Model resolver logic now iterates through all enabled providers using their `getAvailableModels` method. Dynamic model fetching implemented for OpenRouter, Anthropic, DeepSeek, OpenAI, and Ollama (local tags).
 // - Conversation history is not persisted. // Implemented (Persistence works, Clear button added)
 - API Key management is now handled by individual provider modules, interacting with `vscode.SecretStorage`. `AiService` delegates these operations. Input fields remain in the Settings page webview.
+- **Blank Settings Page:** Resolved. Fixed prop passing and initialization logic between `App.tsx` and `SettingPage.tsx`.
 - **Blank Webview (Development):** Resolved by adding a reference to `webview-ui/tsconfig.json` in the root `tsconfig.json`.
 - **Routing CSS:** Basic navigation links added, but styling (`.app-layout`, `.navigation`, `.content-area`) needs to be implemented in `app.css`.

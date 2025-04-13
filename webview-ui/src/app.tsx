@@ -44,6 +44,21 @@ export type ProviderInfoAndStatus = {
  };
 export type AllProviderStatus = ProviderInfoAndStatus[]; // It's now an array
 
+// Define MCP Server Config interface (ideally move to common types)
+// This should match the one in SettingPage.tsx
+interface McpServerConfig {
+    name: string;
+    enabled: boolean;
+    type: 'stdio' | 'sse';
+    command?: string;
+    args?: string[];
+    cwd?: string;
+    url?: string;
+    headers?: Record<string, string>;
+    _uiId?: string; // Only used in UI
+}
+
+
 // Helper to get the VS Code API instance
 // @ts-ignore
 const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
@@ -61,10 +76,10 @@ export const postMessage = (message: any) => { // Export function
                      data: {
                          type: 'availableModels',
                          payload: [
-                             { id: 'claude-3-5-sonnet-20240620', label: 'Claude 3.5 Sonnet', provider: 'ANTHROPIC', source: 'hardcoded' },
-                             { id: 'models/gemini-1.5-pro-latest', label: 'Gemini 1.5 Pro', provider: 'GOOGLE', source: 'hardcoded' },
-                             { id: 'openrouter/claude-3.5-sonnet', label: 'OR: Claude 3.5 Sonnet', provider: 'OPENROUTER', source: 'hardcoded' },
-                             { id: 'deepseek-coder', label: 'DeepSeek Coder', provider: 'DEEPSEEK', source: 'hardcoded' },
+                             { id: 'claude-3-5-sonnet-20240620', label: 'Claude 3.5 Sonnet', providerId: 'ANTHROPIC', source: 'hardcoded' }, // Corrected provider to providerId
+                             { id: 'models/gemini-1.5-pro-latest', label: 'Gemini 1.5 Pro', providerId: 'GOOGLE', source: 'hardcoded' }, // Corrected provider to providerId
+                             { id: 'openrouter/claude-3.5-sonnet', label: 'OR: Claude 3.5 Sonnet', providerId: 'OPENROUTER', source: 'hardcoded' }, // Corrected provider to providerId
+                             { id: 'deepseek-coder', label: 'DeepSeek Coder', providerId: 'DEEPSEEK', source: 'hardcoded' }, // Corrected provider to providerId
                          ]
                      }
                  }));
@@ -85,6 +100,16 @@ export const postMessage = (message: any) => { // Export function
                          payload: [] // Start with empty history for mock
                      }
                  }));
+                 // Mock sending initial MCP server configs
+                 window.dispatchEvent(new MessageEvent('message', {
+                    data: {
+                        type: 'updateMcpServers', // Reuse update message type for initial load
+                        payload: [
+                            { name: 'Mock Stdio Server', enabled: true, type: 'stdio', command: 'echo', args: ['hello mcp'] },
+                            { name: 'Mock SSE Server', enabled: false, type: 'sse', url: 'http://localhost:9999/sse' }
+                        ]
+                    }
+                }));
              }, 300);
         }
     }
@@ -124,6 +149,7 @@ export function App() {
     const [showClearConfirm, setShowClearConfirm] = useState(false); // State for custom confirmation
     const [suggestedActionsMap, setSuggestedActionsMap] = useState<Record<string, SuggestedAction[]>>({}); // State for suggested actions
     const [selectedImages, setSelectedImages] = useState<{ id: string; data: string; mediaType: string; name: string }[]>([]); // State for selected images (array)
+    const [mcpServerConfigs, setMcpServerConfigs] = useState<McpServerConfig[]>([]); // State for MCP server configs
     const fileInputRef = useRef<HTMLInputElement>(null); // Ref for file input
     // Remove the separate thinkingText state
 
@@ -345,6 +371,7 @@ export function App() {
                     currentAssistantMessageId.current = null;
                     // Clear thinking text from the specific message when stream finishes
                     setMessages(prev => prev.map(msg => {
+                        // Note: This check might be redundant if currentAssistantMessageId is already null, but safe to keep
                         if (msg.id === currentAssistantMessageId.current) {
                             return { ...msg, thinking: undefined }; // Remove thinking text
                         }
@@ -376,6 +403,12 @@ export function App() {
                         }));
                     }
                     break;
+                case 'updateMcpServers': // Handle message from backend with MCP configs
+                     if (Array.isArray(message.payload)) {
+                         console.log("Received MCP server configs:", message.payload);
+                         setMcpServerConfigs(message.payload);
+                     }
+                     break;
             }
         };
 
@@ -445,14 +478,14 @@ export function App() {
         if (newProvider === '') {
             setSelectedProvider(null);
             setCurrentModelInput('');
-            vscode?.setState({ selectedProvider: null, selectedModelId: undefined }); // Clear saved state
+            // vscode?.setState({ selectedProvider: null, selectedModelId: undefined }); // Clear saved state - State saving disabled for now
         } else {
             setSelectedProvider(newProvider);
             const defaultModel = availableModels.find(m => m.providerId === newProvider); // Use providerId
             const newModelId = defaultModel ? defaultModel.id : '';
             setCurrentModelInput(newModelId);
             // Save state when provider changes
-            vscode?.setState({ selectedProvider: newProvider, selectedModelId: newModelId });
+            // vscode?.setState({ selectedProvider: newProvider, selectedModelId: newModelId }); // State saving disabled for now
         }
     };
 
@@ -460,7 +493,7 @@ export function App() {
         const newModelId = e.currentTarget.value;
         setCurrentModelInput(newModelId);
         // Save state whenever the model input changes
-        vscode?.setState({ selectedProvider: selectedProvider, selectedModelId: newModelId }); // Save provider too
+        // vscode?.setState({ selectedProvider: selectedProvider, selectedModelId: newModelId }); // Save provider too - State saving disabled for now
     };
 
     const handleProviderToggle = useCallback((providerId: string, enabled: boolean) => {
@@ -500,7 +533,7 @@ export function App() {
                     // const newUserMessage: Message = { id: generateUniqueId(), sender: 'user', content: [{ type: 'text', text: action.value }], timestamp: Date.now() };
                     // setMessages(prev => [...prev, newUserMessage]);
                     // Send message to backend
-                    postMessage({ type: 'sendMessage', content: [{ type: 'text', text: action.value }], modelId: currentModelInput }); // Send as content array
+                    postMessage({ type: 'sendMessage', content: [{ type: 'text', text: action.value }], providerId: selectedProvider, modelId: currentModelInput }); // Send as content array, include providerId
                     setIsStreaming(true); // Assume assistant will respond
                     currentAssistantMessageId.current = null;
                 } else {
@@ -530,7 +563,7 @@ export function App() {
         }
         // Optionally clear suggestions after click?
         // setSuggestedActionsMap(prev => ({ ...prev })); // Or remove specific messageId entry
-    }, [currentModelInput]); // Include dependencies
+    }, [currentModelInput, selectedProvider]); // Include dependencies
 
     const handleImageFileChange = (event: JSX.TargetedEvent<HTMLInputElement>) => {
         const files = event.currentTarget.files;
@@ -853,6 +886,7 @@ export function App() {
                         <SettingPage
                             providerStatus={providerStatus}
                             onProviderToggle={handleProviderToggle}
+                            // Removed initialMcpServers prop
                         />
                     </Route>
                 </main>

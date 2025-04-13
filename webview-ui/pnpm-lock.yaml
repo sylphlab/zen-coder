@@ -57,6 +57,32 @@ importers:
 
 packages:
 
+  '@ai-sdk/provider-utils@2.2.6':
+    resolution: {integrity: sha512-sUlZ7Gnq84DCGWMQRIK8XVbkzIBnvPR1diV4v6JwPgpn5armnLI/j+rqn62MpLrU5ZCQZlDKl/Lw6ed3ulYqaA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.23.8
+
+  '@ai-sdk/provider@1.1.2':
+    resolution: {integrity: sha512-ITdgNilJZwLKR7X5TnUr1BsQW6UTX5yFp0h66Nfx8XjBYkWD9W3yugr50GOz3CnE9m/U/Cd5OyEbTMI0rgi6ZQ==}
+    engines: {node: '>=18'}
+
+  '@ai-sdk/react@1.2.8':
+    resolution: {integrity: sha512-S2FzCSi4uTF0JuSN6zYMXyiAWVAzi/Hho8ISYgHpGZiICYLNCP2si4DuXQOsnWef3IXzQPLVoE11C63lILZIkw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      react: ^18 || ^19 || ^19.0.0-rc
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      zod:
+        optional: true
+
+  '@ai-sdk/ui-utils@1.2.7':
+    resolution: {integrity: sha512-OVRxa4SDj0wVsMZ8tGr/whT89oqNtNoXBKmqWC2BRv5ZG6azL2LYZ5ZK35u3lb4l1IE7cWGsLlmq0py0ttsL7A==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.23.8
+
   '@ampproject/remapping@2.3.0':
     resolution: {integrity: sha512-30iZtAPgz+LTIYoeivqYo853f02jBYSd5uGnGpkFV0M3xOt9aN73erkgYAmZU43x4VfqcnLxW9Kpg3R5LC4YYw==}
     engines: {node: '>=6.0.0'}
@@ -934,6 +960,9 @@ packages:
     engines: {node: '>=6'}
     hasBin: true
 
+  json-schema@0.4.0:
+    resolution: {integrity: sha512-es94M3nTIfsEPisRafak+HDLfHXnKBhV3vU5eqPcS3flIWqcxJWgXHXiey3YrpaNsanY5ei1VoYEbOzijuq9BA==}
+
   json5@2.2.3:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
@@ -1236,6 +1265,9 @@ packages:
     engines: {node: '>=18.0.0', npm: '>=8.0.0'}
     hasBin: true
 
+  secure-json-parse@2.7.0:
+    resolution: {integrity: sha512-6aU+Rwsezw7VR8/nyvKTx8QpWH9FrcYiXXlqC4z5d5XQBDRqtbfsRjnwGyqbi3gddNtWHuEk9OANUotL26qKUw==}
+
   semver@6.3.1:
     resolution: {integrity: sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA==}
     hasBin: true
@@ -1273,6 +1305,15 @@ packages:
 
   style-to-object@1.0.8:
     resolution: {integrity: sha512-xT47I/Eo0rwJmaXC4oilDGDWLohVhR6o/xAQcPQN8q6QBuZVL8qMYL85kLmST5cPjAorwvqIA4qXTRQoYHaL6g==}
+
+  swr@2.3.3:
+    resolution: {integrity: sha512-dshNvs3ExOqtZ6kJBaAsabhPdHyeY4P2cKwRCniDVifBMoG/SVI7tfLWqPXriVspf2Rg4tPzXJTnwaihIeFw2A==}
+    peerDependencies:
+      react: ^16.11.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
+  throttleit@2.1.0:
+    resolution: {integrity: sha512-nt6AMGKW1p/70DF/hGBdJB57B8Tspmbp5gfJ8ilhLnt7kkr2ye7hzD6NVG8GGErk2HWF34igrL2CXmNIkzKqKw==}
+    engines: {node: '>=18'}
 
   tinyexec@0.3.2:
     resolution: {integrity: sha512-KQQR9yN7R5+OSwaK0XQoj22pwHoTlgYqmUscPYoknOoWCWfj/5/ABTMRi69FrKU5ffPVh5QcFikpWJI/P1ocHA==}
@@ -1425,10 +1466,46 @@ packages:
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
+  zod-to-json-schema@3.24.5:
+    resolution: {integrity: sha512-/AuWwMP+YqiPbsJx5D6TfgRTc4kTLjsh5SOcd4bLsfUg2RcEXrFMJl1DGgdHy2aCfsIA/cr/1JM0xcB2GZji8g==}
+    peerDependencies:
+      zod: ^3.24.1
+
+  zod@3.24.2:
+    resolution: {integrity: sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ==}
+
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
 snapshots:
+
+  '@ai-sdk/provider-utils@2.2.6(zod@3.24.2)':
+    dependencies:
+      '@ai-sdk/provider': 1.1.2
+      nanoid: 3.3.11
+      secure-json-parse: 2.7.0
+      zod: 3.24.2
+
+  '@ai-sdk/provider@1.1.2':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/react@1.2.8(react@19.1.0)(zod@3.24.2)':
+    dependencies:
+      '@ai-sdk/provider-utils': 2.2.6(zod@3.24.2)
+      '@ai-sdk/ui-utils': 1.2.7(zod@3.24.2)
+      react: 19.1.0
+      swr: 2.3.3(react@19.1.0)
+      throttleit: 2.1.0
+    optionalDependencies:
+      zod: 3.24.2
+
+  '@ai-sdk/ui-utils@1.2.7(zod@3.24.2)':
+    dependencies:
+      '@ai-sdk/provider': 1.1.2
+      '@ai-sdk/provider-utils': 2.2.6(zod@3.24.2)
+      zod: 3.24.2
+      zod-to-json-schema: 3.24.5(zod@3.24.2)
 
   '@ampproject/remapping@2.3.0':
     dependencies:
@@ -2328,6 +2405,8 @@ snapshots:
 
   jsesc@3.1.0: {}
 
+  json-schema@0.4.0: {}
+
   json5@2.2.3: {}
 
   kolorist@1.8.0: {}
@@ -2908,6 +2987,8 @@ snapshots:
       '@rollup/rollup-win32-x64-msvc': 4.40.0
       fsevents: 2.3.3
 
+  secure-json-parse@2.7.0: {}
+
   semver@6.3.1: {}
 
   simple-code-frame@1.3.0:
@@ -2942,6 +3023,14 @@ snapshots:
   style-to-object@1.0.8:
     dependencies:
       inline-style-parser: 0.2.4
+
+  swr@2.3.3(react@19.1.0):
+    dependencies:
+      dequal: 2.0.3
+      react: 19.1.0
+      use-sync-external-store: 1.5.0(react@19.1.0)
+
+  throttleit@2.1.0: {}
 
   tinyexec@0.3.2: {}
 
@@ -3099,5 +3188,11 @@ snapshots:
   xtend@4.0.2: {}
 
   yallist@3.1.1: {}
+
+  zod-to-json-schema@3.24.5(zod@3.24.2):
+    dependencies:
+      zod: 3.24.2
+
+  zod@3.24.2: {}
 
   zwitch@2.0.4: {}

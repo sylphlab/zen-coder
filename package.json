@@ -234,6 +234,86 @@
           "type": "boolean",
           "default": true,
           "description": "Enable the 'openFileTool' (opens a specified file)."
+        },
+        "zencoder.mcp.servers": {
+          "type": "array",
+          "description": "Configure connections to Model Context Protocol (MCP) servers.",
+          "default": [],
+          "scope": "window",
+          "items": {
+            "type": "object",
+            "title": "MCP Server Configuration",
+            "required": [
+              "name",
+              "type",
+              "enabled"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "A unique name for this server connection."
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "Enable or disable this server connection.",
+                "default": true
+              },
+              "type": {
+                "type": "string",
+                "description": "The type of MCP transport.",
+                "enum": [
+                  "stdio",
+                  "sse"
+                ]
+              },
+              "command": {
+                "type": "string",
+                "description": "The command to execute for 'stdio' transport type."
+              },
+              "args": {
+                "type": "array",
+                "description": "Arguments for the command for 'stdio' transport type.",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Optional working directory for the 'stdio' command."
+              },
+              "url": {
+                "type": "string",
+                "description": "The URL for the 'sse' transport type.",
+                "format": "uri"
+              },
+              "headers": {
+                "type": "object",
+                "description": "Optional headers for the 'sse' transport type.",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": { "type": { "const": "stdio" } }
+                },
+                "then": {
+                  "required": ["command"]
+                }
+              },
+              {
+                "if": {
+                  "properties": { "type": { "const": "sse" } }
+                },
+                "then": {
+                  "required": ["url"]
+                }
+              }
+            ]
+          }
         }
       }
     }

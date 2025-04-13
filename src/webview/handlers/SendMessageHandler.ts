@@ -61,7 +61,7 @@ export class SendMessageHandler implements MessageHandler {
 
             // Call getAiResponseStream with providerId and modelId
             const streamResult = await context.aiService.getAiResponseStream(
-                "", // Pass an empty string for the prompt, as it's included in the history
+                // Removed empty string prompt argument, history is now the first argument
                 coreMessagesForAi,
                 providerId, // Pass providerId
                 modelId
