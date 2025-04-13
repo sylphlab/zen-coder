@@ -1,150 +1,156 @@
 import { FunctionalComponent } from 'preact';
-import { useMemo } from 'preact/hooks'; // Import useMemo
-import { useAtomValue } from 'jotai'; // Import Jotai hook
+import { useState, useMemo, useCallback, useEffect } from 'preact/hooks';
+import { useAtomValue, atom } from 'jotai';
+import { loadable } from 'jotai/utils';
 import { JSX } from 'preact/jsx-runtime';
 import { AvailableModel } from '../../../src/common/types';
-// Removed: import { useModelSelection } from '../hooks/useModelSelection';
-import { availableProvidersAtom, providerModelsMapAtom } from '../store/atoms'; // Import atoms
+import { availableProvidersAtom, modelsForProviderAtomFamily } from '../store/atoms';
 
-// Define the extended model type expected from the hook
-// Removed FilteredModel type, will derive inline if needed
-
+// Props now accept separate provider and model IDs
 interface ModelSelectorProps {
     labelPrefix?: string;
-    // Removed props: availableProviders, providerModelsMap
-    selectedModelId: string | null;
-    onModelChange: (newModelId: string) => void;
-    // Optional: If provider selection should be handled externally (like in HeaderControls)
-    // externalSelectedProvider?: string | null;
-    // externalHandleProviderChange?: (e: JSX.TargetedEvent<HTMLSelectElement>) => void;
+    selectedProviderId: string | null;
+    selectedModelId: string | null; // This is now just the model ID (e.g., 'claude-3-5-sonnet-latest')
+    onModelChange: (providerId: string | null, modelId: string | null) => void;
 }
 
 export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     labelPrefix = '',
-    selectedModelId, // Keep this prop
+    selectedProviderId, // Use directly
+    selectedModelId,    // Use directly
     onModelChange,
 }) => {
-    // Read state from atoms
-    const availableProviders = useAtomValue(availableProvidersAtom);
-    const providerModelsMap = useAtomValue(providerModelsMapAtom);
-    // Derive state previously managed by the hook
-    const selectedProvider = useMemo(() => {
-        return selectedModelId ? selectedModelId.split(':')[0] : null;
-    }, [selectedModelId]);
+    // --- State and Atom Values ---
+    const allAvailableProvidersLoadable = useAtomValue(loadable(availableProvidersAtom));
 
+    // Get models for the currently selected provider (async)
+    const modelsForSelectedProviderLoadable = useAtomValue(loadable(modelsForProviderAtomFamily(selectedProviderId)));
+
+    // Local state for the input field's value (model ID/name part)
+    const [inputValue, setInputValue] = useState('');
+
+    // Update local input state when the external selectedModelId changes
+    useEffect(() => {
+        // Find the model object corresponding to selectedModelId to display its name or ID
+        const models = modelsForSelectedProviderLoadable.state === 'hasData' ? modelsForSelectedProviderLoadable.data ?? [] : [];
+        const selectedModelObject = models.find(m => m.id === selectedModelId);
+        // Display the model's name if available, otherwise the ID, or empty if nothing selected
+        setInputValue(selectedModelObject?.name ?? selectedModelId ?? '');
+    }, [selectedModelId, modelsForSelectedProviderLoadable.state]); // Re-run if model ID or loaded models change
+
+    // --- Async Atom for All Models (for filtering suggestions) ---
+    const allModelsAtom = useMemo(() => atom(async (get) => {
+        const providersLoadable = get(loadable(availableProvidersAtom));
+        if (providersLoadable.state !== 'hasData' || !providersLoadable.data) return [];
+        const ids = providersLoadable.data.map(p => p.providerId);
+        const promises = ids.map(id => get(modelsForProviderAtomFamily(id)));
+        const results = await Promise.all(promises);
+        return results.flat();
+    }), []);
+    const allModelsLoadable = useAtomValue(loadable(allModelsAtom));
+
+    // --- Derived Data for UI ---
     const uniqueProviders = useMemo(() => {
-        // Derive unique providers from availableProviders atom
+        if (allAvailableProvidersLoadable.state !== 'hasData' || !allAvailableProvidersLoadable.data) return [];
         const providerMap = new Map<string, { id: string; name: string }>();
-        availableProviders.forEach(model => { // AvailableModel only has id and providerId
-            if (!providerMap.has(model.providerId)) {
-                // Infer provider name from providerId (e.g., capitalize) or use providerId itself
-                const providerName = model.providerId.charAt(0).toUpperCase() + model.providerId.slice(1).toLowerCase();
-                providerMap.set(model.providerId, { id: model.providerId, name: providerName });
+        allAvailableProvidersLoadable.data.forEach(provider => {
+            if (!providerMap.has(provider.providerId)) {
+                providerMap.set(provider.providerId, { id: provider.providerId, name: provider.providerName });
             }
         });
         return Array.from(providerMap.values());
-    }, [availableProviders]);
+    }, [allAvailableProvidersLoadable]);
 
-    const filteredModels = useMemo(() => {
-        // Derive filtered models based on selectedProvider and providerModelsMap atom
-        if (!selectedProvider) return [];
-        const models = providerModelsMap[selectedProvider] || [];
-        return models.map(m => ({
-            ...m,
-            modelNamePart: m.id.split(':').slice(1).join(':') || m.name // Add modelNamePart
-        }));
-    }, [selectedProvider, providerModelsMap]);
+    const modelsForSelectedProvider = modelsForSelectedProviderLoadable.state === 'hasData'
+        ? modelsForSelectedProviderLoadable.data ?? []
+        : [];
 
-    const effectiveSelectedProvider = selectedProvider; // Use derived provider
+    const allLoadedModels = allModelsLoadable.state === 'hasData'
+        ? allModelsLoadable.data ?? []
+        : [];
 
-    // Handler for provider change - updates internal hook state and selects first model
-    const handleProviderSelect = (e: JSX.TargetedEvent<HTMLSelectElement>) => {
-        // No internal hook state to update
-        const newProviderId = e.currentTarget.value;
-        if (newProviderId) {
-            // Use providerModelsMap to find the first model
-            const modelsForProvider = providerModelsMap[newProviderId] || [];
-            if (modelsForProvider.length > 0) {
-                onModelChange(modelsForProvider[0].id); // Trigger change with the first model
-            } else {
-                // If models haven't loaded yet or none exist, maybe send a placeholder or clear?
-                // Let's clear for now. The UI might show "Loading..." based on map content.
-                onModelChange('');
-            }
-        } else {
-            onModelChange(''); // Clear model if provider deselected
-        }
-    };
+    // Filter models based on the input value for suggestions datalist
+    const filteredModelsForDatalist = useMemo(() => {
+        const lowerInput = inputValue.toLowerCase();
+        if (!lowerInput) return modelsForSelectedProvider; // Show current provider's models if input empty
 
-    // Handler for model input change - reconstructs ID if needed and calls onModelChange
-    const handleModelInput = (e: JSX.TargetedEvent<HTMLInputElement>) => {
-        const rawInputValue = e.currentTarget.value; // The value from the input field (potentially just model name)
-        let finalModelId = ''; // Default to empty if no match
+        // Filter across all loaded models by ID, name, or provider name
+        return allLoadedModels.filter((model: AvailableModel) =>
+            model.id.toLowerCase().includes(lowerInput) ||
+            model.name.toLowerCase().includes(lowerInput) ||
+            model.providerName.toLowerCase().includes(lowerInput)
+        );
+    }, [inputValue, modelsForSelectedProvider, allLoadedModels]);
 
-        // Check if the input value exactly matches a known model ID
-        // Check against all loaded models across all providers first for an exact ID match
-        const allLoadedModels = Object.values(providerModelsMap).flat();
-        const modelFromDataList = allLoadedModels.find(m => m.id === rawInputValue);
+    // --- Event Handlers ---
+    const handleProviderSelect = useCallback((e: JSX.TargetedEvent<HTMLSelectElement>) => {
+        const newProviderId = e.currentTarget.value || null;
+        setInputValue(''); // Clear model input
+        onModelChange(newProviderId, null); // Update state with new provider, clear model
+    }, [onModelChange]);
 
-        if (modelFromDataList) {
-            finalModelId = modelFromDataList.id; // Exact match found
-        } else if (selectedProvider) {
-            // If not an exact ID match, and a provider is selected,
-            // check if the input value matches a modelNamePart for the *currently selected provider*
-            const modelsForSelectedProvider = providerModelsMap[selectedProvider] || [];
-            // We need the modelNamePart logic here or rely on filteredModels from the hook
-            const selectedModelByNamePart = modelsForSelectedProvider
-                .map(m => ({ ...m, modelNamePart: m.id.split(':').slice(1).join(':') })) // Add modelNamePart, remove non-existent m.name fallback
-                .find(m => m.modelNamePart === rawInputValue);
+    const handleModelInput = useCallback((e: JSX.TargetedEvent<HTMLInputElement>) => {
+        setInputValue(e.currentTarget.value);
+        // Don't call onModelChange on input, wait for blur or selection from datalist
+    }, []);
 
-            if (selectedModelByNamePart) {
-                finalModelId = selectedModelByNamePart.id; // Match by name part found for the selected provider
-            } else {
-                // Input doesn't match a known model ID or name part for the selected provider.
-                // Assume user is typing a model name (or potentially a full ID).
-                // We need to construct the correct providerId:modelName format.
-                let modelNamePartToUse = rawInputValue;
-                // If the input contains ':', assume it might be a full ID or malformed.
-                // Extract the part *after* the first colon as the intended model name.
-                if (rawInputValue.includes(':')) {
-                    modelNamePartToUse = rawInputValue.split(':').slice(1).join(':');
-                }
-                // Construct the final ID using the selectedProvider and the extracted/original model name part.
-                // Ensure modelNamePartToUse is not empty before constructing.
-                if (modelNamePartToUse) {
-                    finalModelId = `${selectedProvider}:${modelNamePartToUse}`;
-                } else {
-                    // If model name part is empty, maybe clear the selection or use a default?
-                    // For now, let's emit an empty string to signify clearing.
-                    finalModelId = '';
-                }
-            }
-        } else {
-             // No provider selected, treat input as is (likely won't be valid)
-             finalModelId = rawInputValue;
-        }
+    // Handle selection from datalist or blur
+    const handleModelFinalize = useCallback(() => {
+         const lowerInput = inputValue.toLowerCase();
+         let finalModel: AvailableModel | null = null;
 
-        // Call the callback with the determined model ID
-        onModelChange(finalModelId);
-    };
+         // Try finding exact match by ID or Name from the filtered list first
+         finalModel = filteredModelsForDatalist.find((m: AvailableModel) =>
+             m.id.toLowerCase() === lowerInput || m.name.toLowerCase() === lowerInput
+         ) ?? null;
 
+         // If no exact match in filtered list, check all loaded models (covers cases where user types full ID not shown in filtered list)
+         if (!finalModel) {
+             finalModel = allLoadedModels.find((m: AvailableModel) => m.id.toLowerCase() === lowerInput) ?? null;
+         }
+         if (!finalModel) {
+             finalModel = allLoadedModels.find((m: AvailableModel) => m.name.toLowerCase() === lowerInput) ?? null;
+         }
+
+         // Determine the final IDs
+         const finalProviderId = finalModel ? finalModel.providerId : selectedProviderId; // Keep current provider if model invalid
+         const finalModelId = finalModel ? finalModel.id : null;
+
+         // Update input display to reflect the actual selected model name/ID or clear
+         setInputValue(finalModel?.name ?? finalModel?.id ?? '');
+
+         // Call the callback only if the selection changed
+         if (finalProviderId !== selectedProviderId || finalModelId !== selectedModelId) {
+             console.log(`Finalizing model selection: Provider=${finalProviderId}, Model=${finalModelId}`);
+             onModelChange(finalProviderId, finalModelId);
+         }
+     }, [inputValue, selectedProviderId, selectedModelId, allLoadedModels, filteredModelsForDatalist, onModelChange]); // Added filteredModelsForDatalist
+
+    // --- Render ---
     const providerLabel = `${labelPrefix ? labelPrefix + ' ' : ''}Provider:`;
     const modelLabel = `${labelPrefix ? labelPrefix + ' ' : ''}Model:`;
-    const providerSelectId = `provider-select-${labelPrefix.toLowerCase().replace(' ', '-') || 'main'}`;
-    const modelInputId = `model-input-${labelPrefix.toLowerCase().replace(' ', '-') || 'main'}`;
-    const datalistId = `models-datalist-${labelPrefix.toLowerCase().replace(' ', '-') || 'main'}`;
+    const providerSelectId = `provider-select-${labelPrefix.toLowerCase().replace(/\s+/g, '-') || 'main'}`;
+    const modelInputId = `model-input-${labelPrefix.toLowerCase().replace(/\s+/g, '-') || 'main'}`;
+    const datalistId = `models-datalist-${labelPrefix.toLowerCase().replace(/\s+/g, '-') || 'main'}`;
+
+    const providersLoading = allAvailableProvidersLoadable.state === 'loading';
+    const providersError = allAvailableProvidersLoadable.state === 'hasError';
+    const modelsLoading = modelsForSelectedProviderLoadable.state === 'loading' || allModelsLoadable.state === 'loading';
+    const modelsError = modelsForSelectedProviderLoadable.state === 'hasError' || allModelsLoadable.state === 'hasError';
 
     return (
         <div class="model-selector flex items-center space-x-2">
             <label htmlFor={providerSelectId} class="text-sm font-medium">{providerLabel}</label>
             <select
                 id={providerSelectId}
-                value={effectiveSelectedProvider ?? ''}
+                value={selectedProviderId ?? ''} // Use selectedProviderId prop
                 onChange={handleProviderSelect}
+                disabled={providersLoading || providersError}
                 class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm"
             >
                 <option value="">-- Provider --</option>
-                {/* Use the new uniqueProviders structure */}
+                {providersLoading && <option value="" disabled>Loading...</option>}
+                {providersError && <option value="" disabled>Error</option>}
                 {uniqueProviders.map(provider => (
                     <option key={provider.id} value={provider.id}>{provider.name}</option>
                 ))}
@@ -155,19 +161,22 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                 list={datalistId}
                 id={modelInputId}
                 name={modelInputId}
-                // Bind the input's displayed value to the model name part derived by the hook
-                // Derive display value from selectedModelId prop
-                value={selectedModelId ? selectedModelId.split(':').slice(1).join(':') : ''}
+                value={inputValue} // Bind to local input state
                 onInput={handleModelInput}
-                placeholder={effectiveSelectedProvider ? "Select or type model" : "Select provider"}
-                disabled={!effectiveSelectedProvider}
+                onBlur={handleModelFinalize} // Use combined finalize handler
+                onChange={handleModelFinalize} // Also finalize if user selects from datalist via keyboard/click
+                placeholder={!selectedProviderId ? "Select provider" : (modelsLoading ? "Loading models..." : "Select or type model")}
+                disabled={!selectedProviderId || modelsLoading || modelsError}
                 class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm flex-1 min-w-40"
             />
             <datalist id={datalistId}>
-                {filteredModels.map(model => (
-                    // Use the full ID as the value for the datalist option
+                {modelsLoading && <option value="Loading models..."></option>}
+                {modelsError && <option value="Error loading models"></option>}
+                {filteredModelsForDatalist.map((model: AvailableModel) => (
+                    // Use the model ID as the value for autocompletion
                     <option key={model.id} value={model.id}>
-                        {model.modelNamePart || model.id} {/* Display name part or full ID as fallback */}
+                        {/* Display provider/name for clarity */}
+                        {`${model.providerName} / ${model.name}`}
                     </option>
                 ))}
             </datalist>

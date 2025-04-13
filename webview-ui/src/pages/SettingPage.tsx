@@ -1,18 +1,27 @@
 // import { h } from 'preact'; // Removed unused import
 import { useState, useMemo, useEffect, useCallback } from 'preact/hooks';
-import { useAtom, useAtomValue, useSetAtom, atom } from 'jotai'; // Import atom as well
+import { useAtom, useAtomValue, useSetAtom, atom } from 'jotai';
+import { loadable } from 'jotai/utils'; // Import loadable
 import { useLocation } from "wouter";
 import { JSX } from 'preact/jsx-runtime'; // Import JSX namespace
-import { ProviderInfoAndStatus, postMessage } from '../app'; // Keep postMessage
+import { postMessage } from '../app'; // Keep postMessage
 import { McpServerStatus } from '../../../src/ai/mcpManager';
-import { AvailableModel, DefaultChatConfig } from '../../../src/common/types';
 import { ModelSelector } from '../components/ModelSelector';
+// Import types from common/types.ts
+import {
+    AvailableModel,
+    DefaultChatConfig,
+    ProviderInfoAndStatus,
+    McpConfiguredStatusPayload,
+    AllToolsStatusPayload,
+    ToolInfo
+} from '../../../src/common/types';
+// Import atoms from store
 import {
     providerStatusAtom,
-    defaultConfigAtom, // Assuming we create this atom
+    defaultConfigAtom,
     availableProvidersAtom,
-    providerModelsMapAtom
-} from '../store/atoms'; // Import atoms
+} from '../store/atoms';
 
 // Define props for the SettingPage
 // Remove props interface, component will read from atoms
@@ -20,27 +29,17 @@ import {
 //   providerStatus: ProviderInfoAndStatus[];
 //   onProviderToggle: (providerId: string, enabled: boolean) => void;
 // }
+// Removed local definitions - now imported from common/types
+// interface McpConfiguredStatusPayload { ... }
+// interface McpCombinedState { ... } // Keep this local state type if needed
+// interface ToolInfo { ... }
+// interface AllToolsStatusPayload { ... }
 
-// Update payload type to match the new McpServerStatus structure from backend
-interface McpConfiguredStatusPayload {
-   [serverName: string]: McpServerStatus;
-}
-
-// Update local state to hold the full McpServerStatus
+// Keep local state type if needed for component state
 interface McpCombinedState {
    [serverName: string]: McpServerStatus;
 }
-
-// Define a type for the combined tools list received from backend
-interface ToolInfo {
-    description?: string;
-    enabled: boolean;
-    type: 'standard' | 'mcp';
-    serverName?: string; // Only for MCP tools
-}
-interface AllToolsStatusPayload {
-    [toolIdentifier: string]: ToolInfo; // Key is toolName or serverName/toolName
-}
+// Removed stray closing brace
 
 // --- Tool Categorization Logic ---
 const categorizeTools = (tools: AllToolsStatusPayload): Record<string, AllToolsStatusPayload> => {
@@ -51,7 +50,7 @@ const categorizeTools = (tools: AllToolsStatusPayload): Record<string, AllToolsS
         // MCP categories will be added dynamically
     };
 
-    for (const [id, info] of Object.entries(tools)) {
+    for (const [id, info] of Object.entries(tools)) { // Remove assertion, add type in loop if needed
         if (info.type === 'standard') {
             // Basic categorization based on name patterns (can be refined)
             if (id.toLowerCase().includes('file') || id.toLowerCase().includes('dir') || id.toLowerCase().includes('path') || id.toLowerCase().includes('item')) {
@@ -85,10 +84,11 @@ const categorizeTools = (tools: AllToolsStatusPayload): Record<string, AllToolsS
 // Removed local defaultConfigAtom declaration
 export function SettingPage() { // Remove props
    // Read state from atoms
-   const [providerStatus, setProviderStatus] = useAtom(providerStatusAtom);
-   const [defaultConfig, setDefaultConfig] = useAtom(defaultConfigAtom);
+   // Use loadable to handle async atom states
+   const providerStatusLoadable = useAtomValue(loadable(providerStatusAtom));
+   const defaultConfigLoadable = useAtomValue(loadable(defaultConfigAtom));
    const availableProviders = useAtomValue(availableProvidersAtom);
-   const providerModelsMap = useAtomValue(providerModelsMapAtom);
+   // Removed: const providerModelsMap = useAtomValue(providerModelsMapAtom); // Use atomFamily where needed (e.g., in ModelSelector)
    // State to hold the temporary API key input for each provider
    const [apiKeysInput, setApiKeysInput] = useState<{ [providerId: string]: string }>({});
    // State for the search query
@@ -140,17 +140,19 @@ export function SettingPage() { // Remove props
   };
 
   // Filter providers based on search query
+  // Filter providers based on search query and loaded status
   const filteredProviders = useMemo(() => {
-      if (!providerStatus) return [];
+      if (providerStatusLoadable.state !== 'hasData' || !providerStatusLoadable.data) return [];
+      const currentProviderStatus = providerStatusLoadable.data;
       if (!searchQuery) {
-          return providerStatus;
+          return currentProviderStatus;
       }
       const lowerCaseQuery = searchQuery.toLowerCase();
-      return providerStatus.filter(provider =>
+      return currentProviderStatus.filter(provider =>
           provider.name.toLowerCase().includes(lowerCaseQuery) ||
           provider.id.toLowerCase().includes(lowerCaseQuery)
       );
-  }, [searchQuery, providerStatus]);
+  }, [searchQuery, providerStatusLoadable]);
 
    // Effect to fetch initial status and listen for updates
    useEffect(() => {
@@ -245,7 +247,7 @@ export function SettingPage() { // Remove props
         const updates: { toolIdentifier: string, enabled: boolean }[] = [];
         const optimisticUpdates: AllToolsStatusPayload = {};
 
-        for (const [toolId, toolInfo] of Object.entries(categoryTools)) {
+        for (const [toolId, toolInfo] of Object.entries(categoryTools)) { // Remove assertion
             // Only toggle if the state is actually changing
             if (toolInfo.enabled !== newState) {
                  updates.push({ toolIdentifier: toolId, enabled: newState });
@@ -309,24 +311,32 @@ export function SettingPage() { // Remove props
     };
 
     // --- Default Model Handlers ---
-    const handleDefaultChatModelChange = (newModelId: string | null) => { // Allow null
-        console.log(`Setting default chat model to: ${newModelId}`);
-        // Update atom directly
-        setDefaultConfig((prevConfig: DefaultChatConfig) => ({ ...prevConfig, defaultChatModelId: newModelId ?? undefined })); // Add type annotation
-        // Send update to backend
-        postMessage({ type: 'setDefaultConfig', payload: { config: { defaultChatModelId: newModelId ?? undefined } } });
-    };
+    // Callback now receives separate provider and model IDs
+    const handleDefaultChatModelChange = useCallback((newProviderId: string | null, newModelId: string | null) => {
+        // Backend expects separate fields now (assuming DefaultChatConfig is updated or will be)
+        // TODO: Verify/update DefaultChatConfig type and backend handler if needed
+        console.log(`Setting default chat model: Provider=${newProviderId}, Model=${newModelId}`);
+        postMessage({
+            type: 'setDefaultConfig',
+            payload: {
+                config: {
+                    // Send separate fields
+                    defaultProviderId: newProviderId ?? undefined,
+                    defaultModelId: newModelId ?? undefined
+                }
+            }
+        });
+    }, []);
 
   // Render logic for a single provider setting
   // Define onProviderToggle using atom setter
+  // Removed direct setting of providerStatus atom
   const onProviderToggle = useCallback((providerId: string, enabled: boolean) => {
-       setProviderStatus(prevStatus =>
-           prevStatus.map(p =>
-               p.id === providerId ? { ...p, enabled: enabled } : p
-           )
-       );
+       console.log(`Requesting toggle provider ${providerId} to ${enabled}`);
+       // Send message to backend to update the setting
        postMessage({ type: 'setProviderEnabled', payload: { provider: providerId, enabled: enabled } });
-   }, [setProviderStatus]);
+       // The providerStatusAtom will update via refetch or push update
+   }, []); // No dependency on setProviderStatus needed
 
   // Render logic for a single provider setting
   const renderProviderSetting = (providerInfo: ProviderInfoAndStatus) => {
@@ -345,10 +355,7 @@ export function SettingPage() { // Remove props
                 onChange={(e) => onProviderToggle(id, (e.target as HTMLInputElement).checked)}
               />
               {name}
-              {/* Display model count */}
-              <span class="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
-                ({providerModelsMap[id]?.length ?? '...'} models)
-              </span>
+              {/* Model count display removed */}
             </label>
             <span class={`text-sm font-medium ${apiKeyColor === 'green' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{apiKeyText}</span>
         </div>
@@ -439,6 +446,7 @@ export function SettingPage() { // Remove props
   ], [categorizedTools]);
 
 
+  // Ensure the function explicitly returns JSX
   return (
     // Add relative positioning for the absolute back button
     <div class="p-6 relative">
@@ -464,12 +472,24 @@ export function SettingPage() { // Remove props
           <div class="space-y-4">
               {/* Use the new ModelSelector component */}
               <div class="p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
-                   <ModelSelector
-                       labelPrefix="Default Chat"
-                       // Pass only the required props
-                       selectedModelId={defaultConfig.defaultChatModelId ?? null}
-                       onModelChange={handleDefaultChatModelChange}
-                   />
+                   {/* Handle loading/error state for defaultConfig */}
+                   {defaultConfigLoadable.state === 'loading' && <p class="text-sm text-gray-500">Loading default config...</p>}
+                   {defaultConfigLoadable.state === 'hasError' && <p class="text-sm text-red-500">Error loading default config.</p>}
+                   {defaultConfigLoadable.state === 'hasData' && (() => {
+                       // Assume defaultConfigLoadable.data has separate fields now
+                       // TODO: Update DefaultChatConfig type if needed
+                       const defaultProviderId = defaultConfigLoadable.data?.defaultProviderId ?? null;
+                       const defaultModelId = defaultConfigLoadable.data?.defaultModelId ?? null;
+
+                       return (
+                           <ModelSelector
+                               labelPrefix="Default Chat"
+                               selectedProviderId={defaultProviderId}
+                               selectedModelId={defaultModelId}
+                               onModelChange={handleDefaultChatModelChange}
+                           />
+                       );
+                   })()}
               </div>
               {/* TODO: Add selectors for defaultImageModelId and defaultOptimizeModelId later */}
               {/* <p class="text-xs text-gray-500 dark:text-gray-400">Default Image Generation Model: (Coming Soon)</p> */}
@@ -552,8 +572,9 @@ export function SettingPage() { // Remove props
                           return null; // Skip empty categories
                       }
 
-                      const allEnabled = Object.values(toolsInCategory).every(t => t.enabled);
-                      const noneEnabled = Object.values(toolsInCategory).every(t => !t.enabled);
+                      // Add type assertion for Object.values result
+                      const allEnabled = Object.values(toolsInCategory as AllToolsStatusPayload).every((t: ToolInfo) => t.enabled);
+                      const noneEnabled = Object.values(toolsInCategory as AllToolsStatusPayload).every((t: ToolInfo) => !t.enabled);
                       const isIndeterminate = !allEnabled && !noneEnabled;
 
                       return (
@@ -574,7 +595,7 @@ export function SettingPage() { // Remove props
                                   </label>
                               </div>
                               <ul class="space-y-2">
-                                  {Object.entries(toolsInCategory).map(([toolId, toolInfo]) => renderToolItem(toolId, toolInfo))}
+                                  {Object.entries(toolsInCategory).map(([toolId, toolInfo]) => renderToolItem(toolId, toolInfo as ToolInfo))} // Keep assertion here
                               </ul>
                           </div>
                         );
@@ -600,16 +621,21 @@ export function SettingPage() { // Remove props
             />
         </div>
 
-        {providerStatus && providerStatus.length > 0 ? (
-          <ul class="space-y-4">
-            {filteredProviders.length > 0 ? (
-                 filteredProviders.map(providerInfo => renderProviderSetting(providerInfo))
-             ) : (
-                 <li class="text-gray-500 dark:text-gray-400 italic">未找到匹配嘅 Provider。</li>
-             )}
-          </ul>
-        ) : (
-          <p class="text-gray-500 dark:text-gray-400">正在載入 Provider 狀態...</p>
+        {/* Handle loading/error state for providerStatus */}
+        {providerStatusLoadable.state === 'loading' && <p class="text-gray-500 dark:text-gray-400">正在載入 Provider 狀態...</p>}
+        {providerStatusLoadable.state === 'hasError' && <p class="text-red-500 dark:text-red-400">載入 Provider 狀態時出錯。</p>}
+        {providerStatusLoadable.state === 'hasData' && (
+            providerStatusLoadable.data.length > 0 ? (
+                <ul class="space-y-4">
+                    {filteredProviders.length > 0 ? (
+                        filteredProviders.map(providerInfo => renderProviderSetting(providerInfo))
+                    ) : (
+                        <li class="text-gray-500 dark:text-gray-400 italic">未找到匹配嘅 Provider。</li>
+                    )}
+                </ul>
+            ) : (
+                 <p class="text-gray-500 dark:text-gray-400 italic">未找到任何 Provider。</p>
+            )
         )}
         <p class="text-xs text-gray-600 dark:text-gray-400 mt-6">啟用 Provider 並且設定對應嘅 API Key 先可以使用。</p>
       </section>
@@ -698,5 +724,5 @@ export function SettingPage() { // Remove props
            )}
        </section>
     </div>
-  );
-}
+  ); // Closing parenthesis for the main return
+} // Closing brace for SettingPage function

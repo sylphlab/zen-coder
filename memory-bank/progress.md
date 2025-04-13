@@ -14,10 +14,13 @@
     - Basic routing added in `app.tsx` to navigate between the chat view (`/index.html`) and the chat list view (`/chats`).
     - `HeaderControls.tsx` updated with a button to navigate to the chat list view.
     - `MessagesArea.tsx` updated to display messages from the currently active chat session.
-- **Model ID Standardization (Complete):**
-    - Verified provider implementations format IDs correctly.
-    - Verified `package.json` defaults use the correct format.
-    - Refactored frontend (`useModelSelection`, `HeaderControls`, `app.tsx`) to handle standardized IDs and link UI selection to active chat config.
+- **Jotai Async Refactor & Model ID Correction (Complete):**
+    - Implemented request/response mechanism between webview and extension host.
+    - Refactored data fetching atoms (`providerStatus`, `availableProviders`, `defaultConfig`, `modelsForProvider`) to use async logic and the request mechanism.
+    - Updated UI components (`ModelSelector`, `HeaderControls`, `SettingPage`, `App`) to use async atoms with `loadable` for loading/error states.
+    - Corrected model ID handling to use separate `providerId` and `modelId` fields across types, components, and handlers.
+    - Removed redundant message handlers (`GetProviderStatusHandler`, etc.) in `extension.ts`.
+    - Added placeholder methods to `AiService` for required request handlers (`getMcpStatuses`, `getAllToolsWithStatus`, `getCombinedCustomInstructions`).
 +- **MCP Server Configuration:**
 +    - Defined `zencoder.mcp.servers` setting in `package.json`.
 +    - `AiService.ts` updated to dynamically load MCP servers based on settings.
@@ -105,7 +108,9 @@
 - Test structured output and suggested actions thoroughly.
 - Improve error handling throughout.
 - Refine UI styling and potentially add animations.
-- Consider using Nanostores for state management.
+- Implement placeholder methods in `AiService` (`getMcpStatuses`, `getAllToolsWithStatus`, `getCombinedCustomInstructions`).
+- Verify/update backend handlers (`SetDefaultConfigHandler`, `UpdateChatConfigHandler`) and VS Code settings to use separate `providerId`/`modelId`.
+- Thoroughly test UI interactions, especially model selection and async data loading/error states.
 
 ## Current Status (Multi-Chat Implementation)
 - Backend services (`HistoryManager`, `AiService`, `StreamProcessor`) and core handlers updated for `chatId`.
@@ -118,7 +123,7 @@
 - Backend config loading and usage verified.
 
 ## Known Issues / TODOs (Multi-Chat)
-- **Model ID Standardization:** Completed.
+- **Model ID Handling:** Corrected to use separate `providerId` and `modelId`.
 - **Frontend State Hook (`useMessageHandler`):** Verified.
 - **Chat Deletion:** Confirmation dialog verified.
 - **Chat Configuration UI:** Implemented via `HeaderControls`.

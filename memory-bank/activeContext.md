@@ -1,19 +1,30 @@
 # Active Context
 
 ## Current Focus
-Completed refactoring of the webview UI state management to use Jotai. Addressed user feedback regarding inability to send messages after the initial refactor, likely due to Jotai context issues resolved by adjusting hook usage patterns.
+Completed major refactoring of webview UI state management using Jotai, including implementing async atoms and a request/response communication pattern with the extension host. Corrected model ID handling to use separate `providerId` and `modelId` fields, removing the previous combined `providerId:modelName` format.
 
 ## Next Steps
-1.  **Testing:** Thoroughly test all UI interactions, including sending messages, model selection (both default and chat-specific), chat management (create, select, delete), image upload, custom instructions, MCP server status display/retry, and tool toggling, to ensure the Jotai refactoring didn't introduce regressions and resolved the original responsiveness issues.
-2.  **Resume Image Upload:** Continue implementation and testing of image upload functionality.
-3.  **VS Code Tool Enhancements:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, etc.).
+1.  **Implement Backend Placeholders:** Implement the placeholder methods in `AiService` (`getMcpStatuses`, `getAllToolsWithStatus`, `getCombinedCustomInstructions`) needed by the new request handlers in `extension.ts`. Ensure `McpManager` has the necessary methods (`getAllServerStatuses`).
+2.  **Verify Config/Types:** Ensure `DefaultChatConfig` and `ChatConfig` types, along with backend handlers (`SetDefaultConfigHandler`, `UpdateChatConfigHandler`) and VS Code settings (`zencoder.defaults.*`), consistently use separate `providerId` and `modelId` fields.
+3.  **Testing:** Thoroughly test all UI interactions, especially model selection (default and chat-specific), settings page data loading (providers, defaults, tools, instructions), and ensure async atoms handle loading/error states correctly.
+4.  **Resume Image Upload:** Continue implementation and testing of image upload functionality.
+5.  **VS Code Tool Enhancements:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, etc.).
 
-## Recent Changes (Jotai Refactor & Fixes)
-- **Refactored Webview UI State Management:** Replaced Preact `useState` and message-passing logic with Jotai atoms (`webview-ui/src/store/atoms.ts`) for core UI state (chats, providers, models, input, streaming status, etc.).
-- **Updated Components:** Refactored `App.tsx`, `HeaderControls.tsx`, `MessagesArea.tsx`, `InputArea.tsx`, `SettingPage.tsx`, `ChatListPage.tsx`, and `ModelSelector.tsx` to use Jotai hooks (`useAtom`, `useAtomValue`, `useSetAtom`).
-- **Created `MessageHandlerComponent`:** Added a dedicated component within `App.tsx` to listen for messages from the extension host and update Jotai atoms.
-- **Fixed Jotai Context Errors:** Resolved runtime errors (`Cannot read properties of null (reading 'context')`) by adjusting how `useAtomValue` was used within `useCallback` handlers in `App.tsx`, ensuring atom values are read outside the callback or directly within the render function where appropriate.
-- **Removed Dependencies:** Uninstalled `nanostores` and `@nanostores/preact` from `webview-ui` as they are no longer needed.
+## Recent Changes (Jotai Async Refactor & Model ID Correction)
+- **Implemented Request/Response:** Added `requestManager.ts` in webview and request handling logic in `extension.ts` to replace push-based data fetching for providers, models, and default config.
+- **Implemented Async Atoms:** Refactored `providerStatusAtom`, `availableProvidersAtom`, `defaultConfigAtom`, and created `modelsForProviderAtomFamily` in `webview-ui/src/store/atoms.ts` to use the new async request mechanism.
+- **Updated UI for Async:** Modified `SettingPage.tsx` and `ModelSelector.tsx` to use `jotai/utils/loadable` to handle loading/error states for async atoms.
+- **Corrected Model ID Handling:**
+    - Removed logic parsing/combining IDs with ':' in `ModelSelector.tsx`, `SettingPage.tsx`, `HeaderControls.tsx`, `app.tsx`.
+    - Updated `ModelSelectorProps` and its `onModelChange` callback to handle separate `providerId` and `modelId`.
+    - Updated `DefaultChatConfig` and `ChatConfig` types in `common/types.ts` to use separate `providerId` and `modelId` fields (removed `modelName`, `defaultChatModelId`).
+    - Updated relevant handlers (`handleDefaultChatModelChange` in `SettingPage.tsx`, `handleModelSelectorChange` in `app.tsx`) to work with separate IDs.
+- **Refactored Extension Host:**
+    - Added `_requestHandlers` map in `ZenCoderChatViewProvider` (`extension.ts`) to handle data requests from the webview.
+    - Removed corresponding `MessageHandler` classes (`GetProviderStatusHandler`, `GetAvailableModelsHandler`, `GetCustomInstructionsHandler`) and their registrations.
+    - Added placeholder methods (`getMcpStatuses`, `getAllToolsWithStatus`, `getCombinedCustomInstructions`) to `AiService.ts` for request handlers.
+- **Cleaned Imports:** Removed unused imports and fixed type errors resulting from the refactoring across multiple files.
+- **(Previous Jotai Refactor):** Initial move from `useState`/message-passing to basic Jotai atoms.
 - **(Previous changes before Jotai refactor)**
 - **UI Refactoring (Navigation &amp; Layout):**
     - Removed top navigation bar (`<nav>`) from `app.tsx`.
@@ -308,7 +319,7 @@ Completed refactoring of the webview UI state management to use Jotai. Addressed
 - **Dependencies/Setup:** Integrated Vite, Preact, UnoCSS, wouter, etc.
 - **UI Navigation:** Finalized navigation using settings icon in `HeaderControls` and back button in `SettingPage`, removing top nav bar. Routing handled by `wouter` with `<Switch>`.
 - **Multi-Chat Architecture:** Storing chat sessions (`ChatSession[]`) including history and config per chat in `workspaceState`. Backend services and handlers updated to operate based on `chatId`. Frontend manages `chatSessions` state and `activeChatId`.
-- **Model ID Standardization:** Adopted `providerId:modelName` format for model IDs. `ModelResolver` updated; provider implementations and frontend need updates.
+- **Model ID Handling:** Corrected system to use separate `providerId` and `modelId` fields, removing the previous combined `providerId:modelName` format. Updated types, components, and handlers accordingly.
 - **Tool Enablement Storage:** All tool enablement statuses (standard and MCP) are stored uniformly in `globalState` under the `toolEnabledStatus` key. `SetToolEnabledHandler` writes to this key, and `aiService` reads from it.
 - **MCP Tool Identifier:** Standardized on `mcp_serverName_toolName` format for identifying MCP tools when interacting with the AI and storing/retrieving enablement status from `globalState`.
 - **Message Actions:** Added copy/delete functionality per message bubble in `MessagesArea.tsx`, implemented handlers in `app.tsx`, and added backend support via `DeleteMessageHandler` and `HistoryManager`. Removed the global clear chat button from `HeaderControls.tsx`.

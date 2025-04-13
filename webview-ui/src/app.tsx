@@ -7,6 +7,7 @@ import { SettingPage } from './pages/SettingPage';
 import { ChatListPage } from './pages/ChatListPage'; // Import ChatListPage
 // Removed: import { useMessageHandler } from './hooks/useMessageHandler';
 import { useImageUpload } from './hooks/useImageUpload';
+import { handleResponse as handleRequestManagerResponse } from './utils/requestManager'; // Import the response handler
 // Removed: import { useModelSelection } from './hooks/useModelSelection';
 import { HeaderControls } from './components/HeaderControls';
 import { MessagesArea } from './components/MessagesArea';
@@ -28,19 +29,16 @@ import {
     activeChatIdAtom,
     providerStatusAtom,
     availableProvidersAtom,
-    providerModelsMapAtom,
     isStreamingAtom,
     inputValueAtom,
     selectedImagesAtom,
     suggestedActionsMapAtom,
     activeChatAtom,
     activeChatMessagesAtom,
-    activeChatConfigAtom,
+    activeChatEffectiveConfigAtom, // Use the renamed atom
     activeChatProviderIdAtom,
     activeChatModelNameAtom,
     activeChatCombinedModelIdAtom,
-    triggerWebviewReadyAtom,
-    triggerFetchModelsForProviderAtom,
     webviewLocationAtom // Added for potential future sync
 } from './store/atoms'; // Import Jotai atoms
 
@@ -102,22 +100,30 @@ export const generateUniqueId = () => `id-${Date.now()}-${Math.random().toString
 const MessageHandlerComponent = () => {
     const setChatSessions = useSetAtom(chatSessionsAtom);
     const setActiveChatId = useSetAtom(activeChatIdAtom);
-    const setProviderStatus = useSetAtom(providerStatusAtom);
-    const setAvailableProviders = useSetAtom(availableProvidersAtom);
-    const setProviderModelsMap = useSetAtom(providerModelsMapAtom);
+    // Removed setters for read-only async atoms:
+    // const setProviderStatus = useSetAtom(providerStatusAtom);
+    // const setAvailableProviders = useSetAtom(availableProvidersAtom);
+    // const setProviderModelsMap = useSetAtom(providerModelsMapAtom);
     const setIsStreaming = useSetAtom(isStreamingAtom);
     const setSuggestedActionsMap = useSetAtom(suggestedActionsMapAtom);
     const setLocation = useSetAtom(webviewLocationAtom); // Use Jotai atom setter for location
-    const triggerFetchModels = useSetAtom(triggerFetchModelsForProviderAtom);
-    const triggerReady = useSetAtom(triggerWebviewReadyAtom);
+    // Removed: const triggerFetchModels = useSetAtom(triggerFetchModelsForProviderAtom);
+    // Removed: const triggerReady = useSetAtom(triggerWebviewReadyAtom);
 
     useEffect(() => {
         const handleMessagesFromExtension = (event: MessageEvent) => {
             const message = event.data;
             console.log("[MessageHandler] Received message:", message.type, message.payload); // Log all messages
 
+            // First, check if it's a response to a pending request
+            if (message.type === 'responseData') {
+                handleRequestManagerResponse(message);
+                return; // Stop further processing for this message
+            }
+
+            // Handle other non-response messages (state pushes, stream updates, etc.)
             switch (message.type) {
-                // --- State Loading & Updates ---
+                // --- State Loading & Updates (Keep initial load) ---
                 case 'loadChatState':
                     if (message.payload && Array.isArray(message.payload.chats)) {
                         const loadedChats = message.payload.chats;
@@ -135,39 +141,10 @@ const MessageHandlerComponent = () => {
                          console.warn("[MessageHandler] Invalid loadChatState payload:", message.payload);
                     }
                     break;
-                case 'providerStatus':
-                    if (Array.isArray(message.payload)) {
-                        setProviderStatus(message.payload);
-                    } else {
-                         console.warn("[MessageHandler] Invalid providerStatus payload:", message.payload);
-                    }
-                    break;
-                case 'availableProviders': // Renamed from 'availableModels' in old code
-                     if (Array.isArray(message.payload)) {
-                         const providers = message.payload as AvailableModel[];
-                         console.log("[MessageHandler] Received available providers:", providers);
-                         setAvailableProviders(providers);
-                         // Trigger model fetching for each provider
-                         providers.forEach(provider => {
-                             triggerFetchModels(provider.providerId);
-                         });
-                     } else {
-                          console.warn("[MessageHandler] Invalid availableProviders payload:", message.payload);
-                     }
-                     break;
-                case 'providerModelsLoaded':
-                     if (message.payload && message.payload.providerId && Array.isArray(message.payload.models)) {
-                         const { providerId, models } = message.payload;
-                         console.log(`[MessageHandler] Received ${models.length} models for provider: ${providerId}`);
-                         setProviderModelsMap(prevMap => ({
-                             ...prevMap,
-                             [providerId]: models as AvailableModel[]
-                         }));
-                     } else {
-                          console.warn("[MessageHandler] Invalid providerModelsLoaded payload:", message.payload);
-                     }
-                     break;
-
+                // Remove cases handled by request/response via async atoms
+                // case 'providerStatus': ... removed ...
+                // case 'availableProviders': ... removed ...
+                // case 'providerModelsLoaded': ... removed ...
                 // --- Streaming & Message Updates ---
                  case 'startAssistantMessage':
                      if (message.payload?.chatId && message.payload?.messageId) {
@@ -247,13 +224,15 @@ const MessageHandlerComponent = () => {
 
         window.addEventListener('message', handleMessagesFromExtension);
         console.log("[MessageHandler] Initializing and triggering webviewReady.");
-        triggerReady(); // Trigger initial load
+        // Removed: triggerReady(); // Initial load now handled by async atoms
 
         return () => {
             window.removeEventListener('message', handleMessagesFromExtension);
         };
         // Ensure dependencies cover all setters and trigger functions used inside
-    }, [setChatSessions, setActiveChatId, setProviderStatus, setAvailableProviders, setProviderModelsMap, setIsStreaming, setSuggestedActionsMap, setLocation, triggerFetchModels, triggerReady]);
+    // Removed dependencies on removed setters/triggers
+    // Removed triggerReady/triggerFetchModels from dependencies
+    }, [setChatSessions, setActiveChatId, setIsStreaming, setSuggestedActionsMap, setLocation]);
 
     return null; // This component does not render anything
 };
@@ -269,7 +248,7 @@ export function App() {
     const [providerStatus, setProviderStatus] = useAtom(providerStatusAtom);
     // Removed: const setSuggestedActionsMap = useSetAtom(suggestedActionsMapAtom); // Setter used only in MessageHandlerComponent
     const availableProviders = useAtomValue(availableProvidersAtom);
-    const providerModelsMap = useAtomValue(providerModelsMapAtom);
+    // Removed: const providerModelsMap = useAtomValue(providerModelsMapAtom); // Use atomFamily instead where needed
     // Use derived atoms directly
     const activeChatMessages = useAtomValue(activeChatMessagesAtom);
     const activeChatProviderId = useAtomValue(activeChatProviderIdAtom);
@@ -289,7 +268,7 @@ export function App() {
     const setInputValueDirect = useSetAtom(inputValueAtom);
     // Removed setSelectedImagesDirect - will sync from hook state
     const setIsStreamingDirect = useSetAtom(isStreamingAtom);
-    const setProviderStatusDirect = useSetAtom(providerStatusAtom);
+    // Removed setter for read-only async atom:
     const setSelectedImagesAtomDirect = useSetAtom(selectedImagesAtom); // Setter for the atom
 
     // --- Custom Hooks ---
@@ -395,15 +374,6 @@ export function App() {
         }
     }, [handleSend]); // Dependency on handleSend
 
-    // setProviderStatusDirect defined above
-    const handleProviderToggle = useCallback((providerId: string, enabled: boolean) => {
-         setProviderStatusDirect(prevStatus =>
-             prevStatus.map(p =>
-                 p.id === providerId ? { ...p, enabled: enabled } : p
-             )
-         );
-         postMessage({ type: 'setProviderEnabled', payload: { provider: providerId, enabled: enabled } });
-     }, [setProviderStatusDirect]); // Dependency is correct
 
      // Use activeChatId read outside
      const handleClearChat = useCallback(() => {
@@ -538,13 +508,14 @@ export function App() {
     // This now handles setting the provider *and* updating the chat's model
     // This handler is now simplified as ModelSelector handles finding the default model
     // It just needs to call handleChatModelChange with the new provider and model
-    const handleModelSelectorChange = useCallback((newCombinedModelId: string) => {
+    const handleModelSelectorChange = useCallback((newCombinedModelId: string | null) => { // Allow null
          if (newCombinedModelId && newCombinedModelId.includes(':')) {
+             // Valid combined ID string
              const [newProviderId, ...modelNameParts] = newCombinedModelId.split(':');
              const newModelName = modelNameParts.join(':');
              handleChatModelChange(newProviderId, newModelName);
          } else {
-             // Handle invalid or cleared selection
+             // Handle null (cleared selection) or invalid format
              handleChatModelChange(null, null);
          }
     }, [handleChatModelChange]);

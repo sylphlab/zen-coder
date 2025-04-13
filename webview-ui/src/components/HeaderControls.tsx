@@ -6,17 +6,20 @@ import { AvailableModel } from '../../../src/common/types';
 import { ModelSelector } from './ModelSelector';
 import {
     availableProvidersAtom,
-    providerModelsMapAtom,
-    activeChatCombinedModelIdAtom,
-    activeChatMessagesAtom // Import for hasMessages logic
-} from '../store/atoms'; // Import atoms
+    // Removed: providerModelsMapAtom,
+    // Removed: activeChatCombinedModelIdAtom,
+    activeChatProviderIdAtom, // Import separate provider ID
+    activeChatModelNameAtom,  // Import separate model name/ID
+    activeChatMessagesAtom
+} from '../store/atoms';
 // Define the extended model type expected from the hook
 // type FilteredModel = AvailableModel & { modelNamePart: string }; // No longer needed here
 
 interface HeaderControlsProps {
     // Props now only include callbacks
-    onModelChange: (newModelId: string) => void;
-    onSettingsClick: () => void;
+    // Update callback signature to match what App.tsx provides
+    onModelChange: (providerId: string | null, modelId: string | null) => void;
+    onSettingsClick: () => void; // Keep this
     onChatsClick: () => void;
 }
 
@@ -27,8 +30,9 @@ export const HeaderControls: FunctionalComponent<HeaderControlsProps> = ({
 }) => {
     // Read state from atoms
     const availableProviders = useAtomValue(availableProvidersAtom);
-    const providerModelsMap = useAtomValue(providerModelsMapAtom);
-    const selectedModelId = useAtomValue(activeChatCombinedModelIdAtom);
+    // Removed: const providerModelsMap = useAtomValue(providerModelsMapAtom); // Not needed directly here
+    const selectedProviderId = useAtomValue(activeChatProviderIdAtom); // Read provider ID
+    const selectedModelId = useAtomValue(activeChatModelNameAtom);    // Read model name/ID
     const activeChatMessages = useAtomValue(activeChatMessagesAtom);
     const hasMessages = activeChatMessages.length > 0; // Derive hasMessages
     return (
@@ -38,8 +42,9 @@ export const HeaderControls: FunctionalComponent<HeaderControlsProps> = ({
             {/* Replace with the new ModelSelector component */}
             <ModelSelector
                 // Pass only the required props
-                selectedModelId={selectedModelId}
-                onModelChange={onModelChange}
+                selectedProviderId={selectedProviderId ?? null} // Pass provider ID
+                selectedModelId={selectedModelId ?? null}    // Pass model name/ID
+                onModelChange={onModelChange} // Pass the callback down
                 // No labelPrefix needed here
             />
             {/* Grouped action buttons (kept icons) */}
