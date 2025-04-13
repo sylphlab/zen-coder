@@ -128,7 +128,7 @@ export class AiService {
         history: CoreMessage[] = [],
         providerId: string,
         modelId: string
-    ): Promise<StreamTextResult<any>> { // Return type specified for clarity
+    ) { // Return type specified for clarity
         const modelInstance = await this._getProviderInstance(providerId, modelId);
 
         if (!modelInstance) {
@@ -139,7 +139,9 @@ export class AiService {
         const messagesForApi: CoreMessage[] = [...history];
         const activeTools = this._getActiveToolNames().reduce((acc, toolName) => {
             const toolDefinition = allTools[toolName];
-            if (toolDefinition) acc[toolName] = toolDefinition;
+            if (toolDefinition) {
+                acc[toolName] = toolDefinition;
+            }
             return acc;
         }, {} as Record<ToolName, Tool>);
 
@@ -160,10 +162,7 @@ export class AiService {
         try {
             const streamTextResult = await streamText({
                 toolCallStreaming: true,
-                model: wrapLanguageModel({
-                    model: modelInstance,
-                    middleware: extractReasoningMiddleware({ tagName: 'think' }),
-                  }),
+                model: modelInstance,
                 messages: messagesForApi,
                 tools: allAvailableTools,
                 maxSteps: 100,
@@ -171,21 +170,57 @@ export class AiService {
                 onFinish: async ({ text, toolCalls, toolResults, finishReason, usage }) => {
                     console.log('[AiService] streamText finished. MCP clients remain active.');
                 },
-                experimental_repairToolCall: async ({ toolCall, error, messages, system }) => {
-                    // Basic repair attempt using the same model
+                experimental_repairToolCall: async ({
+                    toolCall,
+                    tools,
+                    error,
+                    messages,
+                    system,
+                  }) => {
                     const result = await generateText({
-                        model: modelInstance, // Use the same model instance
-                        system,
-                        messages: [
-                          ...messages,
-                          { role: 'assistant', content: [toolCall] },
-                          { role: 'tool', content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: error.message }] },
-                        ],
-                        tools: activeTools, // Use only built-in tools for repair prompt? Or allAvailableTools? Let's try activeTools first.
-                      });
-                      const newToolCall = result.toolCalls.find(tc => tc.toolName === toolCall.toolName);
-                      return newToolCall ? { ...newToolCall, toolCallId: toolCall.toolCallId } : null; // Return repaired call or null
-                    },
+                      model: modelInstance,
+                      system,
+                      messages: [
+                        ...messages,
+                        {
+                          role: 'assistant',
+                          content: [
+                            {
+                              type: 'tool-call',
+                              toolCallId: toolCall.toolCallId,
+                              toolName: toolCall.toolName,
+                              args: toolCall.args,
+                            },
+                          ],
+                        },
+                        {
+                          role: 'tool' as const,
+                          content: [
+                            {
+                              type: 'tool-result',
+                              toolCallId: toolCall.toolCallId,
+                              toolName: toolCall.toolName,
+                              result: error.message,
+                            },
+                          ],
+                        },
+                      ],
+                      tools,
+                    });
+                
+                    const newToolCall = result.toolCalls.find(
+                      newToolCall => newToolCall.toolName === toolCall.toolName,
+                    );
+                
+                    return newToolCall !== undefined
+                      ? {
+                          toolCallType: 'function' as const,
+                          toolCallId: toolCall.toolCallId,
+                          toolName: toolCall.toolName,
+                          args: JSON.stringify(newToolCall.args),
+                        }
+                      : null;
+                  },
             });
             return streamTextResult;
         } catch (error: any) {
