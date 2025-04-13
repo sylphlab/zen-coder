@@ -9,9 +9,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onView:zencoder.views.chat"
-  ],
+  "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -28,7 +26,8 @@
         {
           "type": "webview",
           "id": "zencoder.views.chat",
-          "name": "Chat"
+          "name": "Chat",
+          "icon": "$(comment-discussion)"
         }
       ]
     },
@@ -246,8 +245,7 @@
           "type": "array",
           "description": "Configure connections to Model Context Protocol (MCP) servers.",
           "default": [],
-          "scope": "w
-          indow",
+          "scope": "window",
           "items": {
             "type": "object",
             "title": "MCP Server Configuration",

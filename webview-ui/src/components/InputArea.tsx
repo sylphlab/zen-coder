@@ -1,7 +1,7 @@
 import { FunctionalComponent } from 'preact';
 import { Ref } from 'preact';
 import { JSX } from 'preact/jsx-runtime';
-import { UiMessageContentPart, ApiProviderKey, Message, generateUniqueId, postMessage } from '../app'; // Assuming types/helpers are exported
+// Removed unused imports: UiMessageContentPart, ApiProviderKey, Message, generateUniqueId, postMessage
 
 // Interface for selected image state (can be moved to common types)
 export interface SelectedImage { // Ensure this is exported
@@ -30,14 +30,14 @@ interface InputAreaProps {
 
 export const InputArea: FunctionalComponent<InputAreaProps> = ({
     inputValue,
-    setInputValue, // Needed for fill_input action? Or handle that in App? Let's keep it for now.
+    // setInputValue, // Removed unused prop
     handleInputChange,
     handleKeyDown,
     handleSend,
     isStreaming,
     currentModelInput,
     selectedImages,
-    setSelectedImages, // Needed if image handling is kept here
+    // setSelectedImages, // Removed unused prop
     fileInputRef,
     triggerImageUpload,
     removeSelectedImage,

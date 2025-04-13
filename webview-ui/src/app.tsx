@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks';
-import { JSX } from 'preact/jsx-runtime';
-import { Router, Route, Link, useLocation, Switch } from "wouter"; // Import Switch
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
+// import { JSX } from 'preact/jsx-runtime'; // Removed unused JSX import
+import { Router, Route, useLocation, Switch } from "wouter"; // Removed unused Link, Import Switch
 import './app.css';
 import { SettingPage } from './pages/SettingPage'; // Restore import usage
 import { useMessageHandler } from './hooks/useMessageHandler';
@@ -8,7 +8,7 @@ import { useImageUpload } from './hooks/useImageUpload';
 import { useModelSelection } from './hooks/useModelSelection'; // Import model selection hook
 import { HeaderControls } from './components/HeaderControls';
 import { MessagesArea } from './components/MessagesArea';
-import { InputArea, SelectedImage } from './components/InputArea';
+import { InputArea } from './components/InputArea'; // Removed unused SelectedImage
 import { ConfirmationDialog } from './components/ConfirmationDialog';
 import { AvailableModel, SuggestedAction as CommonSuggestedAction } from '../../src/common/types';
 
@@ -81,7 +81,7 @@ export function App() {
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
     const [suggestedActionsMap, setSuggestedActionsMap] = useState<Record<string, SuggestedAction[]>>({});
-    const [mcpServerConfigs, setMcpServerConfigs] = useState<McpServerConfig[]>([]);
+    // const [mcpServerConfigs, setMcpServerConfigs] = useState<McpServerConfig[]>([]); // Removed unused state
 
     // --- Custom Hooks ---
     const {
@@ -131,10 +131,10 @@ export function App() {
                          setProviderStatus(message.payload);
                      }
                      break;
-                 case 'updateMcpServers':
+                 case 'updateMcpServers': // This message type might be obsolete now if MCP status is handled elsewhere
                       if (Array.isArray(message.payload)) {
-                          // console.log("Received MCP server configs:", message.payload);
-                          setMcpServerConfigs(message.payload);
+                          // console.log("Received MCP server configs (now unused in App state):", message.payload);
+                          // setMcpServerConfigs(message.payload); // Removed call to non-existent setter
                       }
                       break;
              }

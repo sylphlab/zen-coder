@@ -1,7 +1,7 @@
-import { h } from 'preact';
+// import { h } from 'preact'; // Removed unused import
 import { useState, useMemo, useEffect, useCallback } from 'preact/hooks'; // Added useCallback
 import { useLocation } from "wouter"; // Import useLocation
-import { ProviderInfoAndStatus, ApiProviderKey, postMessage } from '../app';
+import { ProviderInfoAndStatus, postMessage } from '../app'; // Removed unused ApiProviderKey
 import { McpServerStatus } from '../../../src/ai/mcpManager';
 
 // Define props for the SettingPage
@@ -32,9 +32,9 @@ interface AllToolsStatusPayload {
 }
 
 // Define a simple type for MCP tool definitions for display purposes (used internally in MCP section)
-interface McpToolDisplayInfo {
-    description?: string;
-}
+// interface McpToolDisplayInfo { // Removed unused interface
+//     description?: string;
+// }
 
 // --- Tool Categorization Logic ---
 const categorizeTools = (tools: AllToolsStatusPayload): Record<string, AllToolsStatusPayload> => {
