@@ -11,6 +11,7 @@ import { OpenAiProvider } from './providers/openaiProvider';
 import { OllamaProvider } from './providers/ollamaProvider';
 import z from 'zod';
 import { McpManager, McpServerStatus } from './mcpManager'; // Import McpManager
+import * as path from 'path'; // Needed for custom instructions path
 
 // Key for storing MCP tool overrides in globalState (consistent with handler)
 const MCP_TOOL_OVERRIDES_KEY = 'mcpToolEnabledOverrides';
@@ -172,6 +173,57 @@ export class AiService {
         return finalTools;
     }
 
+    /**
+     * Loads global and project-specific custom instructions and merges them.
+     */
+    private async _loadCustomInstructions(): Promise<string> {
+        let combinedInstructions = '';
+
+        // 1. Load Global Instructions from VS Code Settings
+        try {
+            const globalInstructions = vscode.workspace.getConfiguration('zencoder.customInstructions').get<string>('global');
+            if (globalInstructions && globalInstructions.trim()) {
+                combinedInstructions += globalInstructions.trim();
+                console.log('[AiService] Loaded global custom instructions.');
+            }
+        } catch (error) {
+            console.error('[AiService] Error reading global custom instructions setting:', error);
+        }
+
+        // 2. Load Project-Specific Instructions from .zen/custom_instructions.md
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            const projectInstructionUri = vscode.Uri.joinPath(workspaceFolders[0].uri, '.zen', 'custom_instructions.md');
+            try {
+                const fileContent = await vscode.workspace.fs.readFile(projectInstructionUri);
+                const projectInstructions = Buffer.from(fileContent).toString('utf8');
+                if (projectInstructions && projectInstructions.trim()) {
+                    if (combinedInstructions) {
+                        combinedInstructions += '\\n\\n---\\n\\n'; // Add separator if global instructions exist
+                    }
+                    combinedInstructions += projectInstructions.trim();
+                    console.log(`[AiService] Loaded project custom instructions from: ${projectInstructionUri.fsPath}`);
+                }
+            } catch (error: any) {
+                if (error.code === 'FileNotFound') {
+                    // It's okay if the project file doesn't exist
+                    console.log(`[AiService] Project custom instructions file not found (optional): ${projectInstructionUri.fsPath}`);
+                } else {
+                    console.error(`[AiService] Error reading project custom instructions file ${projectInstructionUri.fsPath}:`, error);
+                    vscode.window.showWarningMessage(`Error reading project custom instructions from ${projectInstructionUri.fsPath}.`);
+                }
+            }
+        }
+
+        if (combinedInstructions) {
+             console.log(`[AiService] Combined custom instructions length: ${combinedInstructions.length}`);
+        } else {
+             console.log(`[AiService] No custom instructions found or loaded.`);
+        }
+
+        return combinedInstructions;
+    }
+
     // --- Core AI Interaction ---
     public async getAiResponseStream(
         history: CoreMessage[] = [],
@@ -185,7 +237,34 @@ export class AiService {
             throw new Error("Failed to get model instance. Cannot proceed with AI request.");
         }
 
-        const messagesForApi: CoreMessage[] = [...history];
+        const messagesForApi: CoreMessage[] = [...history]; // Start with history
+
+        // --- Load and Prepend Custom Instructions ---
+        const customInstructions = await this._loadCustomInstructions();
+        if (customInstructions) {
+            const systemMessageIndex = messagesForApi.findIndex(msg => msg.role === 'system');
+            if (systemMessageIndex !== -1) {
+                // Append to existing system message, ensuring it's actually a message with string content
+                const existingMessage = messagesForApi[systemMessageIndex];
+                if (existingMessage.role === 'system' || existingMessage.role === 'user' || existingMessage.role === 'assistant') {
+                    // Safely update content for roles that have string content
+                    messagesForApi[systemMessageIndex] = {
+                        ...existingMessage,
+                        content: `${existingMessage.content}\\n\\n---\\n\\n${customInstructions}`
+                    };
+                    console.log(`[AiService] Appended custom instructions to existing ${existingMessage.role} message.`);
+                } else {
+                    // Should not happen if findIndex is correct, but handle defensively
+                    console.warn(`[AiService] Found message at system index ${systemMessageIndex}, but it was not a system/user/assistant message. Prepending new system message instead.`);
+                    messagesForApi.unshift({ role: 'system', content: customInstructions });
+                }
+            } else {
+                // Prepend new system message
+                messagesForApi.unshift({ role: 'system', content: customInstructions });
+                 console.log('[AiService] Prepended custom instructions as new system message.');
+            }
+        }
+
         const enabledTools = this._prepareToolSet(); // Get the filtered toolset
 
         // --- Call streamText ---

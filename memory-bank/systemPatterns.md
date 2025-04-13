@@ -10,7 +10,11 @@
     - `HistoryManager` (`src/historyManager.ts`): Manages chat history persistence (`globalState`) and translation between UI/Core formats.
     - `StreamProcessor` (`src/streamProcessor.ts`): Handles parsing the AI response stream (`fullStream` via `text-delta`), and performs post-stream parsing of appended JSON blocks (e.g., for `suggested_actions`) before updating history/UI.
 - **Webview Message Handling:** Uses a registration pattern (`src/webview/handlers/`). `ZenCoderChatViewProvider` delegates incoming messages to specific `MessageHandler` implementations.
-- **State Management:** Chat history (`UiMessage[]`) persisted in `context.globalState`. API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`).
+- **State Management:** Chat history (`UiMessage[]`) persisted in `context.globalState`. API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`).
+- **Configuration Files:**
+    - Global MCP Servers: `[VS Code User Data]/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`
+    - Project MCP Servers: `[Workspace]/.zen/mcp_servers.json`
+    - Project Custom Instructions: `[Workspace]/.zen/custom_instructions.md`
 
 ## Key Technical Decisions
 - **Vercel AI SDK:** Central library for AI model interaction, streaming, and tool definition/execution.

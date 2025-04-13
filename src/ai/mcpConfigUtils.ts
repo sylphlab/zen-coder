@@ -56,7 +56,7 @@ export async function loadAndMergeMcpConfigs(context: vscode.ExtensionContext): 
     let projectConfigs: { [serverName: string]: McpServerConfig } = {};
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-        const projectConfigUri = vscode.Uri.joinPath(workspaceFolders[0].uri, '.vscode', 'mcp_servers.json');
+        const projectConfigUri = vscode.Uri.joinPath(workspaceFolders[0].uri, '.zen', 'mcp_servers.json');
         projectConfigs = await readMcpConfigFile(projectConfigUri);
         console.log(`[McpConfigUtils] Read ${Object.keys(projectConfigs).length} servers from project config: ${projectConfigUri.fsPath}`);
     }
@@ -93,7 +93,7 @@ export function setupMcpConfigWatchers(
     // Watch project config file
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (workspaceFolders && workspaceFolders.length > 0) {
-        const projectConfigPattern = new vscode.RelativePattern(workspaceFolders[0], '.vscode/mcp_servers.json');
+        const projectConfigPattern = new vscode.RelativePattern(workspaceFolders[0], '.zen/mcp_servers.json');
         const mcpConfigWatcher = vscode.workspace.createFileSystemWatcher(projectConfigPattern);
         mcpConfigWatcher.onDidChange(reloadCallback);
         mcpConfigWatcher.onDidCreate(reloadCallback);

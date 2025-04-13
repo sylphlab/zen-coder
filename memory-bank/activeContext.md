@@ -196,6 +196,14 @@ Implemented stream cancellation functionality.
     - Corrected the path used in `src/extension.ts` (`getWebviewContent`) to read the `.vite.port` file from the project root directory.
 - **Fixed `package.json` Inconsistency:**
     - Updated `activationEvents`, `contributes.views`, and removed obsolete `menus`, `commands` to align with `WebviewViewProvider`. Resolved "No data provider registered" error.
+- **Custom Instructions & Config Consolidation:**
+    - Implemented global custom instructions via VS Code setting (`zencoder.customInstructions.global`).
+    - Implemented project-specific custom instructions via `.zen/custom_instructions.md`.
+    - Moved project-specific MCP server configuration from `.vscode/mcp_servers.json` to `.zen/mcp_servers.json`.
+    - Updated `AiService` to load and merge both global and project instructions before sending requests to the AI.
+    - Updated Settings UI (`SettingPage.tsx`) to allow editing/saving of both global and project instructions.
+    - Added backend handlers (`Get/Set...InstructionsHandler`, `OpenOrCreate...FileHandler`) and registered them in `extension.ts`.
+    - Updated config utility functions (`configUtils.ts`, `mcpConfigUtils.ts`) to use the new `.zen` directory for project files.
 - **Vite Port Discovery (Initial Implementation):**
     - Modified `webview-ui/vite.config.ts` to write the running dev server port to `.vite.port`.
     - Modified `src/extension.ts` to read the port during development.

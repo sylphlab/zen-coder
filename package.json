@@ -235,6 +235,13 @@
           "default": true,
           "description": "Enable the 'openFileTool' (opens a specified file)."
         },
+        "zencoder.customInstructions.global": {
+          "type": "string",
+          "default": "",
+          "description": "Global custom instructions to prepend to every AI prompt. Applied across all projects.",
+          "scope": "window",
+          "markdownDescription": "Global custom instructions to prepend to every AI prompt. Applied across all projects. Use Markdown format. Project-specific instructions (in `.zen/custom_instructions.md`) will be appended after these."
+        },
         "zencoder.mcp.servers": {
           "type": "array",
           "description": "Configure connections to Model Context Protocol (MCP) servers.",

@@ -85,6 +85,10 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
    const [mcpServers, setMcpServers] = useState<McpCombinedState>({});
    // State for ALL tools (standard + MCP) with their status
    const [allToolsStatus, setAllToolsStatus] = useState<AllToolsStatusPayload>({});
+   // State for custom instructions
+   const [globalInstructions, setGlobalInstructions] = useState<string>('');
+   const [projectInstructions, setProjectInstructions] = useState<string>('');
+   const [projectInstructionsPath, setProjectInstructionsPath] = useState<string | null>(null); // To display the path
    // Hook for navigation
    const [, setLocation] = useLocation(); // Use hook for navigation
 
@@ -138,7 +142,7 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
    // Effect to fetch initial status and listen for updates
    useEffect(() => {
        // Request initial state
-       postMessage({ type: 'settingsPageReady' }); // This triggers backend to send all tools status
+       postMessage({ type: 'settingsPageReady' }); // This triggers backend to send all tools status AND custom instructions
        postMessage({ type: 'getMcpConfiguredStatus' }); // Still request MCP server status for server-level info
        console.log('SettingsPage mounted, sent settingsPageReady and getMcpConfiguredStatus');
 
@@ -161,6 +165,12 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
                    console.log('[SettingsPage] Received mcpConfigReloaded, requesting new status...');
                    postMessage({ type: 'settingsPageReady' }); // Re-request all tools status
                    postMessage({ type: 'getMcpConfiguredStatus' }); // Re-fetch MCP server status
+                   break;
+               case 'updateCustomInstructions':
+                   console.log('[SettingsPage] Received updateCustomInstructions:', message.payload);
+                   setGlobalInstructions(message.payload.global || '');
+                   setProjectInstructions(message.payload.project || '');
+                   setProjectInstructionsPath(message.payload.projectPath || null);
                    break;
                // Add other message handlers if needed
            }
@@ -255,7 +265,31 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
         setLocation('/index.html'); // Navigate back to the chat page (using correct path)
     }, [setLocation]);
 
+    // --- Custom Instructions Handlers ---
+    const handleGlobalInstructionsChange = (e: Event) => {
+        setGlobalInstructions((e.target as HTMLTextAreaElement).value);
+    };
 
+    const handleProjectInstructionsChange = (e: Event) => {
+        setProjectInstructions((e.target as HTMLTextAreaElement).value);
+    };
+
+    const handleSaveGlobalInstructions = () => {
+        console.log('Saving global custom instructions...');
+        postMessage({ type: 'setGlobalCustomInstructions', payload: { instructions: globalInstructions } });
+        // Optionally show feedback, e.g., a temporary "Saved!" message
+    };
+
+    const handleSaveProjectInstructions = () => {
+        console.log('Saving project custom instructions...');
+        postMessage({ type: 'setProjectCustomInstructions', payload: { instructions: projectInstructions } });
+        // Optionally show feedback
+    };
+
+    const handleOpenProjectInstructionsFile = () => {
+        console.log('Requesting to open project custom instructions file...');
+        postMessage({ type: 'openOrCreateProjectInstructionsFile' });
+    };
   // Render logic for a single provider setting
   const renderProviderSetting = (providerInfo: ProviderInfoAndStatus) => {
     const { id, name, apiKeyUrl, requiresApiKey, enabled, apiKeySet } = providerInfo;
@@ -378,6 +412,67 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
         </button>
 
       <h1 class="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-200 text-center">Zen Coder 設定</h1> {/* Centered Title */}
+
+      {/* --- Custom Instructions Section --- */}
+      <section class="mb-8">
+          <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-300">Custom Instructions</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Provide instructions to guide the AI's behavior and responses. Global instructions apply to all projects, while project instructions are specific to the current workspace and are appended after global ones. Use Markdown format.
+          </p>
+
+          {/* Global Instructions */}
+          <div class="mb-6">
+              <label for="global-instructions" class="block text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">Global Instructions (VS Code Setting)</label>
+              <textarea
+                  id="global-instructions"
+                  rows={8}
+                  class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-mono"
+                  value={globalInstructions}
+                  onInput={handleGlobalInstructionsChange}
+                  placeholder="Enter global instructions here..."
+                  aria-label="Global Custom Instructions"
+              />
+              <button
+                  onClick={handleSaveGlobalInstructions}
+                  class="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              >
+                  Save Global Instructions
+              </button>
+          </div>
+
+          {/* Project Instructions */}
+          <div>
+              <label for="project-instructions" class="block text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">Project Instructions</label>
+              {projectInstructionsPath ? (
+                 <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Editing: <code>{projectInstructionsPath}</code></p>
+              ) : (
+                 <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">No project file found. Saving will create <code>.zen/custom_instructions.md</code>.</p>
+              )}
+              <textarea
+                  id="project-instructions"
+                  rows={12}
+                  class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-mono"
+                  value={projectInstructions}
+                  onInput={handleProjectInstructionsChange}
+                  placeholder="Enter project-specific instructions here..."
+                  aria-label="Project Custom Instructions"
+              />
+               <div class="mt-2 flex space-x-2">
+                   <button
+                       onClick={handleSaveProjectInstructions}
+                       class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                   >
+                       Save Project Instructions
+                   </button>
+                   <button
+                       onClick={handleOpenProjectInstructionsFile}
+                       class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                   >
+                       Open/Create Project File
+                   </button>
+               </div>
+          </div>
+      </section>
 
       {/* --- All Tools Section (Categorized) --- */}
       <section class="mb-8">

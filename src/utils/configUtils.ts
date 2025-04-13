@@ -35,17 +35,17 @@ export async function openOrCreateMcpConfigFile(context: vscode.ExtensionContext
         }
         // Use the first workspace folder for simplicity
         const projectRootUri = workspaceFolders[0].uri;
-        const vscodeFolderUri = vscode.Uri.joinPath(projectRootUri, '.vscode');
-        configUri = vscode.Uri.joinPath(vscodeFolderUri, 'mcp_servers.json');
+        const zenFolderUri = vscode.Uri.joinPath(projectRootUri, '.zen');
+        configUri = vscode.Uri.joinPath(zenFolderUri, 'mcp_servers.json');
         configPath = configUri.fsPath;
         console.log(`Project MCP config path: ${configPath}`);
 
-        // Ensure .vscode directory exists
+        // Ensure .zen directory exists
         try {
-            await vscode.workspace.fs.stat(vscodeFolderUri);
+            await vscode.workspace.fs.stat(zenFolderUri);
         } catch (error) {
-            console.log(`.vscode directory not found, creating: ${vscodeFolderUri.fsPath}`);
-            await vscode.workspace.fs.createDirectory(vscodeFolderUri);
+            console.log(`.zen directory not found, creating: ${zenFolderUri.fsPath}`);
+            await vscode.workspace.fs.createDirectory(zenFolderUri);
         }
     }
 
