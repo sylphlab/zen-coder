@@ -5,7 +5,8 @@ import { JSX } from 'preact/jsx-runtime'; // Import JSX namespace
 import { ProviderInfoAndStatus, postMessage } from '../app';
 import { McpServerStatus } from '../../../src/ai/mcpManager';
 import { AvailableModel, DefaultChatConfig } from '../../../src/common/types'; // Import needed types
-import { useModelSelection } from '../hooks/useModelSelection'; // Import the hook
+// import { useModelSelection } from '../hooks/useModelSelection'; // No longer needed here
+import { ModelSelector } from '../components/ModelSelector'; // Import the new component
 
 // Define props for the SettingPage
 interface SettingPageProps {
@@ -92,16 +93,6 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
    // State for default models
    const [defaultConfig, setDefaultConfig] = useState<DefaultChatConfig>({});
    const [allAvailableModels, setAllAvailableModels] = useState<AvailableModel[]>([]);
-
-   // Use the model selection hook for the default chat model selector
-   const {
-       selectedProvider: defaultChatProvider,
-       setSelectedProvider: setDefaultChatProvider,
-       displayModelName: defaultChatDisplayModelName,
-       uniqueProviders: defaultChatUniqueProviders,
-       filteredModels: defaultChatFilteredModels,
-       handleProviderChange: handleDefaultChatProviderChange,
-   } = useModelSelection(allAvailableModels, defaultConfig.defaultChatModelId ?? null);
 
   // Handle input change for API key fields
   const handleApiKeyInputChange = (providerId: string, value: string) => {
@@ -195,9 +186,7 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
                    if (message.payload && typeof message.payload === 'object') {
                        console.log('[SettingsPage] Received updateDefaultConfig:', message.payload);
                        setDefaultConfig(message.payload as DefaultChatConfig);
-                       // Update the provider selection based on the loaded default chat model
-                       const loadedProviderId = message.payload.defaultChatModelId?.split(':')[0];
-                       setDefaultChatProvider(loadedProviderId || null);
+                       // No need to set provider separately, ModelSelector handles it based on selectedModelId
                    }
                    break;
            }
@@ -324,23 +313,6 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
         const newConfig = { ...defaultConfig, defaultChatModelId: newModelId };
         setDefaultConfig(newConfig); // Optimistic UI update
         postMessage({ type: 'setDefaultConfig', payload: { config: newConfig } });
-    };
-
-    // Handler for provider change in the default chat model selector
-    const handleDefaultProviderSelect = (e: JSX.TargetedEvent<HTMLSelectElement>) => {
-        handleDefaultChatProviderChange(e); // Update the provider in the hook state
-        // When provider changes, select the first available model for that provider as the new default
-        const newProviderId = e.currentTarget.value;
-        if (newProviderId) {
-            const firstModel = allAvailableModels.find(m => m.providerId === newProviderId);
-            if (firstModel) {
-                handleDefaultChatModelChange(firstModel.id);
-            } else {
-                handleDefaultChatModelChange(''); // Clear model if none available
-            }
-        } else {
-            handleDefaultChatModelChange(''); // Clear model if provider deselected
-        }
     };
 
   // Render logic for a single provider setting
@@ -473,45 +445,14 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
               Select the default AI models to be used for new chat sessions or when a chat is set to use defaults.
           </p>
           <div class="space-y-4">
-              {/* Default Chat Model Selector */}
-              <div class="default-model-selector flex items-center space-x-2 p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
-                  <label htmlFor="default-provider-select" class="text-sm font-medium text-gray-700 dark:text-gray-300 w-24">Default Chat:</label>
-                  <select
-                      id="default-provider-select"
-                      value={defaultChatProvider ?? ''}
-                      onChange={handleDefaultProviderSelect} // Use specific handler
-                      class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm"
-                  >
-                      <option value="">-- Provider --</option>
-                      {defaultChatUniqueProviders.map(providerId => (
-                          <option key={providerId} value={providerId}>{providerId}</option>
-                      ))}
-                  </select>
-
-                  <input
-                      list="default-models-datalist"
-                      id="default-model-input"
-                      name="default-model-input"
-                      value={defaultChatDisplayModelName} // Display derived name
-                      onInput={(e: JSX.TargetedEvent<HTMLInputElement>) => {
-                          const inputValue = e.currentTarget.value;
-                          let fullModelId = inputValue;
-                          if (!inputValue.includes(':') && defaultChatProvider) {
-                              fullModelId = `${defaultChatProvider}:${inputValue}`;
-                          }
-                          handleDefaultChatModelChange(fullModelId); // Update default config
-                      }}
-                      placeholder={defaultChatProvider ? "Select or type model name" : "Select provider"}
-                      disabled={!defaultChatProvider}
-                      class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm flex-1 min-w-40"
-                  />
-                  <datalist id="default-models-datalist">
-                      {defaultChatFilteredModels.map(model => (
-                          <option key={model.id} value={model.id}>
-                              {model.modelNamePart} {/* Display only model name part */}
-                          </option>
-                      ))}
-                  </datalist>
+              {/* Use the new ModelSelector component */}
+              <div class="p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
+                   <ModelSelector
+                       labelPrefix="Default Chat"
+                       availableModels={allAvailableModels}
+                       selectedModelId={defaultConfig.defaultChatModelId ?? null}
+                       onModelChange={handleDefaultChatModelChange}
+                   />
               </div>
               {/* TODO: Add selectors for defaultImageModelId and defaultOptimizeModelId later */}
               {/* <p class="text-xs text-gray-500 dark:text-gray-400">Default Image Generation Model: (Coming Soon)</p> */}

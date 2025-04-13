@@ -71,6 +71,12 @@ Implementing multi-chat functionality. Backend services (`HistoryManager`, `AiSe
 - **Updated `src/historyManager.ts`:**
     - Modified `addUserMessage` to accept `content: UiMessageContentPart[]` instead of `text: string`.
     - Updated `translateUiHistoryToCoreMessages` to handle user messages with `image` parts, converting base64 data to Buffer for the AI SDK.
+- **Refactored Model Selector:** Created reusable `ModelSelector.tsx` component and updated `SettingPage.tsx`, `HeaderControls.tsx`, and `app.tsx` accordingly. Improved model selection logic within the component.
+- **Updated Message Bubble Actions:** Added Copy and Delete buttons to individual messages in `MessagesArea.tsx`. Implemented corresponding handlers (`handleCopyMessage`, `handleDeleteMessage`) in `app.tsx`. Added backend support (`DeleteMessageHandler.ts`, `HistoryManager.deleteMessageFromHistory`, registered handler in `extension.ts`).
+- **Removed Clear Chat Button:** Removed the clear chat history button (trash icon) from `HeaderControls.tsx` and updated `app.tsx` props.
+- **Unified Tool ID & Enablement:**
+   - Standardized MCP tool identifier to `mcp_serverName_toolName` format in `aiService.ts` for AI interaction.
+   - Unified tool enablement logic: All tool statuses (standard and MCP) are now read from and written to a single `globalState` key (`toolEnabledStatus`) in `aiService.ts`, `SetToolEnabledHandler.ts`, and `WebviewReadyHandler.ts`. Removed separate handling logic and ID conversions.
 - **(Previous changes before interruption - see below)**
 - **Refactored `AiService._getProviderInstance`:** Removed unreliable logic that inferred `providerId` from `modelId`. The method now requires both `providerId` and `modelId` as arguments, ensuring the correct provider is used directly. Updated UI and handlers to pass `providerId`.
 - **Refactored Stream Processing (`src/streamProcessor.ts`):** Modified `process` method to iterate over `streamResult.fullStream` instead of sequential processing of individual streams (`textStream`, `toolCalls`, etc.). This ensures correct handling of mixed stream part types (text, tool calls, reasoning, etc.) and maintains proper order.
@@ -306,4 +312,8 @@ Implementing multi-chat functionality. Backend services (`HistoryManager`, `AiSe
 - **UI Navigation:** Finalized navigation using settings icon in `HeaderControls` and back button in `SettingPage`, removing top nav bar. Routing handled by `wouter` with `<Switch>`.
 - **Multi-Chat Architecture:** Storing chat sessions (`ChatSession[]`) including history and config per chat in `workspaceState`. Backend services and handlers updated to operate based on `chatId`. Frontend manages `chatSessions` state and `activeChatId`.
 - **Model ID Standardization:** Adopted `providerId:modelName` format for model IDs. `ModelResolver` updated; provider implementations and frontend need updates.
+- **Tool Enablement Storage:** All tool enablement statuses (standard and MCP) are stored uniformly in `globalState` under the `toolEnabledStatus` key. `SetToolEnabledHandler` writes to this key, and `aiService` reads from it.
+- **MCP Tool Identifier:** Standardized on `mcp_serverName_toolName` format for identifying MCP tools when interacting with the AI and storing/retrieving enablement status from `globalState`.
+- **Message Actions:** Added copy/delete functionality per message bubble in `MessagesArea.tsx`, implemented handlers in `app.tsx`, and added backend support via `DeleteMessageHandler` and `HistoryManager`. Removed the global clear chat button from `HeaderControls.tsx`.
+- **Model Selector:** Refactored into a reusable component (`ModelSelector.tsx`) used in both `SettingPage.tsx` and `HeaderControls.tsx`.
 - **Previous Decisions:** (Includes items like routing, dynamic OpenRouter fetch, API key handling, etc.)

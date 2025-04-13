@@ -146,38 +146,36 @@ export class AiService {
      */
     private _prepareToolSet(): ToolSet {
         const finalTools: ToolSet = {};
-        const config = vscode.workspace.getConfiguration('zencoder.tools');
-        const mcpOverrides = this.context.globalState.get<{ [toolId: string]: boolean }>(MCP_TOOL_OVERRIDES_KEY, {});
+        // Unified key for storing enablement status of ALL tools
+        const TOOL_ENABLED_STATUS_KEY = 'toolEnabledStatus';
+        const toolEnabledStatus = this.context.globalState.get<{ [toolIdentifier: string]: boolean }>(TOOL_ENABLED_STATUS_KEY, {});
 
-        // 1. Filter Standard Tools based on VS Code settings
+        // 1. Process Standard Tools
         const standardToolNames = Object.keys(allTools) as ToolName[];
         standardToolNames.forEach(toolName => {
             const toolDefinition = allTools[toolName];
-            const isEnabled = config.get<boolean>(`${toolName}.enabled`, true); // Default to true if setting missing
+            // Check enablement status in globalState, default to true if not found
+            const isEnabled = toolEnabledStatus[toolName] !== false;
             if (toolDefinition && isEnabled) {
                 finalTools[toolName] = toolDefinition;
             }
         });
-        // console.log(`[AiService] Added ${Object.keys(finalTools).length} enabled standard tools.`); // Reduce noise
 
-        // 2. Filter MCP Tools based on connection status and overrides
-        const mcpToolsMap = this.mcpManager.getMcpServerTools(); // Get all tools from connected servers
-        let mcpToolCount = 0;
+        // 2. Process MCP Tools
+        const mcpToolsMap = this.mcpManager.getMcpServerTools();
         for (const [serverName, tools] of mcpToolsMap.entries()) {
              for (const [mcpToolName, mcpToolDefinition] of Object.entries(tools)) {
-                 const toolIdentifier = `${serverName}/${mcpToolName}`;
-                 // Enabled if override is explicitly true OR if override doesn't exist (default true)
-                 const isEnabled = mcpOverrides[toolIdentifier] !== false;
+                 // Use the unified format mcp_serverName_toolName everywhere
+                 const unifiedIdentifier = `mcp_${serverName}_${mcpToolName}`;
+                 // Check enablement status in globalState using the unified ID, default to true
+                 const isEnabled = toolEnabledStatus[unifiedIdentifier] !== false;
                  if (isEnabled) {
-                     // Use the identifier as the key in the final toolset to avoid name collisions
-                     finalTools[toolIdentifier] = mcpToolDefinition;
-                     mcpToolCount++;
+                     finalTools[unifiedIdentifier] = mcpToolDefinition;
                  }
              }
         }
-        // console.log(`[AiService] Added ${mcpToolCount} enabled MCP tools.`); // Reduce noise
 
-        // console.log(`[AiService] Total tools available for AI (filtered): ${Object.keys(finalTools).length}`); // Reduce noise
+        // console.log(`[AiService] Total tools available for AI (filtered): ${Object.keys(finalTools).length}`);
         return finalTools;
     }
 
@@ -296,6 +294,10 @@ export class AiService {
         }
 
         const enabledTools = this._prepareToolSet(); // Get the filtered toolset
+
+        // --- Add logging here ---
+        console.log('[AiService] Enabled tools being passed to AI:', Object.keys(enabledTools));
+        // --- End logging ---
 
         // --- Call streamText ---
         if (this.activeAbortController) {

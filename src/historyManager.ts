@@ -558,6 +558,30 @@ export class HistoryManager {
     }
 
     /**
+     * Deletes a specific message from a chat session's history.
+     * @param chatId - The ID of the chat session.
+     * @param messageId - The ID of the message to delete.
+     */
+    public async deleteMessageFromHistory(chatId: string, messageId: string): Promise<void> {
+        const chat = this.getChatSession(chatId);
+        if (!chat) {
+            console.warn(`[HistoryManager] Chat session not found: ${chatId} (deleteMessageFromHistory)`);
+            return;
+        }
+
+        const initialLength = chat.history.length;
+        chat.history = chat.history.filter(msg => msg.id !== messageId);
+
+        if (chat.history.length < initialLength) {
+            chat.lastModified = Date.now();
+            await this.saveWorkspaceStateIfNeeded();
+            console.log(`[HistoryManager] Deleted message ${messageId} from chat ${chatId}.`);
+        } else {
+            console.warn(`[HistoryManager] Message ${messageId} not found in chat ${chatId} for deletion.`);
+        }
+    }
+
+    /**
      * Translates the UI history of a specific chat session (UiMessage[]) into the format
      * required by the Vercel AI SDK (CoreMessage[]).
      * @param chatId - The ID of the chat session.

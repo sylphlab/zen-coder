@@ -400,6 +400,59 @@ export function App() {
         }
     }, [activeChatId, availableModels, setSelectedProvider, handleChatModelChange, setAvailableModels]); // Add availableModels to dependencies
 
+    // --- Message Action Handlers ---
+    const handleCopyMessage = useCallback((messageId: string) => {
+        if (!activeChatId) return;
+        const activeSession = chatSessions.find(session => session.id === activeChatId);
+        const messageToCopy = activeSession?.history.find(msg => msg.id === messageId);
+
+        if (messageToCopy && Array.isArray(messageToCopy.content)) {
+            const textToCopy = messageToCopy.content
+                .filter((part): part is UiTextMessagePart => part.type === 'text') // Type guard
+                .map(part => part.text)
+                .join('\n'); // Join text parts with newline
+
+            if (textToCopy) {
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {
+                        console.log(`Copied message ${messageId} to clipboard.`);
+                        // Optional: Show a temporary "Copied!" feedback
+                    })
+                    .catch(err => {
+                        console.error(`Failed to copy message ${messageId}:`, err);
+                        // Optional: Show error feedback
+                    });
+            } else {
+                console.warn(`No text content found to copy in message ${messageId}.`);
+            }
+        } else {
+            console.warn(`Could not find message ${messageId} to copy.`);
+        }
+    }, [chatSessions, activeChatId]);
+
+    const handleDeleteMessage = useCallback((messageId: string) => {
+        if (!activeChatId) return;
+
+        console.log(`Requesting delete message ${messageId} from chat ${activeChatId}`);
+
+        // Optimistically update UI state
+        setChatSessions(prevSessions =>
+            prevSessions.map(session =>
+                session.id === activeChatId
+                    ? {
+                        ...session,
+                        history: session.history.filter(msg => msg.id !== messageId),
+                        lastModified: Date.now()
+                      }
+                    : session
+            )
+        );
+
+        // Inform backend to delete the message from persistent storage
+        postMessage({ type: 'deleteMessage', payload: { chatId: activeChatId, messageId } });
+
+    }, [activeChatId, setChatSessions]);
+
     // --- Main Render ---
     return (
         <Router>
@@ -410,15 +463,11 @@ export function App() {
                             <div class="chat-container flex flex-col flex-1 h-full">
                                 {/* TODO: Update HeaderControls to potentially show chat name/list button */}
                                 <HeaderControls
-                                    uniqueProviders={uniqueProviders}
-                                    selectedProvider={selectedProvider}
-                                    handleProviderChange={handleProviderChange} // Use App's handler
-                                    currentModelInput={activeChatEffectiveModelId ?? ''} // Pass the derived ID
-                                    displayModelName={displayModelName} // Pass derived display name
-                                    handleChatModelChange={handleChatModelChange} // Pass the new handler
-                                    filteredModels={filteredModels}
-                                    handleClearChat={handleClearChat}
-                                    isStreaming={isStreaming}
+                                    // Pass props matching the new ModelSelector integration
+                                    allAvailableModels={availableModels} // Pass the full list
+                                    selectedModelId={activeChatEffectiveModelId ?? null} // Pass the selected ID
+                                    onModelChange={handleChatModelChange} // Pass the handler for changes
+                                    // Removed: handleClearChat, isStreaming, hasMessages
                                     hasMessages={activeChatMessages.length > 0}
                                     onSettingsClick={handleSettingsClick}
                                     onChatsClick={handleChatsClick}
@@ -429,6 +478,8 @@ export function App() {
                                     handleSuggestedActionClick={handleSuggestedActionClick}
                                     isStreaming={isStreaming}
                                     messagesEndRef={messagesEndRef}
+                                    onCopyMessage={handleCopyMessage} // Pass copy handler
+                                    onDeleteMessage={handleDeleteMessage} // Pass delete handler
                                 />
                                 <InputArea
                                     inputValue={inputValue}

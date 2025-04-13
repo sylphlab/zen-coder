@@ -42,6 +42,7 @@ import { CreateChatHandler } from './webview/handlers/CreateChatHandler';
 import { DeleteChatHandler } from './webview/handlers/DeleteChatHandler';
 import { UpdateLastLocationHandler } from './webview/handlers/UpdateLastLocationHandler';
 import { SetDefaultConfigHandler } from './webview/handlers/SetDefaultConfigHandler'; // Import the new handler
+import { DeleteMessageHandler } from './webview/handlers/DeleteMessageHandler'; // Import the delete handler
 // Key for storing MCP tool overrides in globalState (consistent with handler)
 const MCP_TOOL_OVERRIDES_KEY = 'mcpToolEnabledOverrides';
 
@@ -189,6 +190,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new DeleteChatHandler(),
             new UpdateLastLocationHandler(),
             new SetDefaultConfigHandler(), // Register the new handler
+            new DeleteMessageHandler(this._historyManager, this.postMessageToWebview.bind(this)), // Register the delete handler with dependencies
             // Add other handlers here
         ];
 

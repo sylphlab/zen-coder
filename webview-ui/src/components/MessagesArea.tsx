@@ -17,6 +17,8 @@ interface MessagesAreaProps {
     handleSuggestedActionClick: (action: SuggestedAction) => void;
     isStreaming: boolean;
     messagesEndRef: Ref<HTMLDivElement>;
+    onCopyMessage: (messageId: string) => void; // Add copy handler prop
+    onDeleteMessage: (messageId: string) => void; // Add delete handler prop
 }
 
 // Moved renderContentPart logic here
@@ -106,12 +108,40 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
     suggestedActionsMap,
     handleSuggestedActionClick,
     isStreaming,
-    messagesEndRef
+    messagesEndRef,
+    onCopyMessage, // Destructure new props
+    onDeleteMessage
 }) => {
     return (
         <div class="messages-area flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((msg) => (
-                <div key={msg.id} class={`message flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <> {/* Return a fragment */}
+                    {/* Add group class for hover effects - Comment now inside fragment */}
+                    <div key={msg.id} class={`message group relative flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {/* Action buttons container - appears on hover */}
+                    <div class={`message-actions absolute top-0 mx-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${msg.sender === 'user' ? 'right-full mr-1' : 'left-full ml-1'}`}>
+                        {/* Copy Button */}
+                        <button
+                            onClick={() => onCopyMessage(msg.id)}
+                            title="Copy Message"
+                            class="p-1 rounded bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                        </button>
+                        {/* Delete Button */}
+                        <button
+                            onClick={() => onDeleteMessage(msg.id)}
+                            title="Delete Message"
+                            class="p-1 rounded bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700 text-red-700 dark:text-red-200"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </button>
+                    </div>
+                    {/* Original message content */}
                     <div class={`message-content p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
                         {/* Render Thinking Process */}
                         {msg.sender === 'assistant' && msg.thinking && (
@@ -141,8 +171,9 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
                             </div>
                         )}
                     </div>
-                </div>
-            ))}
+                   </div>
+               </> // Close the fragment
+           ))}
             <div ref={messagesEndRef} />
         </div>
     );

@@ -17,7 +17,7 @@
 - **pnpm:** Package management (v10.8.0 used for initial install).
 - **esbuild:** Bundler (as indicated by `esbuild.js` in the project root).
 - **eslint:** Linter (as indicated by `eslint.config.mjs`).
-- **Modular Tools:** Tool logic refactored into `src/tools/` with categories (filesystem, utils, system, vscode).
+- **Modular Tools:** Tool logic refactored into `src/tools/` with categories (filesystem, utils, system, vscode). Standard tools use their function name as identifier (e.g., `readFile`). MCP tools use the format `mcp_serverName_toolName` (e.g., `mcp_github_create_issue`).
 
 ## Development Setup
 - Standard VS Code extension development environment.

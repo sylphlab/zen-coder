@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import { MessageHandler, HandlerContext } from './MessageHandler';
 import { ToolName, allTools } from '../../tools'; // Import standard tools map and type
 
-// Key for storing MCP tool overrides in globalState
-const MCP_TOOL_OVERRIDES_KEY = 'mcpToolEnabledOverrides';
+// Unified key for storing enablement status of ALL tools
+const TOOL_ENABLED_STATUS_KEY = 'toolEnabledStatus';
 
 interface SetToolEnabledPayload {
     toolIdentifier: string; // e.g., "readFile" or "brave-search/brave_web_search"
@@ -22,23 +22,19 @@ export class SetToolEnabledHandler implements MessageHandler {
         }
 
         const { toolIdentifier, enabled } = payload;
-        const isStandardTool = toolIdentifier in allTools;
+       // Removed isStandardTool check
 
-        try {
-            if (isStandardTool) {
-                // Handle Standard Tool (Update VS Code Config)
-                const configKey = `zencoder.tools.${toolIdentifier}.enabled`;
-                await vscode.workspace.getConfiguration().update(configKey, enabled, vscode.ConfigurationTarget.Global);
-                console.log(`Updated standard tool setting '${configKey}' to ${enabled}`);
-                vscode.window.showInformationMessage(`Standard tool '${toolIdentifier}' ${enabled ? 'enabled' : 'disabled'}.`);
-            } else {
-                // Handle MCP Tool (Update Global State Override)
-                const overrides = context.extensionContext.globalState.get<{ [toolId: string]: boolean }>(MCP_TOOL_OVERRIDES_KEY, {});
-                overrides[toolIdentifier] = enabled;
-                await context.extensionContext.globalState.update(MCP_TOOL_OVERRIDES_KEY, overrides);
-                console.log(`Updated MCP tool override '${toolIdentifier}' to ${enabled}`);
-                vscode.window.showInformationMessage(`MCP tool '${toolIdentifier}' ${enabled ? 'enabled' : 'disabled'} for AI use.`);
-            }
+       try {
+           // Unified logic: Update the status in the single globalState map
+           const toolEnabledStatus = context.extensionContext.globalState.get<{ [toolId: string]: boolean }>(TOOL_ENABLED_STATUS_KEY, {});
+
+           // Use the received toolIdentifier directly as the key (standard or mcp_server_tool)
+           toolEnabledStatus[toolIdentifier] = enabled;
+
+           await context.extensionContext.globalState.update(TOOL_ENABLED_STATUS_KEY, toolEnabledStatus);
+           console.log(`[SetToolEnabledHandler] Updated tool '${toolIdentifier}' enabled status to ${enabled} in globalState.`);
+           vscode.window.showInformationMessage(`Tool '${toolIdentifier}' ${enabled ? 'enabled' : 'disabled'}.`);
+
 
             // Optional: Trigger a refresh of the tool list in the UI
             // This would involve calling a method (perhaps added to HandlerContext or AiService)

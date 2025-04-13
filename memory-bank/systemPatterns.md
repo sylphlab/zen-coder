@@ -10,7 +10,7 @@
     - `HistoryManager` (`src/historyManager.ts`): Manages chat history persistence (`globalState`) and translation between UI/Core formats.
     - `StreamProcessor` (`src/streamProcessor.ts`): Handles parsing the AI response stream (`fullStream` via `text-delta`), and performs post-stream parsing of appended JSON blocks (e.g., for `suggested_actions`) before updating history/UI.
 - **Webview Message Handling:** Uses a registration pattern (`src/webview/handlers/`). `ZenCoderChatViewProvider` delegates incoming messages to specific `MessageHandler` implementations.
-- **State Management:** Chat history (`UiMessage[]`) persisted in `context.globalState`. API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`).
+- **State Management:** Chat history (`UiMessage[]`) persisted in `context.workspaceState` (per workspace). API keys stored securely in `context.secrets`. **Tool enablement (standard & MCP)** stored uniformly in `context.globalState` (`toolEnabledStatus`). Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`).
 - **Configuration Files:**
     - Global MCP Servers: `[VS Code User Data]/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`
     - Project MCP Servers: `[Workspace]/.zen/mcp_servers.json`
@@ -18,7 +18,7 @@
 
 ## Key Technical Decisions
 - **Vercel AI SDK:** Central library for AI model interaction, streaming, and tool definition/execution.
-- **Tool Implementation:** Tools are defined using the `ai` package's `tool` function with `zod` schemas. They are organized modularly under `src/tools/` (filesystem, utils, system, vscode). Execution logic uses `vscode` API or Node.js modules as appropriate.
+- **Tool Implementation:** Tools are defined using the `ai` package's `tool` function with `zod` schemas. They are organized modularly under `src/tools/` (filesystem, utils, system, vscode). Execution logic uses `vscode` API or Node.js modules as appropriate. MCP tools are identified using the `mcp_serverName_toolName` format.
    - **Filesystem Tool Design Philosophy:**
        - **Consistency:** Strive for consistent parameter names and return structures across tools.
        - **Batch Operations:** Tools generally accept arrays of paths/items to minimize AI roundtrips.

@@ -31,8 +31,11 @@
 +    - Added `searchContent` (with context), `replaceContent` (bulk replace), `deleteItems` (unified delete), and `editFile` (precise edits) tools.
 +    - Core logic for all filesystem tools implemented.
 +    - Tool indices updated and related test errors fixed.
+- **Model Selector Refactoring:** Created reusable `ModelSelector.tsx` component, updated `SettingPage.tsx`, `HeaderControls.tsx`, and `app.tsx`. Improved model selection logic.
+- **Message Bubble Actions:** Added Copy/Delete buttons to messages in `MessagesArea.tsx`, implemented handlers in `app.tsx`, and added backend support (`DeleteMessageHandler`, `HistoryManager.deleteMessageFromHistory`).
+- **Unified Tool ID & Enablement:** Standardized MCP tool ID format (`mcp_serverName_toolName`) and unified enablement logic using `globalState` (`toolEnabledStatus`) across `aiService.ts`, `SetToolEnabledHandler.ts`, and `WebviewReadyHandler.ts`.
 - **Provider Selection Persistence:** Implemented saving/restoring of selected provider and model ID in `app.tsx`.
-- **Clear Chat Button:** Added button to UI and backend handler to clear history.
+- **Clear Chat Button:** Removed from `HeaderControls.tsx`.
 - **UI Stream Update (Attempt 3):** Applied stricter immutability pattern for state updates in `appendMessageChunk` handler (`app.tsx`).
 - **UI Stream Update (Attempt 2):** Refined state update logic (`app.tsx`) using deep cloning to force UI re-renders for message chunks.
 - **UI Stream Update:** Fixed frontend state update logic (`app.tsx`) for `appendMessageChunk` to ensure message chunks render immediately by creating new array references.
@@ -125,3 +128,4 @@
 - **TODO:** Improve UI feedback during chat creation/deletion (e.g., loading indicators).
 - **TODO:** Style `ChatListPage.tsx`.
 - **(Previous Known Issues Still Apply where relevant)**
+- **MCP Tool Schema Error:** Believed to be resolved by unifying tool ID format to `mcp_serverName_toolName`. Requires testing.
