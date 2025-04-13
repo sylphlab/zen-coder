@@ -1,23 +1,20 @@
 # Active Context
 
 ## Current Focus
-Implementing multi-chat functionality. Backend services (`HistoryManager`, `AiService`, `StreamProcessor`) and core handlers (`SendMessageHandler`, `ClearChatHistoryHandler`, `WebviewReadyHandler`) have been updated to handle `chatId`. New handlers (`SetActiveChatHandler`, `CreateChatHandler`, `DeleteChatHandler`) created and registered. Frontend (`app.tsx`, `MessagesArea.tsx`, `HeaderControls.tsx`) updated to manage chat sessions state and integrate `ChatListPage.tsx`. Model ID format standardized to `providerId:modelName` in `ModelResolver`.
+Completed refactoring of the webview UI state management to use Jotai. Addressed user feedback regarding inability to send messages after the initial refactor, likely due to Jotai context issues resolved by adjusting hook usage patterns.
 
-## Next Steps (Multi-Chat Implementation)
-1.  **Standardize Model IDs (Complete):**
-    *   Verified provider implementations (`src/ai/providers/*`) already return model IDs in `providerId:modelName` format.
-    *   Verified default configuration settings in `package.json` already use the correct format.
-    *   Refactored frontend model selection logic (`webview-ui/src/hooks/useModelSelection.ts`, `webview-ui/src/components/HeaderControls.tsx`, `webview-ui/src/app.tsx`) to correctly handle, display, and update the standardized IDs, ensuring the UI reflects the active chat's configuration.
-2.  **Refine Frontend (Complete):**
-    *   Verified confirmation dialog for chat deletion is already implemented in `ChatListPage.tsx`.
-    *   Verified `useMessageHandler` hook correctly handles `loadChatState` and sets `activeChatId`.
-    *   Verified UI elements for chat-specific model selection exist in `HeaderControls.tsx` and are correctly linked to update the active chat's configuration via `app.tsx`.
-3.  **Refine Backend (Complete):**
-    *   Verified default configuration loading is implemented in `HistoryManager` (reads from VS Code settings).
-    *   Verified `AiService` correctly uses the effective config (including provider ID) derived by `HistoryManager`.
-4.  **Testing:** Next step is to thoroughly test creating, selecting, deleting chats, sending messages in different chats, and configuration persistence (defaults vs. chat-specific).
+## Next Steps
+1.  **Testing:** Thoroughly test all UI interactions, including sending messages, model selection (both default and chat-specific), chat management (create, select, delete), image upload, custom instructions, MCP server status display/retry, and tool toggling, to ensure the Jotai refactoring didn't introduce regressions and resolved the original responsiveness issues.
+2.  **Resume Image Upload:** Continue implementation and testing of image upload functionality.
+3.  **VS Code Tool Enhancements:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, etc.).
 
-## Recent Changes
+## Recent Changes (Jotai Refactor & Fixes)
+- **Refactored Webview UI State Management:** Replaced Preact `useState` and message-passing logic with Jotai atoms (`webview-ui/src/store/atoms.ts`) for core UI state (chats, providers, models, input, streaming status, etc.).
+- **Updated Components:** Refactored `App.tsx`, `HeaderControls.tsx`, `MessagesArea.tsx`, `InputArea.tsx`, `SettingPage.tsx`, `ChatListPage.tsx`, and `ModelSelector.tsx` to use Jotai hooks (`useAtom`, `useAtomValue`, `useSetAtom`).
+- **Created `MessageHandlerComponent`:** Added a dedicated component within `App.tsx` to listen for messages from the extension host and update Jotai atoms.
+- **Fixed Jotai Context Errors:** Resolved runtime errors (`Cannot read properties of null (reading 'context')`) by adjusting how `useAtomValue` was used within `useCallback` handlers in `App.tsx`, ensuring atom values are read outside the callback or directly within the render function where appropriate.
+- **Removed Dependencies:** Uninstalled `nanostores` and `@nanostores/preact` from `webview-ui` as they are no longer needed.
+- **(Previous changes before Jotai refactor)**
 - **UI Refactoring (Navigation &amp; Layout):**
     - Removed top navigation bar (`<nav>`) from `app.tsx`.
     - Added settings icon button to `HeaderControls.tsx` for navigation to `/settings`.

@@ -1,7 +1,13 @@
 import { FunctionalComponent } from 'preact';
 import { Ref } from 'preact';
+import { useAtom, useAtomValue } from 'jotai'; // Import Jotai hooks
 import { JSX } from 'preact/jsx-runtime';
-// Removed unused imports: UiMessageContentPart, ApiProviderKey, Message, generateUniqueId, postMessage
+import {
+    inputValueAtom,
+    isStreamingAtom,
+    activeChatModelNameAtom,
+    selectedImagesAtom
+} from '../store/atoms'; // Import atoms
 
 // Interface for selected image state (can be moved to common types)
 export interface SelectedImage { // Ensure this is exported
@@ -12,15 +18,11 @@ export interface SelectedImage { // Ensure this is exported
 }
 
 interface InputAreaProps {
-    inputValue: string;
-    setInputValue: (value: string) => void;
-    handleInputChange: (e: JSX.TargetedEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+    // Removed state props: inputValue, setInputValue, handleInputChange, isStreaming, currentModelInput, selectedImages
     handleKeyDown: (e: KeyboardEvent) => void;
     handleSend: () => void;
-    isStreaming: boolean;
-    currentModelInput: string;
-    selectedImages: SelectedImage[];
-    setSelectedImages: (images: SelectedImage[] | ((prev: SelectedImage[]) => SelectedImage[])) => void; // Allow function updates
+    // Kept image upload related props
+    setSelectedImages: (images: SelectedImage[] | ((prev: SelectedImage[]) => SelectedImage[])) => void;
     fileInputRef: Ref<HTMLInputElement>;
     triggerImageUpload: () => void;
     removeSelectedImage: (id: string) => void;
@@ -29,21 +31,22 @@ interface InputAreaProps {
 }
 
 export const InputArea: FunctionalComponent<InputAreaProps> = ({
-    inputValue,
-    // setInputValue, // Removed unused prop
-    handleInputChange,
+    // Removed state props
     handleKeyDown,
     handleSend,
-    isStreaming,
-    currentModelInput,
-    selectedImages,
-    // setSelectedImages, // Removed unused prop
+    // Kept image upload related props
+    setSelectedImages,
     fileInputRef,
     triggerImageUpload,
     removeSelectedImage,
-    handleImageFileChange, // Pass the handler down
-    handleStopGeneration // Destructure the new prop
+    handleImageFileChange,
+    handleStopGeneration
 }) => {
+    // Read state from atoms
+    const [inputValue, setInputValue] = useAtom(inputValueAtom);
+    const isStreaming = useAtomValue(isStreamingAtom);
+    const currentModelInput = useAtomValue(activeChatModelNameAtom); // Use derived atom
+    const selectedImages = useAtomValue(selectedImagesAtom);
 
     return (
         <div class="input-area p-2 border-t border-gray-300 dark:border-gray-700 flex flex-col">
@@ -94,7 +97,7 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
                         const target = e.currentTarget;
                         target.style.height = 'auto';
                         target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
-                        handleInputChange(e);
+                        setInputValue(e.currentTarget.value); // Use atom setter directly
                     }}
                     onKeyDown={handleKeyDown}
                     placeholder={selectedImages.length > 0 ? "Add a caption or message..." : "Type your message..."}

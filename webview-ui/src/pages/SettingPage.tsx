@@ -1,18 +1,25 @@
 // import { h } from 'preact'; // Removed unused import
 import { useState, useMemo, useEffect, useCallback } from 'preact/hooks';
+import { useAtom, useAtomValue, useSetAtom, atom } from 'jotai'; // Import atom as well
 import { useLocation } from "wouter";
 import { JSX } from 'preact/jsx-runtime'; // Import JSX namespace
-import { ProviderInfoAndStatus, postMessage } from '../app';
+import { ProviderInfoAndStatus, postMessage } from '../app'; // Keep postMessage
 import { McpServerStatus } from '../../../src/ai/mcpManager';
-import { AvailableModel, DefaultChatConfig } from '../../../src/common/types'; // Import needed types
-// import { useModelSelection } from '../hooks/useModelSelection'; // No longer needed here
-import { ModelSelector } from '../components/ModelSelector'; // Import the new component
+import { AvailableModel, DefaultChatConfig } from '../../../src/common/types';
+import { ModelSelector } from '../components/ModelSelector';
+import {
+    providerStatusAtom,
+    defaultConfigAtom, // Assuming we create this atom
+    availableProvidersAtom,
+    providerModelsMapAtom
+} from '../store/atoms'; // Import atoms
 
 // Define props for the SettingPage
-interface SettingPageProps {
-  providerStatus: ProviderInfoAndStatus[];
-  onProviderToggle: (providerId: string, enabled: boolean) => void;
-}
+// Remove props interface, component will read from atoms
+// interface SettingPageProps {
+//   providerStatus: ProviderInfoAndStatus[];
+//   onProviderToggle: (providerId: string, enabled: boolean) => void;
+// }
 
 // Update payload type to match the new McpServerStatus structure from backend
 interface McpConfiguredStatusPayload {
@@ -75,7 +82,13 @@ const categorizeTools = (tools: AllToolsStatusPayload): Record<string, AllToolsS
 };
 
 
-export function SettingPage({ providerStatus, onProviderToggle }: SettingPageProps) {
+// Removed local defaultConfigAtom declaration
+export function SettingPage() { // Remove props
+   // Read state from atoms
+   const [providerStatus, setProviderStatus] = useAtom(providerStatusAtom);
+   const [defaultConfig, setDefaultConfig] = useAtom(defaultConfigAtom);
+   const availableProviders = useAtomValue(availableProvidersAtom);
+   const providerModelsMap = useAtomValue(providerModelsMapAtom);
    // State to hold the temporary API key input for each provider
    const [apiKeysInput, setApiKeysInput] = useState<{ [providerId: string]: string }>({});
    // State for the search query
@@ -90,11 +103,7 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
    const [projectInstructionsPath, setProjectInstructionsPath] = useState<string | null>(null); // To display the path
    // Hook for navigation
    const [, setLocation] = useLocation();
-   // State for default models
-   const [defaultConfig, setDefaultConfig] = useState<DefaultChatConfig>({});
-   // Replace allAvailableModels state with the new structure
-   const [availableProviders, setAvailableProviders] = useState<AvailableModel[]>([]);
-   const [providerModelsMap, setProviderModelsMap] = useState<Record<string, AvailableModel[]>>({});
+   // Removed local state for defaultConfig, availableProviders, providerModelsMap
 
   // Handle input change for API key fields
   const handleApiKeyInputChange = (providerId: string, value: string) => {
@@ -179,36 +188,8 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
                    setProjectInstructions(message.payload.project || '');
                    setProjectInstructionsPath(message.payload.projectPath || null);
                    break;
-               // Handle the new provider/model messages
-               case 'availableProviders':
-                   if (Array.isArray(message.payload)) {
-                       const providers = message.payload as AvailableModel[];
-                       console.log("[SettingsPage] Received available providers:", providers);
-                       setAvailableProviders(providers);
-                       // Trigger model fetching for each provider
-                       providers.forEach(provider => {
-                           console.log(`[SettingsPage] Requesting models for provider: ${provider.providerId}`);
-                           postMessage({ type: 'getAvailableModels', payload: { providerId: provider.providerId } });
-                       });
-                   }
-                   break;
-               case 'providerModelsLoaded':
-                   if (message.payload && message.payload.providerId && Array.isArray(message.payload.models)) {
-                       const { providerId, models } = message.payload;
-                       console.log(`[SettingsPage] Received ${models.length} models for provider: ${providerId}`);
-                       setProviderModelsMap(prevMap => ({
-                           ...prevMap,
-                           [providerId]: models as AvailableModel[]
-                       }));
-                   }
-                   break;
-               case 'updateDefaultConfig': // Handle default config updates
-                   if (message.payload && typeof message.payload === 'object') {
-                       console.log('[SettingsPage] Received updateDefaultConfig:', message.payload);
-                       setDefaultConfig(message.payload as DefaultChatConfig);
-                       // No need to set provider separately, ModelSelector handles it based on selectedModelId
-                   }
-                   break;
+               // Removed handling for availableProviders, providerModelsLoaded, updateDefaultConfig
+               // These should be handled by the MessageHandlerComponent updating atoms
            }
        };
 
@@ -328,12 +309,24 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
     };
 
     // --- Default Model Handlers ---
-    const handleDefaultChatModelChange = (newModelId: string) => {
+    const handleDefaultChatModelChange = (newModelId: string | null) => { // Allow null
         console.log(`Setting default chat model to: ${newModelId}`);
-        const newConfig = { ...defaultConfig, defaultChatModelId: newModelId };
-        setDefaultConfig(newConfig); // Optimistic UI update
-        postMessage({ type: 'setDefaultConfig', payload: { config: newConfig } });
+        // Update atom directly
+        setDefaultConfig((prevConfig: DefaultChatConfig) => ({ ...prevConfig, defaultChatModelId: newModelId ?? undefined })); // Add type annotation
+        // Send update to backend
+        postMessage({ type: 'setDefaultConfig', payload: { config: { defaultChatModelId: newModelId ?? undefined } } });
     };
+
+  // Render logic for a single provider setting
+  // Define onProviderToggle using atom setter
+  const onProviderToggle = useCallback((providerId: string, enabled: boolean) => {
+       setProviderStatus(prevStatus =>
+           prevStatus.map(p =>
+               p.id === providerId ? { ...p, enabled: enabled } : p
+           )
+       );
+       postMessage({ type: 'setProviderEnabled', payload: { provider: providerId, enabled: enabled } });
+   }, [setProviderStatus]);
 
   // Render logic for a single provider setting
   const renderProviderSetting = (providerInfo: ProviderInfoAndStatus) => {
@@ -473,9 +466,7 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
               <div class="p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
                    <ModelSelector
                        labelPrefix="Default Chat"
-                       // Pass the new props to ModelSelector
-                       availableProviders={availableProviders}
-                       providerModelsMap={providerModelsMap}
+                       // Pass only the required props
                        selectedModelId={defaultConfig.defaultChatModelId ?? null}
                        onModelChange={handleDefaultChatModelChange}
                    />

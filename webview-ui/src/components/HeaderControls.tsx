@@ -1,45 +1,43 @@
 import { FunctionalComponent } from 'preact';
+import { useAtomValue } from 'jotai'; // Import Jotai hook
 import { JSX } from 'preact/jsx-runtime';
-import { ApiProviderKey } from '../app'; // Import ApiProviderKey from app
-import { AvailableModel } from '../../../src/common/types'; // Import AvailableModel from common types
-import { ModelSelector } from './ModelSelector'; // Import the new component
+// Removed: import { ApiProviderKey } from '../app';
+import { AvailableModel } from '../../../src/common/types';
+import { ModelSelector } from './ModelSelector';
+import {
+    availableProvidersAtom,
+    providerModelsMapAtom,
+    activeChatCombinedModelIdAtom,
+    activeChatMessagesAtom // Import for hasMessages logic
+} from '../store/atoms'; // Import atoms
 // Define the extended model type expected from the hook
 // type FilteredModel = AvailableModel & { modelNamePart: string }; // No longer needed here
 
 interface HeaderControlsProps {
-    // Removed: uniqueProviders, selectedProvider, handleProviderChange, displayModelName, filteredModels
-    // Replace allAvailableModels with the new structure
-    availableProviders: AvailableModel[];
-    providerModelsMap: Record<string, AvailableModel[]>;
-    selectedModelId: string | null; // Renamed from currentModelInput
-    onModelChange: (newModelId: string) => void; // Renamed from handleChatModelChange
-    // Removed: handleClearChat, isStreaming, hasMessages
-    hasMessages: boolean;
+    // Props now only include callbacks
+    onModelChange: (newModelId: string) => void;
     onSettingsClick: () => void;
     onChatsClick: () => void;
 }
 
 export const HeaderControls: FunctionalComponent<HeaderControlsProps> = ({
-    // Removed props
-    // allAvailableModels, // Removed
-    availableProviders, // Added
-    providerModelsMap, // Added
-    selectedModelId,
     onModelChange,
-    // Removed props
-    hasMessages,
     onSettingsClick,
     onChatsClick
 }) => {
+    // Read state from atoms
+    const availableProviders = useAtomValue(availableProvidersAtom);
+    const providerModelsMap = useAtomValue(providerModelsMapAtom);
+    const selectedModelId = useAtomValue(activeChatCombinedModelIdAtom);
+    const activeChatMessages = useAtomValue(activeChatMessagesAtom);
+    const hasMessages = activeChatMessages.length > 0; // Derive hasMessages
     return (
         /* Reverted layout changes, kept button grouping */
         <div class="header-controls p-2 border-b border-gray-300 dark:border-gray-700 flex justify-between items-center">
             {/* Original model selector layout */}
             {/* Replace with the new ModelSelector component */}
             <ModelSelector
-                // Pass the new props to ModelSelector
-                availableProviders={availableProviders}
-                providerModelsMap={providerModelsMap}
+                // Pass only the required props
                 selectedModelId={selectedModelId}
                 onModelChange={onModelChange}
                 // No labelPrefix needed here

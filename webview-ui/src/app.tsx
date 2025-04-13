@@ -1,12 +1,13 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks'; // Add useMemo
+import { useEffect, useRef, useCallback, useState } from 'preact/hooks'; // Keep useState for local UI state
+import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { Router, Route, useLocation, Switch, Redirect } from "wouter";
 import { JSX } from 'preact/jsx-runtime'; // Import JSX namespace
 import './app.css';
 import { SettingPage } from './pages/SettingPage';
 import { ChatListPage } from './pages/ChatListPage'; // Import ChatListPage
-import { useMessageHandler } from './hooks/useMessageHandler';
+// Removed: import { useMessageHandler } from './hooks/useMessageHandler';
 import { useImageUpload } from './hooks/useImageUpload';
-import { useModelSelection } from './hooks/useModelSelection';
+// Removed: import { useModelSelection } from './hooks/useModelSelection';
 import { HeaderControls } from './components/HeaderControls';
 import { MessagesArea } from './components/MessagesArea';
 import { InputArea } from './components/InputArea';
@@ -21,7 +22,27 @@ import {
     UiToolCallPart,
     UiTextMessagePart,
     UiImagePart
-} from '../../src/common/types';
+} from '../../src/common/types'; // Corrected path: up from webview-ui/src to webview-ui, up to root, then down to src/common
+import {
+    chatSessionsAtom,
+    activeChatIdAtom,
+    providerStatusAtom,
+    availableProvidersAtom,
+    providerModelsMapAtom,
+    isStreamingAtom,
+    inputValueAtom,
+    selectedImagesAtom,
+    suggestedActionsMapAtom,
+    activeChatAtom,
+    activeChatMessagesAtom,
+    activeChatConfigAtom,
+    activeChatProviderIdAtom,
+    activeChatModelNameAtom,
+    activeChatCombinedModelIdAtom,
+    triggerWebviewReadyAtom,
+    triggerFetchModelsForProviderAtom,
+    webviewLocationAtom // Added for potential future sync
+} from './store/atoms'; // Import Jotai atoms
 
 // --- Type Definitions ---
 export type SuggestedAction = CommonSuggestedAction;
@@ -77,283 +98,364 @@ export const postMessage = (message: any) => {
 // --- Helper Functions ---
 export const generateUniqueId = () => `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+// --- Message Handler Component (Handles messages from Extension Host) ---
+const MessageHandlerComponent = () => {
+    const setChatSessions = useSetAtom(chatSessionsAtom);
+    const setActiveChatId = useSetAtom(activeChatIdAtom);
+    const setProviderStatus = useSetAtom(providerStatusAtom);
+    const setAvailableProviders = useSetAtom(availableProvidersAtom);
+    const setProviderModelsMap = useSetAtom(providerModelsMapAtom);
+    const setIsStreaming = useSetAtom(isStreamingAtom);
+    const setSuggestedActionsMap = useSetAtom(suggestedActionsMapAtom);
+    const setLocation = useSetAtom(webviewLocationAtom); // Use Jotai atom setter for location
+    const triggerFetchModels = useSetAtom(triggerFetchModelsForProviderAtom);
+    const triggerReady = useSetAtom(triggerWebviewReadyAtom);
+
+    useEffect(() => {
+        const handleMessagesFromExtension = (event: MessageEvent) => {
+            const message = event.data;
+            console.log("[MessageHandler] Received message:", message.type, message.payload); // Log all messages
+
+            switch (message.type) {
+                // --- State Loading & Updates ---
+                case 'loadChatState':
+                    if (message.payload && Array.isArray(message.payload.chats)) {
+                        const loadedChats = message.payload.chats;
+                        const loadedActiveId = message.payload.lastActiveChatId;
+                        const loadedLocation = message.payload.lastLocation;
+
+                        setChatSessions(loadedChats);
+                        setActiveChatId(loadedActiveId);
+                        // Update location atom if needed (consider if wouter should drive this)
+                        // if (loadedLocation && loadedLocation !== '/') {
+                        //     setLocation(loadedLocation);
+                        // }
+                        console.log(`[MessageHandler] Loaded ${loadedChats.length} chats. Active: ${loadedActiveId}. Location: ${loadedLocation}`);
+                    } else {
+                         console.warn("[MessageHandler] Invalid loadChatState payload:", message.payload);
+                    }
+                    break;
+                case 'providerStatus':
+                    if (Array.isArray(message.payload)) {
+                        setProviderStatus(message.payload);
+                    } else {
+                         console.warn("[MessageHandler] Invalid providerStatus payload:", message.payload);
+                    }
+                    break;
+                case 'availableProviders': // Renamed from 'availableModels' in old code
+                     if (Array.isArray(message.payload)) {
+                         const providers = message.payload as AvailableModel[];
+                         console.log("[MessageHandler] Received available providers:", providers);
+                         setAvailableProviders(providers);
+                         // Trigger model fetching for each provider
+                         providers.forEach(provider => {
+                             triggerFetchModels(provider.providerId);
+                         });
+                     } else {
+                          console.warn("[MessageHandler] Invalid availableProviders payload:", message.payload);
+                     }
+                     break;
+                case 'providerModelsLoaded':
+                     if (message.payload && message.payload.providerId && Array.isArray(message.payload.models)) {
+                         const { providerId, models } = message.payload;
+                         console.log(`[MessageHandler] Received ${models.length} models for provider: ${providerId}`);
+                         setProviderModelsMap(prevMap => ({
+                             ...prevMap,
+                             [providerId]: models as AvailableModel[]
+                         }));
+                     } else {
+                          console.warn("[MessageHandler] Invalid providerModelsLoaded payload:", message.payload);
+                     }
+                     break;
+
+                // --- Streaming & Message Updates ---
+                 case 'startAssistantMessage':
+                     if (message.payload?.chatId && message.payload?.messageId) {
+                         const { chatId, messageId } = message.payload;
+                         setChatSessions(prev => prev.map(chat =>
+                             chat.id === chatId
+                                 ? { ...chat, history: [...chat.history, { id: messageId, sender: 'assistant', content: [], timestamp: Date.now() }] }
+                                 : chat
+                         ));
+                         setIsStreaming(true);
+                         setSuggestedActionsMap(prev => ({ ...prev, [messageId]: [] })); // Clear suggestions for new message
+                     } else {
+                          console.warn("[MessageHandler] Invalid startAssistantMessage payload:", message.payload);
+                     }
+                     break;
+                 case 'appendMessageChunk':
+                     if (message.payload?.chatId && message.payload?.messageId && message.payload?.contentChunk) {
+                         const { chatId, messageId, contentChunk } = message.payload;
+                         setChatSessions(prev => prev.map(chat => {
+                             if (chat.id !== chatId) return chat;
+                             const history = chat.history.map(msg => {
+                                 if (msg.id !== messageId) return msg;
+                                 // Ensure content is always an array
+                                 const currentContent = Array.isArray(msg.content) ? msg.content : (msg.content ? [{ type: 'text', text: String(msg.content) } as UiTextMessagePart] : []); // Assert type
+                                 let lastPart = currentContent[currentContent.length - 1];
+
+                                 // Append to last text part or add new text part
+                                 if (lastPart?.type === 'text' && contentChunk.type === 'text-delta') {
+                                     // Create a new text part object
+                                     const updatedTextPart: UiTextMessagePart = { ...lastPart, text: lastPart.text + contentChunk.textDelta };
+                                     return { ...msg, content: [...currentContent.slice(0, -1), updatedTextPart] };
+                                 } else if (contentChunk.type === 'text-delta') {
+                                     // Create a new text part object
+                                     const newTextPart: UiTextMessagePart = { type: 'text', text: contentChunk.textDelta };
+                                     return { ...msg, content: [...currentContent, newTextPart] };
+                                 }
+                                 // Handle other chunk types if necessary (e.g., tool calls)
+                                 // For now, just log unexpected chunk types
+                                 console.warn("[MessageHandler] Received unhandled content chunk type:", contentChunk.type);
+                                 return msg; // Return unmodified message if chunk type is not handled
+                             });
+                             return { ...chat, history };
+                         }));
+                     } else {
+                          console.warn("[MessageHandler] Invalid appendMessageChunk payload:", message.payload);
+                     }
+                     break;
+                 case 'updateToolCall':
+                     // TODO: Implement logic to update tool call status within the message content
+                     console.warn("[MessageHandler] updateToolCall not fully implemented yet.");
+                     break;
+                 case 'addSuggestedActions':
+                      if (message.payload?.chatId && message.payload?.messageId && Array.isArray(message.payload?.actions)) {
+                          const { messageId, actions } = message.payload;
+                          setSuggestedActionsMap(prev => ({ ...prev, [messageId]: actions }));
+                      } else {
+                           console.warn("[MessageHandler] Invalid addSuggestedActions payload:", message.payload);
+                      }
+                     break;
+                 case 'streamFinished':
+                     setIsStreaming(false);
+                     break;
+
+                // --- Other Actions ---
+                case 'showSettings': // May be deprecated if routing handles this
+                    // setLocation('/settings'); // Example: Update location atom
+                    console.log("[MessageHandler] Received showSettings message (potentially deprecated).");
+                    break;
+                case 'updateMcpServers': // Likely deprecated for App state
+                    console.log("[MessageHandler] Received updateMcpServers message (potentially deprecated).");
+                    break;
+                default:
+                    // console.log(`[MessageHandler] Received unhandled message type: ${message.type}`);
+                    break;
+            }
+        };
+
+        window.addEventListener('message', handleMessagesFromExtension);
+        console.log("[MessageHandler] Initializing and triggering webviewReady.");
+        triggerReady(); // Trigger initial load
+
+        return () => {
+            window.removeEventListener('message', handleMessagesFromExtension);
+        };
+        // Ensure dependencies cover all setters and trigger functions used inside
+    }, [setChatSessions, setActiveChatId, setProviderStatus, setAvailableProviders, setProviderModelsMap, setIsStreaming, setSuggestedActionsMap, setLocation, triggerFetchModels, triggerReady]);
+
+    return null; // This component does not render anything
+};
+
+
 // --- App Component ---
 export function App() {
-    // --- State Variables ---
-    // Replace single messages state with chat sessions and active ID
-    const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-    const [activeChatId, setActiveChatId] = useState<string | null>(null);
-    // const [messages, setMessages] = useState<InternalUiMessage[]>([]); // Removed, derived from chatSessions
+    // --- Jotai State ---
+    const [chatSessions, setChatSessions] = useAtom(chatSessionsAtom);
+    const [activeChatId, setActiveChatId] = useAtom(activeChatIdAtom);
+    const [inputValue, setInputValue] = useAtom(inputValueAtom);
+    const [isStreaming, setIsStreaming] = useAtom(isStreamingAtom);
+    const [providerStatus, setProviderStatus] = useAtom(providerStatusAtom);
+    // Removed: const setSuggestedActionsMap = useSetAtom(suggestedActionsMapAtom); // Setter used only in MessageHandlerComponent
+    const availableProviders = useAtomValue(availableProvidersAtom);
+    const providerModelsMap = useAtomValue(providerModelsMapAtom);
+    // Use derived atoms directly
+    const activeChatMessages = useAtomValue(activeChatMessagesAtom);
+    const activeChatProviderId = useAtomValue(activeChatProviderIdAtom);
+    const activeChatModelName = useAtomValue(activeChatModelNameAtom);
+    const activeChatCombinedModelId = useAtomValue(activeChatCombinedModelIdAtom);
+    const suggestedActionsMap = useAtomValue(suggestedActionsMapAtom); // Read derived value
 
-    const [inputValue, setInputValue] = useState('');
-    const [isStreaming, setIsStreaming] = useState(false);
-    const [providerStatus, setProviderStatus] = useState<AllProviderStatus>([]);
-    const [location, setLocation] = useLocation();
+    // --- Local UI State (Can remain useState or become atoms if needed elsewhere) ---
+    const [location, setLocation] = useLocation(); // Keep wouter for routing for now
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
-    const [isChatListLoading, setIsChatListLoading] = useState(false); // State for chat list operations
-    const [suggestedActionsMap, setSuggestedActionsMap] = useState<Record<string, SuggestedAction[]>>({});
+    const [isChatListLoading, setIsChatListLoading] = useState(false);
+
+    // --- Define ALL Jotai Setters at the Top ---
+    const setChatSessionsDirect = useSetAtom(chatSessionsAtom);
+    const setActiveChatIdDirect = useSetAtom(activeChatIdAtom);
+    const setInputValueDirect = useSetAtom(inputValueAtom);
+    // Removed setSelectedImagesDirect - will sync from hook state
+    const setIsStreamingDirect = useSetAtom(isStreamingAtom);
+    const setProviderStatusDirect = useSetAtom(providerStatusAtom);
+    const setSelectedImagesAtomDirect = useSetAtom(selectedImagesAtom); // Setter for the atom
 
     // --- Custom Hooks ---
+    // Call useImageUpload and get state and functions
     const {
-        selectedImages,
+        selectedImages, // State from the hook
+        setSelectedImages, // Setter from the hook
         fileInputRef,
         handleImageFileChange,
         triggerImageUpload,
         removeSelectedImage,
-        clearSelectedImages
+        clearSelectedImages // Clear function from the hook
     } = useImageUpload();
 
-    // Destructure from useModelSelection, removing handleModelInputChange
-    // --- Derived State for Model Selection ---
-    // Derive active chat's provider and model name separately
-    const activeChatProviderId = useMemo(() => {
-        if (!activeChatId) return null;
-        const activeSession = chatSessions.find(session => session.id === activeChatId);
-        if (!activeSession) return null;
-        // TODO: Implement logic to get default provider ID from settings if useDefaults is true
-        return activeSession.config.providerId || null;
-    }, [chatSessions, activeChatId]);
-
-    const activeChatModelName = useMemo(() => {
-        if (!activeChatId) return null;
-        const activeSession = chatSessions.find(session => session.id === activeChatId);
-        if (!activeSession) return null;
-        // TODO: Implement logic to get default model name from settings if useDefaults is true
-        return activeSession.config.modelName || null;
-    }, [chatSessions, activeChatId]);
-
-    // Combine them into the format needed by useModelSelection (or maybe adjust the hook later)
-    const activeChatCombinedModelId = useMemo(() => {
-        if (activeChatProviderId && activeChatModelName) {
-            return `${activeChatProviderId}:${activeChatModelName}`;
-        }
-        return null;
-    }, [activeChatProviderId, activeChatModelName]);
-
-    // State for available providers (received quickly)
-    const [availableProviders, setAvailableProviders] = useState<AvailableModel[]>([]);
-    // State to store models loaded per provider
-    const [providerModelsMap, setProviderModelsMap] = useState<Record<string, AvailableModel[]>>({});
-
-    // TODO: Refactor or replace useModelSelection hook later to use availableProviders and providerModelsMap
-    // The useModelSelection hook is called within the useEffect below.
-    // We don't need to destructure its return values here.
-    // Call the hook inside useEffect to potentially avoid linter issues and run its internal effect once.
+    // Sync hook state to Jotai atom
     useEffect(() => {
-        useModelSelection({
-            availableProviders,
-            providerModelsMap,
-            activeChatModelId: activeChatCombinedModelId
-        });
-        // We don't use the return value here, just calling for potential side effects within the hook.
-    }, [availableProviders, providerModelsMap, activeChatCombinedModelId]); // Re-run if these inputs change
+        setSelectedImagesAtomDirect(selectedImages);
+    }, [selectedImages, setSelectedImagesAtomDirect]);
 
-    // Update useMessageHandler hook call to manage chatSessions and activeChatId
-    // Pass the required state and setters to the updated hook
-    useMessageHandler(
-        activeChatId,
-        setChatSessions,
-        setActiveChatId,
-        setIsStreaming,
-        setSuggestedActionsMap,
-        setLocation
-        // Note: We might need to pass setIsChatListLoading here if the hook handles the response
-    );
+    // Removed duplicate clearSelectedImages definition. Using the one from useImageUpload hook.
 
-    // --- Derived State ---
-    // Derive messages for the active chat
-    const activeChatMessages = useMemo(() => {
-        if (!activeChatId) return [];
-        const activeSession = chatSessions.find(session => session.id === activeChatId);
-        // Map UiMessage to InternalUiMessage if needed, otherwise just return history
-        return activeSession ? activeSession.history.map(msg => ({ ...msg })) : [];
-    }, [chatSessions, activeChatId]);
+    // Removed useModelSelection hook
+    // Removed useMessageHandler hook call
+
+    // Setters defined above
+
+    // Read atom values needed in callbacks
+    const currentInputValue = useAtomValue(inputValueAtom);
+    const currentSelectedImages = useAtomValue(selectedImagesAtom);
+    const currentIsStreaming = useAtomValue(isStreamingAtom);
+    const currentActiveChatId = useAtomValue(activeChatIdAtom);
+    const currentProviderId = useAtomValue(activeChatProviderIdAtom);
+    const currentModelName = useAtomValue(activeChatModelNameAtom);
+    const currentChatSessions = useAtomValue(chatSessionsAtom);
 
     // --- Effects ---
     // Scroll to bottom when active chat messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [activeChatMessages]);
+    }, [activeChatMessages]); // Dependency on atom value is fine
 
-    // Send location updates to backend when location changes
-    useEffect(() => {
-        // Avoid sending initial '/' or redundant updates
-        // Check against the last known location *sent by the backend* (implicitly stored in workspaceState now)
-        // We don't have direct access to workspaceState here, so we rely on the backend to handle redundancy.
-        // Send update on every location change except initial '/'
-        if (location && location !== '/') {
-             console.log(`[App Effect] Location changed to: ${location}. Sending update to backend.`);
-             postMessage({ type: 'updateLastLocation', payload: { location: location } });
-             // Remove immediate update to vscode.setState, rely on backend persistence via HistoryManager
-        }
-    }, [location]); // Depend only on location
-    // Handle initial setup messages and model loading responses
-     useEffect(() => {
-         const handleSetupAndModelMessage = (event: MessageEvent) => {
-             const message = event.data;
-             switch (message.type) {
-                 // Renamed from 'availableModels'
-                 case 'availableProviders':
-                     if (Array.isArray(message.payload)) {
-                         const providers = message.payload as AvailableModel[];
-                         console.log("[App Effect] Received available providers:", providers);
-                         setAvailableProviders(providers);
-                         // Trigger model fetching for each provider
-                         providers.forEach(provider => {
-                             console.log(`[App Effect] Requesting models for provider: ${provider.providerId}`);
-                             postMessage({ type: 'getAvailableModels', payload: { providerId: provider.providerId } });
-                         });
-                     }
-                     break;
-                 // New message type from backend
-                 case 'providerModelsLoaded':
-                     if (message.payload && message.payload.providerId && Array.isArray(message.payload.models)) {
-                         const { providerId, models } = message.payload;
-                         console.log(`[App Effect] Received ${models.length} models for provider: ${providerId}`);
-                         setProviderModelsMap(prevMap => ({
-                             ...prevMap,
-                             [providerId]: models as AvailableModel[]
-                         }));
-                     }
-                     break;
-                 case 'providerStatus':
-                     if (Array.isArray(message.payload)) {
-                         setProviderStatus(message.payload);
-                     }
-                     break;
-                 case 'loadChatState': // Handle new message type with lastLocation
-                     if (message.payload && Array.isArray(message.payload.chats)) {
-                         const loadedChats = message.payload.chats;
-                         const loadedActiveId = message.payload.lastActiveChatId;
-                         const loadedLocation = message.payload.lastLocation;
-
-                         setChatSessions(loadedChats);
-                         setActiveChatId(loadedActiveId);
-                         setIsChatListLoading(false); // Stop loading indicator
-                         console.log(`[App Effect] Loaded ${loadedChats.length} chats. Active: ${loadedActiveId}. Location: ${loadedLocation}`);
-
-                         // Restore location AFTER setting state, only if it's different from current
-                         // and not the root path (which is handled by redirect)
-                         if (loadedLocation && loadedLocation !== location && loadedLocation !== '/') {
-                             console.log(`[App Effect] Restoring location from loadChatState: ${loadedLocation}`);
-                             // Use timeout to allow state updates to potentially settle before navigation
-                             setTimeout(() => setLocation(loadedLocation, { replace: true }), 50);
-                         }
-                     }
-                     break;
-                 case 'updateMcpServers':
-                     // This message type might be deprecated or handled elsewhere now
-                     // if (Array.isArray(message.payload)) {
-                     //     // console.log("Received MCP server configs (now unused in App state):", message.payload);
-                     // }
-                     break;
-             }
-         };
-         window.addEventListener('message', handleSetupAndModelMessage);
-         postMessage({ type: 'webviewReady' }); // Request initial data (will trigger 'availableProviders')
-         return () => {
-             window.removeEventListener('message', handleSetupAndModelMessage);
-         };
-         // Dependencies: setLocation and location are needed for route restoration.
-     }, [setLocation, location]); // Removed setAvailableModels, added setProviderModelsMap (implicitly stable)
+    // Removed useEffect for location updates (can be handled differently if needed, maybe via atom effect)
+    // Removed useEffect for initial setup messages (moved to MessageHandlerComponent)
 
     // --- Event Handlers (Remaining in App) ---
+    // --- Event Handlers (Refactored for Jotai) ---
     const handleSend = useCallback(() => {
-        // Use activeChatId
-        if ((inputValue.trim() || selectedImages.length > 0) && !isStreaming && activeChatProviderId && activeChatModelName && activeChatId) { // Use separate provider/model name check
-            const contentParts: UiMessageContentPart[] = [];
-            selectedImages.forEach(img => {
-                contentParts.push({ type: 'image', mediaType: img.mediaType, data: img.data });
-            });
-            if (inputValue.trim()) {
-                contentParts.push({ type: 'text', text: inputValue });
+        // Use values read outside the callback
+
+        // Use setters defined above
+        if ((currentInputValue.trim() || currentSelectedImages.length > 0) && !currentIsStreaming && currentProviderId && currentModelName && currentActiveChatId) {
+            // Map SelectedImage[] to UiImagePart[] for the backend message
+            const contentParts: UiMessageContentPart[] = currentSelectedImages.map(img => ({
+                type: 'image',
+                mediaType: img.mediaType,
+                data: img.data
+            } as UiImagePart));
+
+            // Removed redundant forEach loop
+            if (currentInputValue.trim()) {
+                contentParts.push({ type: 'text', text: currentInputValue });
             }
             // Add message optimistically to the correct chat session
             const newUserMessage: UiMessage = { id: generateUniqueId(), sender: 'user', content: contentParts, timestamp: Date.now() };
-            setChatSessions(prevSessions =>
+            setChatSessionsDirect(prevSessions =>
                 prevSessions.map(session =>
-                    session.id === activeChatId
+                    session.id === currentActiveChatId
                         ? { ...session, history: [...session.history, newUserMessage], lastModified: Date.now() }
                         : session
                 )
             );
             // Send message with chatId
             // Combine provider and model name for the backend message
-            const combinedModelId = activeChatProviderId && activeChatModelName ? `${activeChatProviderId}:${activeChatModelName}` : null;
+            const combinedModelId = currentProviderId && currentModelName ? `${currentProviderId}:${currentModelName}` : null;
             if (combinedModelId) {
-                 postMessage({ type: 'sendMessage', chatId: activeChatId, content: contentParts, providerId: activeChatProviderId, modelId: combinedModelId });
+                 postMessage({ type: 'sendMessage', chatId: currentActiveChatId, content: contentParts, providerId: currentProviderId, modelId: combinedModelId });
             } else {
                  console.error("Cannot send message: Missing provider or model name for active chat.");
-                 setIsStreaming(false); // Stop streaming indicator if we can't send
+                 setIsStreamingDirect(false); // Stop streaming indicator if we can't send
                  return; // Prevent sending
             }
-            setInputValue('');
-            clearSelectedImages();
-            setIsStreaming(true);
-        } else if (!activeChatId) {
+            setInputValueDirect('');
+            // clearSelectedImages(); // This needs to update the atom now
+            clearSelectedImages(); // Use the function from the hook, dependency added below
+            setIsStreamingDirect(true);
+        } else if (!currentActiveChatId) {
              console.warn("Cannot send message: No active chat selected.");
-        } else if (!activeChatProviderId || !activeChatModelName) {
+        } else if (!currentProviderId || !currentModelName) {
              console.warn("Cannot send message: Provider or Model not selected for the active chat.");
         }
-    }, [inputValue, selectedImages, isStreaming, activeChatProviderId, activeChatModelName, activeChatId, clearSelectedImages, setChatSessions, setIsStreaming, setInputValue]); // Use separate provider/model name
+    }, [ // Add atom values read outside to dependency array
+         currentInputValue, currentSelectedImages, currentIsStreaming, currentActiveChatId, currentProviderId, currentModelName,
+         setChatSessionsDirect, setInputValueDirect, setIsStreamingDirect, clearSelectedImages
+    ]);
 
+    // Define handleKeyDown separately
+    const handleKeyDown = useCallback((e: KeyboardEvent) => {
+        // Read isStreaming inside handler as it can change
+        const currentIsStreamingVal = useAtomValue(isStreamingAtom);
+        if (e.key === 'Enter' && !e.shiftKey && !currentIsStreamingVal) {
+            e.preventDefault();
+            handleSend(); // Call the existing handleSend callback
+        }
+    }, [handleSend]); // Dependency on handleSend
+
+    // setProviderStatusDirect defined above
     const handleProviderToggle = useCallback((providerId: string, enabled: boolean) => {
-         setProviderStatus(prevStatus =>
+         setProviderStatusDirect(prevStatus =>
              prevStatus.map(p =>
                  p.id === providerId ? { ...p, enabled: enabled } : p
              )
          );
          postMessage({ type: 'setProviderEnabled', payload: { provider: providerId, enabled: enabled } });
-     }, []);
+     }, [setProviderStatusDirect]); // Dependency is correct
 
+     // Use activeChatId read outside
      const handleClearChat = useCallback(() => {
-         if (activeChatId) { // Only show confirm if a chat is active
+         if (currentActiveChatId) {
              setShowClearConfirm(true);
          } else {
              console.warn("Cannot clear chat: No active chat selected.");
          }
-     }, [activeChatId]); // Depend on activeChatId
+     }, [currentActiveChatId]); // Add dependency
 
+     // Use activeChatId read outside
      const confirmClearChat = useCallback(() => {
-         if (activeChatId) {
-             // Clear history for the active chat optimistically
-             setChatSessions(prevSessions =>
+         const currentActiveChatIdForClear = currentActiveChatId; // Use value from closure
+         if (currentActiveChatIdForClear) {
+             setChatSessionsDirect(prevSessions =>
                  prevSessions.map(session =>
-                     session.id === activeChatId
+                     session.id === currentActiveChatIdForClear
                          ? { ...session, history: [], lastModified: Date.now() }
                          : session
                  )
              );
-             // Send message with chatId
-             postMessage({ type: 'clearChatHistory', payload: { chatId: activeChatId } });
+             postMessage({ type: 'clearChatHistory', payload: { chatId: currentActiveChatIdForClear } });
              setShowClearConfirm(false);
          }
-     }, [activeChatId, setChatSessions]); // Add activeChatId dependency
+     }, [currentActiveChatId, setChatSessionsDirect]); // Add dependency
 
      const cancelClearChat = useCallback(() => {
          setShowClearConfirm(false);
      }, []);
 
+    // Use values read outside
     const handleSuggestedActionClick = useCallback((action: SuggestedAction) => {
-        // Include activeChatId when sending message
-        const combinedModelIdForAction = activeChatProviderId && activeChatModelName ? `${activeChatProviderId}:${activeChatModelName}` : null;
-        if (activeChatId && activeChatProviderId && combinedModelIdForAction) {
+        const currentActiveChatIdForSuggest = currentActiveChatId;
+        const currentProviderIdForSuggest = currentProviderId;
+        const currentModelNameForSuggest = currentModelName;
+        const combinedModelIdForAction = currentProviderIdForSuggest && currentModelNameForSuggest ? `${currentProviderIdForSuggest}:${currentModelNameForSuggest}` : null;
+        if (currentActiveChatIdForSuggest && currentProviderIdForSuggest && combinedModelIdForAction) {
             switch (action.action_type) {
                 case 'send_message':
                     if (typeof action.value === 'string') {
-                        postMessage({ type: 'sendMessage', chatId: activeChatId, content: [{ type: 'text', text: action.value }], providerId: activeChatProviderId, modelId: combinedModelIdForAction });
-                        setIsStreaming(true);
+                        postMessage({ type: 'sendMessage', chatId: currentActiveChatIdForSuggest, content: [{ type: 'text', text: action.value }], providerId: currentProviderIdForSuggest, modelId: combinedModelIdForAction });
+                        setIsStreamingDirect(true);
                     } else { console.warn("Invalid value/state for send_message action"); }
                     break;
                 case 'run_tool':
                     if (typeof action.value === 'object' && action.value?.toolName) {
                         console.warn("run_tool action type not fully implemented yet.");
-                        postMessage({ type: 'logAction', message: `User wants to run tool: ${action.value.toolName} in chat ${activeChatId}` });
+                        postMessage({ type: 'logAction', message: `User wants to run tool: ${action.value.toolName} in chat ${currentActiveChatIdForSuggest}` });
                     } else { console.warn("Invalid value for run_tool action"); }
                     break;
                 case 'fill_input':
-                     if (typeof action.value === 'string') { setInputValue(action.value); }
+                     if (typeof action.value === 'string') { setInputValueDirect(action.value); }
                      else { console.warn("Invalid value for fill_input action"); }
                     break;
                 default: console.warn("Unknown suggested action type");
@@ -361,7 +463,7 @@ export function App() {
         } else {
              console.warn("Cannot handle suggested action: Missing activeChatId, provider, or model name for the chat.");
         }
-    }, [activeChatId, activeChatProviderId, activeChatModelName, setInputValue, setIsStreaming]); // Use separate provider/model name
+    }, [ currentActiveChatId, currentProviderId, currentModelName, setInputValueDirect, setIsStreamingDirect]); // Add dependencies
 
     const handleStopGeneration = useCallback(() => {
         console.log("[App Handler] Stop generation requested.");
@@ -378,12 +480,13 @@ export function App() {
     }, [setLocation]);
 
     // --- Chat List Handlers ---
+    // setActiveChatIdDirect defined above
     const handleSelectChat = useCallback((chatId: string) => {
         console.log(`[App Handler] Selecting chat: ${chatId}`);
-        setActiveChatId(chatId);
+        setActiveChatIdDirect(chatId);
         postMessage({ type: 'setActiveChat', payload: { chatId } }); // Inform backend
         setLocation('/index.html'); // Navigate back to chat view
-    }, [setLocation, setActiveChatId]);
+    }, [setLocation, setActiveChatIdDirect]); // Dependency is correct
 
     const handleCreateChat = useCallback(() => {
         console.log("[App Handler] Requesting new chat creation...");
@@ -401,19 +504,20 @@ export function App() {
     }, [setIsChatListLoading]); // Add dependency
 
     // --- Handler for Chat-Specific Model Change ---
-    // Now accepts separate providerId and modelName
+    // Use activeChatId read outside
     const handleChatModelChange = useCallback((newProviderId: string | null, newModelName: string | null) => {
-        if (activeChatId) {
-            console.log(`[App Handler] Updating model for chat ${activeChatId} to Provider: ${newProviderId}, Model: ${newModelName}`);
+        const currentActiveChatIdForModelChange = currentActiveChatId; // Use value from closure
+        if (currentActiveChatIdForModelChange) {
+            console.log(`[App Handler] Updating model for chat ${currentActiveChatIdForModelChange} to Provider: ${newProviderId}, Model: ${newModelName}`);
             const newConfig: Partial<ChatConfig> = {
                 providerId: newProviderId ?? undefined, // Store null as undefined
                 modelName: newModelName ?? undefined,   // Store null as undefined
                 useDefaults: false // Explicitly set model, so don't use defaults
             };
 
-            setChatSessions(prevSessions =>
+            setChatSessionsDirect(prevSessions =>
                 prevSessions.map(session =>
-                    session.id === activeChatId
+                    session.id === currentActiveChatIdForModelChange
                         ? {
                             ...session,
                             config: { ...session.config, ...newConfig }, // Merge new config parts
@@ -423,12 +527,12 @@ export function App() {
                 )
             );
             // Inform backend about the config change using separate fields
-            postMessage({ type: 'updateChatConfig', payload: { chatId: activeChatId, config: newConfig } });
+            postMessage({ type: 'updateChatConfig', payload: { chatId: currentActiveChatIdForModelChange, config: newConfig } });
 
         } else {
             console.warn("Cannot change chat model: No active chat selected.");
         }
-    }, [activeChatId, setChatSessions]); // Dependencies
+    }, [currentActiveChatId, setChatSessionsDirect]); // Add dependency
 
     // --- App-level Provider Change Handler ---
     // This now handles setting the provider *and* updating the chat's model
@@ -446,9 +550,12 @@ export function App() {
     }, [handleChatModelChange]);
 
     // --- Message Action Handlers ---
+    // Use values read outside
     const handleCopyMessage = useCallback((messageId: string) => {
-        if (!activeChatId) return;
-        const activeSession = chatSessions.find(session => session.id === activeChatId);
+        const currentActiveChatIdForCopy = currentActiveChatId;
+        const currentChatSessionsForCopy = currentChatSessions;
+        if (!currentActiveChatIdForCopy) return;
+        const activeSession = currentChatSessionsForCopy.find(session => session.id === currentActiveChatIdForCopy);
         const messageToCopy = activeSession?.history.find(msg => msg.id === messageId);
 
         if (messageToCopy && Array.isArray(messageToCopy.content)) {
@@ -473,17 +580,19 @@ export function App() {
         } else {
             console.warn(`Could not find message ${messageId} to copy.`);
         }
-    }, [chatSessions, activeChatId]);
+    }, [currentActiveChatId, currentChatSessions]); // Add dependencies
+// setChatSessionsDirect defined above
+const handleDeleteMessage = useCallback((messageId: string) => {
+    // Use value read outside
+    const currentActiveChatIdForDelete = currentActiveChatId;
+    if (!currentActiveChatIdForDelete) return;
 
-    const handleDeleteMessage = useCallback((messageId: string) => {
-        if (!activeChatId) return;
-
-        console.log(`Requesting delete message ${messageId} from chat ${activeChatId}`);
+    console.log(`Requesting delete message ${messageId} from chat ${currentActiveChatIdForDelete}`);
 
         // Optimistically update UI state
-        setChatSessions(prevSessions =>
+        setChatSessionsDirect(prevSessions =>
             prevSessions.map(session =>
-                session.id === activeChatId
+                session.id === currentActiveChatIdForDelete
                     ? {
                         ...session,
                         history: session.history.filter(msg => msg.id !== messageId),
@@ -494,13 +603,15 @@ export function App() {
         );
 
         // Inform backend to delete the message from persistent storage
-        postMessage({ type: 'deleteMessage', payload: { chatId: activeChatId, messageId } });
+        postMessage({ type: 'deleteMessage', payload: { chatId: currentActiveChatIdForDelete, messageId } });
 
-    }, [activeChatId, setChatSessions]);
+    }, [currentActiveChatId, setChatSessionsDirect]); // Add dependency
 
     // --- Main Render ---
     return (
         <Router>
+            {/* Add the non-rendering message handler component */}
+            <MessageHandlerComponent />
             <div class="app-layout h-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
                 <main class="content-area flex-1 flex flex-col overflow-y-auto p-4">
                     <Switch>
@@ -508,40 +619,28 @@ export function App() {
                             <div class="chat-container flex flex-col flex-1 h-full">
                                 {/* TODO: Update HeaderControls to potentially show chat name/list button */}
                                 <HeaderControls
-                                    // Pass the new props
-                                    availableProviders={availableProviders}
-                                    providerModelsMap={providerModelsMap}
-                                    selectedModelId={activeChatCombinedModelId ?? null}
-                                    onModelChange={handleModelSelectorChange} // Use the new wrapper handler
-                                    // Removed: handleClearChat, isStreaming, hasMessages
-                                    hasMessages={activeChatMessages.length > 0}
+                                    // Pass only the required callback props
+                                    onModelChange={handleModelSelectorChange}
                                     onSettingsClick={handleSettingsClick}
                                     onChatsClick={handleChatsClick}
                                 />
                                 <MessagesArea
-                                    messages={activeChatMessages} // Use derived messages
-                                    suggestedActionsMap={suggestedActionsMap}
+                                    // Removed props: messages, suggestedActionsMap, isStreaming
                                     handleSuggestedActionClick={handleSuggestedActionClick}
-                                    isStreaming={isStreaming}
                                     messagesEndRef={messagesEndRef}
                                     onCopyMessage={handleCopyMessage} // Pass copy handler
                                     onDeleteMessage={handleDeleteMessage} // Pass delete handler
                                 />
                                 <InputArea
-                                    inputValue={inputValue}
-                                    setInputValue={setInputValue}
-                                    handleInputChange={(e) => setInputValue(e.currentTarget.value)}
-                                    handleKeyDown={(e) => {
-                                         if (e.key === 'Enter' && !e.shiftKey && !isStreaming) {
-                                             e.preventDefault(); handleSend();
-                                         }
-                                     }}
+                                    // Pass only required props (callbacks, refs, image handlers)
+                                    // Pass refactored handleKeyDown
+                                    handleKeyDown={handleKeyDown}
                                     handleSend={handleSend}
-                                    isStreaming={isStreaming}
-                                    currentModelInput={activeChatModelName ?? ''} // Pass just the model name
-                                    selectedImages={selectedImages}
-                                    setSelectedImages={() => {}} // Dummy setter
-                                    fileInputRef={fileInputRef}
+                                    // Image related props from useImageUpload hook
+                                    // selectedImages prop removed as InputArea reads from atom
+                                    setSelectedImages={setSelectedImages}
+                                    fileInputRef={fileInputRef} // Keep ref from useImageUpload for now
+                                    // Removed duplicate fileInputRef prop
                                     triggerImageUpload={triggerImageUpload}
                                     removeSelectedImage={removeSelectedImage}
                                     handleImageFileChange={handleImageFileChange}
@@ -550,16 +649,12 @@ export function App() {
                             </div>
                         </Route>
                         <Route path="/settings">
-                            <SettingPage
-                                providerStatus={providerStatus}
-                                onProviderToggle={handleProviderToggle}
-                            />
+                            <SettingPage /> {/* Remove props */}
                         </Route>
                         {/* Chat List Route */}
                         <Route path="/chats">
                             <ChatListPage
-                                chatSessions={chatSessions}
-                                activeChatId={activeChatId}
+                                // Removed props: chatSessions, activeChatId
                                 onSelectChat={handleSelectChat}
                                 onCreateChat={handleCreateChat}
                                 onDeleteChat={handleDeleteChat}
@@ -568,13 +663,16 @@ export function App() {
                         </Route>
                         {/* Default route - Redirect to last active chat or chat list */}
                         <Route>
-                            {/* Default route redirect logic: If at root, redirect based on active chat */}
-                            {location === '/' ? (
-                                <Redirect to={activeChatId ? "/index.html" : "/chats"} />
-                            ) : (
-                                // Show 404 for any other unhandled path that wasn't restored
-                                <div class="p-6 text-center text-red-500">404: Page Not Found<br/>Path: {location}</div>
-                            )}
+                            {/* Default route component function */}
+                            {() => {
+                                // Read atom value inside the render function for freshness
+                                const currentActiveChatId = useAtomValue(activeChatIdAtom);
+                                if (location === '/') {
+                                    return <Redirect to={currentActiveChatId ? "/index.html" : "/chats"} />;
+                                }
+                                // Show 404 for any other unhandled path
+                                return <div class="p-6 text-center text-red-500">404: Page Not Found<br/>Path: {location}</div>;
+                            }}
                         </Route>
                     </Switch>
                 </main>

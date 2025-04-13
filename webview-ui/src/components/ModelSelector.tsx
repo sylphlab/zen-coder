@@ -1,16 +1,17 @@
 import { FunctionalComponent } from 'preact';
+import { useMemo } from 'preact/hooks'; // Import useMemo
+import { useAtomValue } from 'jotai'; // Import Jotai hook
 import { JSX } from 'preact/jsx-runtime';
 import { AvailableModel } from '../../../src/common/types';
-import { useModelSelection } from '../hooks/useModelSelection';
+// Removed: import { useModelSelection } from '../hooks/useModelSelection';
+import { availableProvidersAtom, providerModelsMapAtom } from '../store/atoms'; // Import atoms
 
 // Define the extended model type expected from the hook
-type FilteredModel = AvailableModel & { modelNamePart: string };
+// Removed FilteredModel type, will derive inline if needed
 
 interface ModelSelectorProps {
     labelPrefix?: string;
-    // Replace availableModels with the new structure
-    availableProviders: AvailableModel[]; // List of available providers (quick load)
-    providerModelsMap: Record<string, AvailableModel[]>; // Map of providerId -> loaded models
+    // Removed props: availableProviders, providerModelsMap
     selectedModelId: string | null;
     onModelChange: (newModelId: string) => void;
     // Optional: If provider selection should be handled externally (like in HeaderControls)
@@ -20,34 +21,45 @@ interface ModelSelectorProps {
 
 export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     labelPrefix = '',
-    // availableModels, // Removed
-    availableProviders, // Added
-    providerModelsMap, // Added
-    selectedModelId,
+    selectedModelId, // Keep this prop
     onModelChange,
-    // externalSelectedProvider,
-    // externalHandleProviderChange,
 }) => {
-    // Use the hook internally to manage provider/model state based on the selectedModelId
-    const {
-        selectedProvider,
-        setSelectedProvider,
-        displayModelName,
-        uniqueProviders,
-        filteredModels,
-        handleProviderChange: internalHandleProviderChange,
-    // Pass the new props structure to the hook
-    } = useModelSelection({ availableProviders, providerModelsMap, activeChatModelId: selectedModelId }); // Pass selectedModelId as activeChatModelId
+    // Read state from atoms
+    const availableProviders = useAtomValue(availableProvidersAtom);
+    const providerModelsMap = useAtomValue(providerModelsMapAtom);
+    // Derive state previously managed by the hook
+    const selectedProvider = useMemo(() => {
+        return selectedModelId ? selectedModelId.split(':')[0] : null;
+    }, [selectedModelId]);
 
-    // Determine which provider change handler to use
-    // const effectiveHandleProviderChange = externalHandleProviderChange ?? internalHandleProviderChange;
-    // const effectiveSelectedProvider = externalSelectedProvider ?? selectedProvider;
-    // For now, let the hook manage the provider selection internally based on selectedModelId
-    const effectiveSelectedProvider = selectedProvider;
+    const uniqueProviders = useMemo(() => {
+        // Derive unique providers from availableProviders atom
+        const providerMap = new Map<string, { id: string; name: string }>();
+        availableProviders.forEach(model => { // AvailableModel only has id and providerId
+            if (!providerMap.has(model.providerId)) {
+                // Infer provider name from providerId (e.g., capitalize) or use providerId itself
+                const providerName = model.providerId.charAt(0).toUpperCase() + model.providerId.slice(1).toLowerCase();
+                providerMap.set(model.providerId, { id: model.providerId, name: providerName });
+            }
+        });
+        return Array.from(providerMap.values());
+    }, [availableProviders]);
+
+    const filteredModels = useMemo(() => {
+        // Derive filtered models based on selectedProvider and providerModelsMap atom
+        if (!selectedProvider) return [];
+        const models = providerModelsMap[selectedProvider] || [];
+        return models.map(m => ({
+            ...m,
+            modelNamePart: m.id.split(':').slice(1).join(':') || m.name // Add modelNamePart
+        }));
+    }, [selectedProvider, providerModelsMap]);
+
+    const effectiveSelectedProvider = selectedProvider; // Use derived provider
 
     // Handler for provider change - updates internal hook state and selects first model
     const handleProviderSelect = (e: JSX.TargetedEvent<HTMLSelectElement>) => {
-        internalHandleProviderChange(e); // Update the provider in the hook state
+        // No internal hook state to update
         const newProviderId = e.currentTarget.value;
         if (newProviderId) {
             // Use providerModelsMap to find the first model
@@ -82,7 +94,7 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
             const modelsForSelectedProvider = providerModelsMap[selectedProvider] || [];
             // We need the modelNamePart logic here or rely on filteredModels from the hook
             const selectedModelByNamePart = modelsForSelectedProvider
-                .map(m => ({ ...m, modelNamePart: m.id.split(':').slice(1).join(':') || m.name })) // Add modelNamePart temporarily
+                .map(m => ({ ...m, modelNamePart: m.id.split(':').slice(1).join(':') })) // Add modelNamePart, remove non-existent m.name fallback
                 .find(m => m.modelNamePart === rawInputValue);
 
             if (selectedModelByNamePart) {
@@ -144,7 +156,8 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                 id={modelInputId}
                 name={modelInputId}
                 // Bind the input's displayed value to the model name part derived by the hook
-                value={selectedModelId ? selectedModelId.split(':').slice(1).join(':') : ''} // Always derive from selectedModelId prop
+                // Derive display value from selectedModelId prop
+                value={selectedModelId ? selectedModelId.split(':').slice(1).join(':') : ''}
                 onInput={handleModelInput}
                 placeholder={effectiveSelectedProvider ? "Select or type model" : "Select provider"}
                 disabled={!effectiveSelectedProvider}
@@ -154,7 +167,7 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                 {filteredModels.map(model => (
                     // Use the full ID as the value for the datalist option
                     <option key={model.id} value={model.id}>
-                        {model.modelNamePart} {/* Display only the model name part */}
+                        {model.modelNamePart || model.id} {/* Display name part or full ID as fallback */}
                     </option>
                 ))}
             </datalist>

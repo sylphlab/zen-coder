@@ -1,21 +1,21 @@
 import { FunctionalComponent } from 'preact';
+import { useAtomValue } from 'jotai'; // Import Jotai hook
 import { Ref } from 'preact'; // Import Ref from preact
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { SuggestedAction } from '../app'; // Keep SuggestedAction if defined there
-import { UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, UiImagePart } from '../../../src/common/types'; // Import directly from common types
-// Define a UI-specific message type that includes the 'thinking' state
-interface DisplayMessage extends UiMessage {
-    thinking?: string;
-}
-
+import { UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, UiImagePart } from '../../../src/common/types';
+import {
+    activeChatMessagesAtom,
+    suggestedActionsMapAtom,
+    isStreamingAtom
+} from '../store/atoms'; // Import atoms
+// Removed DisplayMessage interface definition below
 interface MessagesAreaProps {
-    messages: DisplayMessage[]; // Use the local DisplayMessage type
-    suggestedActionsMap: Record<string, SuggestedAction[]>;
+    // Removed props: messages, suggestedActionsMap, isStreaming
     handleSuggestedActionClick: (action: SuggestedAction) => void;
-    isStreaming: boolean;
     messagesEndRef: Ref<HTMLDivElement>;
     onCopyMessage: (messageId: string) => void; // Add copy handler prop
     onDeleteMessage: (messageId: string) => void; // Add delete handler prop
@@ -104,14 +104,15 @@ const renderContentPart = (part: UiMessageContentPart, index: number) => {
 
 
 export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
-    messages,
-    suggestedActionsMap,
     handleSuggestedActionClick,
-    isStreaming,
     messagesEndRef,
     onCopyMessage, // Destructure new props
     onDeleteMessage
 }) => {
+    // Read state from atoms
+    const messages = useAtomValue(activeChatMessagesAtom);
+    const suggestedActionsMap = useAtomValue(suggestedActionsMapAtom);
+    const isStreaming = useAtomValue(isStreamingAtom);
     return (
         <div class="messages-area flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((msg) => (
@@ -143,16 +144,7 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
                     </div>
                     {/* Original message content */}
                     <div class={`message-content p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
-                        {/* Render Thinking Process */}
-                        {msg.sender === 'assistant' && msg.thinking && (
-                            <div class="thinking-process mb-2 pb-2 border-b border-gray-300 dark:border-gray-600">
-                                <div class="prose dark:prose-invert prose-xs max-w-none text-gray-600 dark:text-gray-400 italic">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                        {`Thinking:\n${msg.thinking}`}
-                                    </ReactMarkdown>
-                                </div>
-                            </div>
-                        )}
+                        {/* Removed Thinking Process rendering */}
                         {/* Render Main Content Parts */}
                         {Array.isArray(msg.content) ? msg.content.map(renderContentPart) : null}
                         {/* Render Suggested Actions */}

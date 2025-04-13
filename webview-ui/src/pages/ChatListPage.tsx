@@ -1,26 +1,28 @@
 import { FunctionalComponent } from 'preact';
-import { useState, useCallback } from 'preact/hooks'; // Import useState and useCallback
-import { ChatSession } from '../../../src/common/types'; // Import common type
-import { ConfirmationDialog } from '../components/ConfirmationDialog'; // Import the dialog component
+import { useState, useCallback } from 'preact/hooks';
+import { useAtomValue } from 'jotai'; // Import Jotai hook
+import { ChatSession } from '../../../src/common/types';
+import { ConfirmationDialog } from '../components/ConfirmationDialog';
+import { chatSessionsAtom, activeChatIdAtom } from '../store/atoms'; // Import atoms
 interface ChatListPageProps {
-    chatSessions: ChatSession[];
-    activeChatId: string | null;
+    // Removed state props: chatSessions, activeChatId
     onSelectChat: (chatId: string) => void;
     onCreateChat: () => void;
     onDeleteChat: (chatId: string) => void;
-    isLoading: boolean; // Add isLoading prop
+    isLoading: boolean;
     // Add navigation function if needed, e.g., back to chat view
     // onNavigate: (path: string) => void;
 }
 
 export const ChatListPage: FunctionalComponent<ChatListPageProps> = ({
-    chatSessions,
-    activeChatId,
     onSelectChat,
     onCreateChat,
     onDeleteChat,
-    isLoading, // Destructure isLoading
+    isLoading,
 }) => {
+    // Read state from atoms
+    const chatSessions = useAtomValue(chatSessionsAtom);
+    const activeChatId = useAtomValue(activeChatIdAtom);
 
     // State for confirmation dialog
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
