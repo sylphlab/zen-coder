@@ -62,9 +62,11 @@ export class StreamProcessor {
                         break;
                     case 'reasoning':
                         // Handle reasoning steps: send to UI for display
-                        console.log("[StreamProcessor] Reasoning:", part.textDelta);
+                        console.log("[StreamProcessor] Reasoning Part Received:", part.textDelta); // Add detailed log
                         // Send the thinking chunk to the UI
-                        this._postMessageCallback({ type: 'appendThinkingChunk', sender: 'assistant', textDelta: part.textDelta });
+                        const thinkingMessage = { type: 'appendThinkingChunk', sender: 'assistant', textDelta: part.textDelta };
+                        console.log("[StreamProcessor] Posting thinking chunk to UI:", JSON.stringify(thinkingMessage)); // Log the message being sent
+                        this._postMessageCallback(thinkingMessage);
                         // Note: We might not want to save reasoning steps to the main history
                         // await this._historyManager.appendReasoningChunk(assistantMessageId, part.textDelta); // Requires HistoryManager update if needed
                         break;

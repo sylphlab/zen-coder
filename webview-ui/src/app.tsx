@@ -18,6 +18,7 @@ export interface Message { // Renamed from UiMessage to avoid conflict, but stru
     sender: 'user' | 'assistant';
     content: UiMessageContentPart[];
     timestamp: number;
+    thinking?: string; // Add optional thinking property
 }
 // --- End UI Message Structure Definition ---
 
@@ -122,7 +123,7 @@ export function App() {
     const [suggestedActionsMap, setSuggestedActionsMap] = useState<Record<string, SuggestedAction[]>>({}); // State for suggested actions
     const [selectedImages, setSelectedImages] = useState<{ id: string; data: string; mediaType: string; name: string }[]>([]); // State for selected images (array)
     const fileInputRef = useRef<HTMLInputElement>(null); // Ref for file input
-    const [thinkingText, setThinkingText] = useState<string>(''); // State for AI thinking process
+    // Remove the separate thinkingText state
 
     // --- Derived State ---
     const uniqueProviders = useMemo(() => {
@@ -181,7 +182,7 @@ export function App() {
                     break;
                 case 'startAssistantMessage': // Signal to start a new assistant message block
                      setIsStreaming(true);
-                     setThinkingText(''); // Clear thinking text when new message starts
+                     // No need to clear separate thinkingText state anymore
                      // Use the messageId directly from the payload sent by the backend
                      if (message.messageId) {
                          const newAssistantMessageId = message.messageId;
@@ -194,7 +195,8 @@ export function App() {
                                  id: newAssistantMessageId,
                                  sender: 'assistant',
                                  content: [], // Start with empty content
-                                 timestamp: Date.now()
+                                 timestamp: Date.now(),
+                                 // thinking: undefined // Ensure new message starts without thinking text
                              }
                          ]);
                      } else {
@@ -339,7 +341,13 @@ export function App() {
                     console.log("Stream finished signal received.");
                     setIsStreaming(false);
                     currentAssistantMessageId.current = null;
-                    setThinkingText(''); // Clear thinking text when stream finishes
+                    // Clear thinking text from the specific message when stream finishes
+                    setMessages(prev => prev.map(msg => {
+                        if (msg.id === currentAssistantMessageId.current) {
+                            return { ...msg, thinking: undefined }; // Remove thinking text
+                        }
+                        return msg;
+                    }));
                     break;
                 case 'addSuggestedActions': // Handle suggested actions from backend
                     if (message.payload && message.payload.messageId && Array.isArray(message.payload.actions)) {
@@ -352,9 +360,18 @@ export function App() {
                         console.warn("Received addSuggestedActions with invalid payload:", message.payload);
                     }
                     break;
-                case 'appendThinkingChunk': // Handle thinking process chunks
-                    if (message.textDelta) {
-                        setThinkingText(prev => prev + message.textDelta);
+                case 'appendThinkingChunk': // Handle thinking process chunks for the current message
+                    console.log("[App.tsx] Received appendThinkingChunk:", message.textDelta);
+                    if (message.textDelta && currentAssistantMessageId.current) {
+                        setMessages(prev => prev.map(msg => {
+                            if (msg.id === currentAssistantMessageId.current) {
+                                const currentThinking = msg.thinking ?? '';
+                                const newThinking = currentThinking + message.textDelta;
+                                console.log(`[App.tsx] Updating thinking for message ${msg.id}:`, newThinking);
+                                return { ...msg, thinking: newThinking };
+                            }
+                            return msg;
+                        }));
                     }
                     break;
             }
@@ -406,7 +423,7 @@ export function App() {
                 fileInputRef.current.value = ''; // Reset file input visually
             }
             setIsStreaming(true); // Set streaming immediately for responsiveness
-            setThinkingText(''); // Clear thinking text when sending new message
+            // No separate thinkingText state to clear
             currentAssistantMessageId.current = null; // Reset before new message stream
         } else if (!currentModelInput) {
              console.warn("Cannot send message: No model selected or entered.");
@@ -701,16 +718,26 @@ export function App() {
                                 {messages.map((msg) => (
                                     <div key={msg.id} class={`message flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
                                         <div class={`message-content p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
-                                            {/* Render content parts */}
+                                            {/* Render Thinking Process (if assistant and exists) */}
+                                            {msg.sender === 'assistant' && msg.thinking && (
+                                                <div class="thinking-process mb-2 pb-2 border-b border-gray-300 dark:border-gray-600">
+                                                    <div class="prose dark:prose-invert prose-xs max-w-none text-gray-600 dark:text-gray-400 italic">
+                                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                            {`Thinking:\n${msg.thinking}`}
+                                                        </ReactMarkdown>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {/* Render Main Content Parts */}
                                             {Array.isArray(msg.content) ? msg.content.map(renderContentPart) : null}
-                                            {/* Render Suggested Actions if they exist for this message */}
-                                            {suggestedActionsMap[msg.id] && msg.sender === 'assistant' && (
-                                                <div class="suggested-actions mt-2 flex flex-wrap gap-2">
+                                            {/* Render Suggested Actions (if assistant and exist) */}
+                                            {msg.sender === 'assistant' && suggestedActionsMap[msg.id] && (
+                                                <div class="suggested-actions mt-2 pt-2 border-t border-gray-300 dark:border-gray-600 flex flex-wrap gap-2">
                                                     {suggestedActionsMap[msg.id].map((action, actionIndex) => (
                                                         <button
                                                             key={actionIndex}
                                                             onClick={() => handleSuggestedActionClick(action)}
-                                                            disabled={isStreaming} // Disable buttons while streaming
+                                                            disabled={isStreaming}
                                                             class="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                                         >
                                                             {action.label}
@@ -721,22 +748,7 @@ export function App() {
                                         </div>
                                     </div>
                                 ))}
-                                {/* Thinking Indicator / Display */}
-                                {(isStreaming || thinkingText) && ( // Show if streaming OR there's thinking text
-                                    <div class="message flex justify-start">
-                                        <div class="message-content p-3 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 italic text-xs">
-                                            {thinkingText ? (
-                                                <div class="prose dark:prose-invert prose-xs max-w-none">
-                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                                        {`Thinking:\n${thinkingText}`}
-                                                    </ReactMarkdown>
-                                                </div>
-                                            ) : (
-                                                <span>Thinking...</span> // Show default if no thinking text yet but streaming
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
+                                {/* Remove the separate thinking indicator block */}
                                 <div ref={messagesEndRef} />
                             </div>
                             {/* Input Area */}
