@@ -28,6 +28,7 @@ import { SetToolEnabledHandler } from './webview/handlers/SetToolEnabledHandler'
 import { GetMcpConfiguredStatusHandler } from './webview/handlers/GetMcpConfiguredStatusHandler';
 import { TestMcpConnectionHandler } from './webview/handlers/TestMcpConnectionHandler'; // This handler is now defunct
 import { RetryMcpConnectionHandler } from './webview/handlers/RetryMcpConnectionHandler'; // Import the new retry handler
+import { StopGenerationHandler } from './webview/handlers/StopGenerationHandler'; // Import the stop handler
 import { openOrCreateMcpConfigFile } from './utils/configUtils'; // Import the helper function
 import { allTools, ToolName } from './tools'; // Import allTools map
 
@@ -162,6 +163,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new GetMcpConfiguredStatusHandler(), // Doesn't need AiService directly, uses context
             // new TestMcpConnectionHandler(), // Keep commented out or remove, as it's defunct
             new RetryMcpConnectionHandler(), // Register the new retry handler
+            new StopGenerationHandler(this._aiService), // Register the stop handler
             // Add other handlers here
         ];
 

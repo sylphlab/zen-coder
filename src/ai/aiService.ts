@@ -21,6 +21,7 @@ export type ApiProviderKey = AiService['allProviders'][number]['id'];
 export class AiService {
     private currentModelId: string = 'claude-3-5-sonnet';
     private postMessageCallback?: (message: any) => void;
+    private activeAbortController: AbortController | null = null; // Controller for the active stream
 
     public readonly allProviders: AiProvider[];
     public readonly providerMap: Map<string, AiProvider>;
@@ -188,6 +189,14 @@ export class AiService {
         const enabledTools = this._prepareToolSet(); // Get the filtered toolset
 
         // --- Call streamText ---
+        // Ensure any previous controller is cleared (shouldn't happen often, but safety)
+        if (this.activeAbortController) {
+            console.warn('[AiService] Found existing AbortController before starting new stream. Aborting previous.');
+            this.activeAbortController.abort('New stream started');
+        }
+        this.activeAbortController = new AbortController();
+        const abortSignal = this.activeAbortController.signal;
+
         try {
             const streamTextResult = await streamText({
                 toolCallStreaming: true,
@@ -195,9 +204,12 @@ export class AiService {
                 messages: messagesForApi,
                 tools: enabledTools, // Pass the filtered tools
                 maxSteps: 100,
+                abortSignal: abortSignal, // Pass the signal
                 experimental_continueSteps: true,
                 onFinish: async ({ text, toolCalls, toolResults, finishReason, usage }) => {
-                    console.log('[AiService] streamText finished. MCP clients remain active.');
+                    console.log('[AiService] streamText finished.');
+                    // Clear the controller when finished naturally
+                    this.activeAbortController = null;
                 },
                 experimental_repairToolCall: async ({
                     toolCall,
@@ -267,6 +279,13 @@ export class AiService {
                   vscode.window.showErrorMessage(`Error interacting with AI: ${error.message}`);
              }
              throw error; // Rethrow the error
+        } finally {
+            // Ensure the controller is cleared even if an error occurs during streaming setup or processing
+            // Note: If abort() was called, this might be redundant but harmless.
+            if (this.activeAbortController?.signal === abortSignal) {
+                this.activeAbortController = null;
+                console.log('[AiService] Active AbortController cleared in finally block.');
+            }
         }
     }
 
@@ -313,7 +332,19 @@ export class AiService {
          }
      }
 
-    // --- Public Methods Delegating to McpManager ---
+   // --- Stream Control ---
+   public abortCurrentStream(): void {
+       if (this.activeAbortController) {
+           console.log('[AiService] Aborting current AI stream...');
+           this.activeAbortController.abort('User requested cancellation');
+           this.activeAbortController = null; // Clear immediately after aborting
+           console.log('[AiService] Stream aborted.');
+       } else {
+           console.warn('[AiService] Attempted to abort stream, but no active stream found.');
+       }
+   }
+
+   // --- Public Methods Delegating to McpManager ---
 
     /**
      * Gets the current status of all configured MCP servers.

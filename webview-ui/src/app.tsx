@@ -220,6 +220,13 @@ export function App() {
         }
     }, [currentModelInput, selectedProvider, setInputValue, setIsStreaming]);
 
+    const handleStopGeneration = useCallback(() => {
+        console.log("[App Handler] Stop generation requested.");
+        postMessage({ type: 'stopGeneration' });
+        // Note: setIsStreaming(false) will be handled by the streamFinished message
+        // received via useMessageHandler when the stream is actually terminated.
+    }, []);
+
     // --- Event Handlers (Navigation) ---
     const handleSettingsClick = useCallback(() => {
         // console.log("[App Handler] Settings icon clicked, navigating to /settings");
@@ -272,6 +279,7 @@ export function App() {
                                     triggerImageUpload={triggerImageUpload}
                                     removeSelectedImage={removeSelectedImage}
                                     handleImageFileChange={handleImageFileChange}
+                                    handleStopGeneration={handleStopGeneration} // Pass the handler
                                 />
                             </div>
                         </Route>

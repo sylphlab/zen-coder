@@ -25,6 +25,7 @@ interface InputAreaProps {
     triggerImageUpload: () => void;
     removeSelectedImage: (id: string) => void;
     handleImageFileChange: (event: JSX.TargetedEvent<HTMLInputElement>) => void;
+    handleStopGeneration: () => void; // Add prop for stop handler
 }
 
 export const InputArea: FunctionalComponent<InputAreaProps> = ({
@@ -40,7 +41,8 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
     fileInputRef,
     triggerImageUpload,
     removeSelectedImage,
-    handleImageFileChange // Pass the handler down
+    handleImageFileChange, // Pass the handler down
+    handleStopGeneration // Destructure the new prop
 }) => {
 
     return (
@@ -101,14 +103,27 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
                     disabled={isStreaming || !currentModelInput}
                     class="flex-1 p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 resize-none mr-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
-                {/* Send Button */}
-                <button
-                    onClick={handleSend}
-                    disabled={isStreaming || (!inputValue.trim() && selectedImages.length === 0) || !currentModelInput}
-                    class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed self-end"
-                >
-                    Send
-                </button>
+                {/* Send/Stop Buttons */}
+                {isStreaming ? (
+                    <button
+                        onClick={handleStopGeneration}
+                        class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 self-end"
+                        title="Stop Generating"
+                    >
+                        {/* Simple Square Icon */}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                           <path fill-rule="evenodd" d="M5 5a1 1 0 011-1h8a1 1 0 011 1v8a1 1 0 01-1 1H6a1 1 0 01-1-1V5z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+                ) : (
+                    <button
+                        onClick={handleSend}
+                        disabled={(!inputValue.trim() && selectedImages.length === 0) || !currentModelInput}
+                        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed self-end"
+                    >
+                        Send
+                    </button>
+                )}
             </div>
         </div>
     );

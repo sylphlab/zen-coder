@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-UI Refactoring complete. Next step is likely resuming image upload functionality or addressing other pending tasks.
+Implemented stream cancellation functionality.
 
 ## Recent Changes
 - **UI Refactoring (Navigation &amp; Layout):**
@@ -9,6 +9,20 @@ UI Refactoring complete. Next step is likely resuming image upload functionality
     - Added settings icon button to `HeaderControls.tsx` for navigation to `/settings`.
     - Added back button to `SettingPage.tsx` for navigation back to chat (`/index.html`).
     - Resolved complex rendering issues caused by conflicts between `wouter` routing (`<Router>`, `<Route>`) and Flexbox layout (`flex-1`, `h-full`). Final solution involved using `<Switch>`, correcting the chat route path to `/index.html`, and ensuring Flexbox properties were correctly applied within route components.
+- **Implemented Stream Cancellation:**
+    - Added `AbortController` management to `src/ai/aiService.ts` (`getAiResponseStream`).
+    - Added `abortCurrentStream` method to `src/ai/aiService.ts`.
+    - Created `src/webview/handlers/StopGenerationHandler.ts` to call `abortCurrentStream`.
+    - Registered `StopGenerationHandler` in `src/extension.ts`.
+    - Added "Stop Generating" button to `webview-ui/src/components/InputArea.tsx` (visible during streaming).
+    - Updated `webview-ui/src/app.tsx` to pass the `handleStopGeneration` callback to `InputArea`.
+- **Implemented Stream Cancellation:**
+    - Added `AbortController` management to `src/ai/aiService.ts` (`getAiResponseStream`).
+    - Added `abortCurrentStream` method to `src/ai/aiService.ts`.
+    - Created `src/webview/handlers/StopGenerationHandler.ts` to call `abortCurrentStream`.
+    - Registered `StopGenerationHandler` in `src/extension.ts`.
+    - Added "Stop Generating" button to `webview-ui/src/components/InputArea.tsx` (visible during streaming).
+    - Updated `webview-ui/src/app.tsx` to pass the `handleStopGeneration` callback to `InputArea`.
 - **Updated `src/ai/aiService.ts`:** Modified `getAiResponseStream` to accept `history: CoreMessage[]` (which includes the latest user message with potential image parts) instead of a separate `prompt: string`, aligning with `HistoryManager` updates for image upload support.
 - **Refactored MCP Management:**
     - Created `src/ai/mcpManager.ts` to encapsulate all MCP-related logic (config loading/watching, client initialization/management, tool fetching/caching, error tracking, retry logic).
@@ -201,8 +215,8 @@ UI Refactoring complete. Next step is likely resuming image upload functionality
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** UI Refactoring complete.
-- **Next:** Resume image upload task: update `AiService.ts` to handle `UiMessageContentPart[]` in `getAiResponseStream`.
+- **Current Task:** Stream cancellation implemented.
+- **Next:** Resume image upload task (verify `AiService.ts` handles `UiMessageContentPart[]` correctly, test thoroughly).
 - **Future:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, `renameSymbol`, `getConfiguration`, debugging tools, `runCommandTool` exit code).
 - **Future:** Confirm `replaceInActiveEditorTool` insertion capability.
 - **Future:** Test structured output and suggested actions thoroughly.
@@ -265,7 +279,7 @@ UI Refactoring complete. Next step is likely resuming image upload functionality
 - **Tooling (Filesystem - Background):**
    - Filesystem tools refactored for consistency (Glob paths, unified `lineRange`, clear separation of `replaceContent`/`editFile`).
    - Prioritize inline status; confirm results passed to AI.
-- **Persistence:** Use `globalState` for history, `vscode.getState/setState` for webview state.
+- **Persistence:** Use `globalState` for history, `vscode.getState/setState` for webview state. Existing history logic should handle saving partial messages on stream abort.
 - **Dependencies/Setup:** Integrated Vite, Preact, UnoCSS, wouter, etc.
 - **UI Navigation:** Finalized navigation using settings icon in `HeaderControls` and back button in `SettingPage`, removing top nav bar. Routing handled by `wouter` with `<Switch>`.
 - **Previous Decisions:** (Includes items like routing, dynamic OpenRouter fetch, API key handling, etc.)
