@@ -1,5 +1,5 @@
 import { MessageHandler, HandlerContext } from './MessageHandler';
-import { McpServerTestResult } from '../../ai/aiService'; // Import the result type
+// McpServerTestResult type removed as test logic is disabled
 
 /**
  * Handles the 'testMcpConnection' message from the webview.
@@ -36,7 +36,7 @@ export class TestMcpConnectionHandler implements MessageHandler {
                         error: "Test function removed. Connection status shown directly.",
                         toolCount: 0,
                         durationMs: 0
-                    } satisfies McpServerTestResult // Ensure structure matches
+                    } // Structure matches the expected payload, McpServerTestResult removed
                 }
             });
         } catch (error) {

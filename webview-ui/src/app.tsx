@@ -195,7 +195,7 @@ export function App() {
                     postMessage({ type: 'logAction', message: `User wants to run tool: ${action.value.toolName}` });
                 } else { console.warn("Invalid value for run_tool action"); }
                 break;
-            t':
+            case 'fill_input':
                  if (typeof action.value === 'string') { setInputValue(action.value); }
                  else { console.warn("Invalid value for fill_input action"); }
                 break;
