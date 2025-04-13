@@ -58,31 +58,43 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
 
     // Handler for model input change - reconstructs ID if needed and calls onModelChange
     const handleModelInput = (e: JSX.TargetedEvent<HTMLInputElement>) => {
-        const inputValue = e.currentTarget.value;
+        const rawInputValue = e.currentTarget.value; // The value from the input field (potentially just model name)
         let finalModelId = ''; // Default to empty if no match
 
         // Check if the input value exactly matches a known model ID
-        const modelFromDataList = availableModels.find(m => m.id === inputValue);
+        const modelFromDataList = availableModels.find(m => m.id === rawInputValue);
 
         if (modelFromDataList) {
             finalModelId = modelFromDataList.id; // Exact match found
         } else if (selectedProvider) {
             // If not an exact ID match, and a provider is selected,
             // check if the input value matches a modelNamePart for the current provider
-            const selectedModelByNamePart = filteredModels.find(m => m.modelNamePart === inputValue && m.providerId === selectedProvider);
+            const selectedModelByNamePart = filteredModels.find(m => m.modelNamePart === rawInputValue && m.providerId === selectedProvider);
             if (selectedModelByNamePart) {
                 finalModelId = selectedModelByNamePart.id; // Match by name part found
-            } else if (!inputValue.includes(':')) {
-                 // If still no match and input doesn't look like a full ID,
-                 // assume user is typing a new/unknown model name for the selected provider
-                 finalModelId = `${selectedProvider}:${inputValue}`;
             } else {
-                 // Input looks like a full ID but doesn't match known models, treat as is
-                 finalModelId = inputValue;
+                // Input doesn't match a known model ID or name part for the selected provider.
+                // Assume user is typing a model name (or potentially a full ID).
+                // We need to construct the correct providerId:modelName format.
+                let modelNamePartToUse = rawInputValue;
+                // If the input contains ':', assume it might be a full ID or malformed.
+                // Extract the part *after* the first colon as the intended model name.
+                if (rawInputValue.includes(':')) {
+                    modelNamePartToUse = rawInputValue.split(':').slice(1).join(':');
+                }
+                // Construct the final ID using the selectedProvider and the extracted/original model name part.
+                // Ensure modelNamePartToUse is not empty before constructing.
+                if (modelNamePartToUse) {
+                    finalModelId = `${selectedProvider}:${modelNamePartToUse}`;
+                } else {
+                    // If model name part is empty, maybe clear the selection or use a default?
+                    // For now, let's emit an empty string to signify clearing.
+                    finalModelId = '';
+                }
             }
         } else {
              // No provider selected, treat input as is (likely won't be valid)
-             finalModelId = inputValue;
+             finalModelId = rawInputValue;
         }
 
         // Call the callback with the determined model ID
@@ -116,7 +128,7 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                 id={modelInputId}
                 name={modelInputId}
                 // Bind the input's displayed value to the model name part derived by the hook
-                value={displayModelName}
+                value={selectedModelId ? selectedModelId.split(':').slice(1).join(':') : ''} // Always derive from selectedModelId prop
                 onInput={handleModelInput}
                 placeholder={effectiveSelectedProvider ? "Select or type model" : "Select provider"}
                 disabled={!effectiveSelectedProvider}

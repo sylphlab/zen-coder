@@ -14,13 +14,14 @@ import { ConfirmationDialog } from './components/ConfirmationDialog';
 import {
     AvailableModel,
     SuggestedAction as CommonSuggestedAction,
-    ChatSession, // Import ChatSession
+    ChatSession,
+    ChatConfig, // <-- Add missing import
     UiMessageContentPart,
-    UiMessage, // Renaming internal Message type to avoid conflict
+    UiMessage,
     UiToolCallPart,
     UiTextMessagePart,
     UiImagePart
-} from '../../src/common/types'; // Import ChatSession
+} from '../../src/common/types';
 
 // --- Type Definitions ---
 export type SuggestedAction = CommonSuggestedAction;
@@ -105,13 +106,30 @@ export function App() {
 
     // Destructure from useModelSelection, removing handleModelInputChange
     // --- Derived State for Model Selection ---
-    const activeChatEffectiveModelId = useMemo(() => {
+    // Derive active chat's provider and model name separately
+    const activeChatProviderId = useMemo(() => {
         if (!activeChatId) return null;
         const activeSession = chatSessions.find(session => session.id === activeChatId);
         if (!activeSession) return null;
-        // TODO: Implement logic to get default model ID from settings if useDefaults is true
-        return activeSession.config.chatModelId || null; // Return null if no model is set
+        // TODO: Implement logic to get default provider ID from settings if useDefaults is true
+        return activeSession.config.providerId || null;
     }, [chatSessions, activeChatId]);
+
+    const activeChatModelName = useMemo(() => {
+        if (!activeChatId) return null;
+        const activeSession = chatSessions.find(session => session.id === activeChatId);
+        if (!activeSession) return null;
+        // TODO: Implement logic to get default model name from settings if useDefaults is true
+        return activeSession.config.modelName || null;
+    }, [chatSessions, activeChatId]);
+
+    // Combine them into the format needed by useModelSelection (or maybe adjust the hook later)
+    const activeChatCombinedModelId = useMemo(() => {
+        if (activeChatProviderId && activeChatModelName) {
+            return `${activeChatProviderId}:${activeChatModelName}`;
+        }
+        return null;
+    }, [activeChatProviderId, activeChatModelName]);
 
     const {
         availableModels, // Add back availableModels
@@ -122,7 +140,7 @@ export function App() {
         uniqueProviders,
         filteredModels,
         handleProviderChange: handleProviderSelectChange,
-    } = useModelSelection(undefined, activeChatEffectiveModelId);
+    } = useModelSelection(undefined, activeChatCombinedModelId); // Pass combined ID to hook for now
 
     // Update useMessageHandler hook call to manage chatSessions and activeChatId
     // Pass the required state and setters to the updated hook
@@ -218,7 +236,7 @@ export function App() {
     // --- Event Handlers (Remaining in App) ---
     const handleSend = useCallback(() => {
         // Use activeChatId
-        if ((inputValue.trim() || selectedImages.length > 0) && !isStreaming && activeChatEffectiveModelId && selectedProvider && activeChatId) {
+        if ((inputValue.trim() || selectedImages.length > 0) && !isStreaming && activeChatProviderId && activeChatModelName && activeChatId) { // Use separate provider/model name check
             const contentParts: UiMessageContentPart[] = [];
             selectedImages.forEach(img => {
                 contentParts.push({ type: 'image', mediaType: img.mediaType, data: img.data });
@@ -236,16 +254,24 @@ export function App() {
                 )
             );
             // Send message with chatId
-            postMessage({ type: 'sendMessage', chatId: activeChatId, content: contentParts, providerId: selectedProvider, modelId: activeChatEffectiveModelId });
+            // Combine provider and model name for the backend message
+            const combinedModelId = activeChatProviderId && activeChatModelName ? `${activeChatProviderId}:${activeChatModelName}` : null;
+            if (combinedModelId) {
+                 postMessage({ type: 'sendMessage', chatId: activeChatId, content: contentParts, providerId: activeChatProviderId, modelId: combinedModelId });
+            } else {
+                 console.error("Cannot send message: Missing provider or model name for active chat.");
+                 setIsStreaming(false); // Stop streaming indicator if we can't send
+                 return; // Prevent sending
+            }
             setInputValue('');
             clearSelectedImages();
             setIsStreaming(true);
         } else if (!activeChatId) {
              console.warn("Cannot send message: No active chat selected.");
-        } else if (!activeChatEffectiveModelId || !selectedProvider) {
+        } else if (!activeChatProviderId || !activeChatModelName) {
              console.warn("Cannot send message: Provider or Model not selected for the active chat.");
         }
-    }, [inputValue, selectedImages, isStreaming, activeChatEffectiveModelId, selectedProvider, activeChatId, clearSelectedImages, setChatSessions, setIsStreaming, setInputValue]); // Use activeChatEffectiveModelId
+    }, [inputValue, selectedImages, isStreaming, activeChatProviderId, activeChatModelName, activeChatId, clearSelectedImages, setChatSessions, setIsStreaming, setInputValue]); // Use separate provider/model name
 
     const handleProviderToggle = useCallback((providerId: string, enabled: boolean) => {
          setProviderStatus(prevStatus =>
@@ -286,11 +312,12 @@ export function App() {
 
     const handleSuggestedActionClick = useCallback((action: SuggestedAction) => {
         // Include activeChatId when sending message
-        if (activeChatId && selectedProvider && activeChatEffectiveModelId) {
+        const combinedModelIdForAction = activeChatProviderId && activeChatModelName ? `${activeChatProviderId}:${activeChatModelName}` : null;
+        if (activeChatId && activeChatProviderId && combinedModelIdForAction) {
             switch (action.action_type) {
                 case 'send_message':
                     if (typeof action.value === 'string') {
-                        postMessage({ type: 'sendMessage', chatId: activeChatId, content: [{ type: 'text', text: action.value }], providerId: selectedProvider, modelId: activeChatEffectiveModelId });
+                        postMessage({ type: 'sendMessage', chatId: activeChatId, content: [{ type: 'text', text: action.value }], providerId: activeChatProviderId, modelId: combinedModelIdForAction });
                         setIsStreaming(true);
                     } else { console.warn("Invalid value/state for send_message action"); }
                     break;
@@ -307,9 +334,9 @@ export function App() {
                 default: console.warn("Unknown suggested action type");
             }
         } else {
-             console.warn("Cannot handle suggested action: Missing activeChatId, provider, or effective model for the chat.");
+             console.warn("Cannot handle suggested action: Missing activeChatId, provider, or model name for the chat.");
         }
-    }, [activeChatId, activeChatEffectiveModelId, selectedProvider, setInputValue, setIsStreaming]); // Use activeChatEffectiveModelId
+    }, [activeChatId, activeChatProviderId, activeChatModelName, setInputValue, setIsStreaming]); // Use separate provider/model name
 
     const handleStopGeneration = useCallback(() => {
         console.log("[App Handler] Stop generation requested.");
@@ -348,27 +375,30 @@ export function App() {
         // If the deleted chat was active, the backend/HistoryManager should handle resetting activeChatId.
     }, [setIsChatListLoading]); // Add dependency
 
-    // --- Handler for Chat-Specific Model Change --- (Moved to correct scope)
-    const handleChatModelChange = useCallback((newModelId: string) => {
+    // --- Handler for Chat-Specific Model Change ---
+    // Now accepts separate providerId and modelName
+    const handleChatModelChange = useCallback((newProviderId: string | null, newModelName: string | null) => {
         if (activeChatId) {
-            console.log(`[App Handler] Updating model for chat ${activeChatId} to ${newModelId}`);
+            console.log(`[App Handler] Updating model for chat ${activeChatId} to Provider: ${newProviderId}, Model: ${newModelName}`);
+            const newConfig: Partial<ChatConfig> = {
+                providerId: newProviderId ?? undefined, // Store null as undefined
+                modelName: newModelName ?? undefined,   // Store null as undefined
+                useDefaults: false // Explicitly set model, so don't use defaults
+            };
+
             setChatSessions(prevSessions =>
                 prevSessions.map(session =>
                     session.id === activeChatId
                         ? {
                             ...session,
-                            config: { ...session.config, chatModelId: newModelId, useDefaults: false }, // Set specific model, disable defaults
+                            config: { ...session.config, ...newConfig }, // Merge new config parts
                             lastModified: Date.now()
                           }
                         : session
                 )
             );
-            // Inform backend about the config change
-            postMessage({ type: 'updateChatConfig', payload: { chatId: activeChatId, config: { chatModelId: newModelId, useDefaults: false } } });
-            // Note: We might need to update currentModelInput/displayModelName here too,
-            // depending on how useModelSelection derives its state. Let's assume for now
-            // that currentModelInput reflects the active chat's effective model.
-            // If not, useModelSelection might need adjustment or we update its state here.
+            // Inform backend about the config change using separate fields
+            postMessage({ type: 'updateChatConfig', payload: { chatId: activeChatId, config: newConfig } });
 
         } else {
             console.warn("Cannot change chat model: No active chat selected.");
@@ -377,28 +407,18 @@ export function App() {
 
     // --- App-level Provider Change Handler ---
     // This now handles setting the provider *and* updating the chat's model
-    const handleProviderChange = useCallback((e: JSX.TargetedEvent<HTMLSelectElement>) => {
-        const newProvider = e.currentTarget.value as ApiProviderKey | '';
-        setSelectedProvider(newProvider || null); // Update the hook's state for filtering
-
-        if (newProvider && activeChatId) {
-            // Find the first available model for the new provider
-            const defaultModel = availableModels.find((m: AvailableModel) => m.providerId === newProvider); // Add type for m
-            const newModelId = defaultModel ? defaultModel.id : '';
-            if (newModelId) {
-                // Trigger the chat model change handler
-                handleChatModelChange(newModelId);
-            } else {
-                // Handle case where no models are available for the provider
-                console.warn(`No models found for provider ${newProvider}. Chat model not changed.`);
-                // Optionally clear the chat model or set a placeholder state
-                handleChatModelChange(''); // Clear the model if none available? Or keep the old one? Let's clear.
-            }
-        } else if (!newProvider && activeChatId) {
-            // Provider deselected, clear the chat model
-            handleChatModelChange('');
-        }
-    }, [activeChatId, availableModels, setSelectedProvider, handleChatModelChange, setAvailableModels]); // Add availableModels to dependencies
+    // This handler is now simplified as ModelSelector handles finding the default model
+    // It just needs to call handleChatModelChange with the new provider and model
+    const handleModelSelectorChange = useCallback((newCombinedModelId: string) => {
+         if (newCombinedModelId && newCombinedModelId.includes(':')) {
+             const [newProviderId, ...modelNameParts] = newCombinedModelId.split(':');
+             const newModelName = modelNameParts.join(':');
+             handleChatModelChange(newProviderId, newModelName);
+         } else {
+             // Handle invalid or cleared selection
+             handleChatModelChange(null, null);
+         }
+    }, [handleChatModelChange]);
 
     // --- Message Action Handlers ---
     const handleCopyMessage = useCallback((messageId: string) => {
@@ -464,9 +484,9 @@ export function App() {
                                 {/* TODO: Update HeaderControls to potentially show chat name/list button */}
                                 <HeaderControls
                                     // Pass props matching the new ModelSelector integration
-                                    allAvailableModels={availableModels} // Pass the full list
-                                    selectedModelId={activeChatEffectiveModelId ?? null} // Pass the selected ID
-                                    onModelChange={handleChatModelChange} // Pass the handler for changes
+                                    allAvailableModels={availableModels}
+                                    selectedModelId={activeChatCombinedModelId ?? null} // Pass combined ID for now
+                                    onModelChange={handleModelSelectorChange} // Use the new wrapper handler
                                     // Removed: handleClearChat, isStreaming, hasMessages
                                     hasMessages={activeChatMessages.length > 0}
                                     onSettingsClick={handleSettingsClick}
@@ -492,7 +512,7 @@ export function App() {
                                      }}
                                     handleSend={handleSend}
                                     isStreaming={isStreaming}
-                                    currentModelInput={activeChatEffectiveModelId ?? ''} // Provide default empty string
+                                    currentModelInput={activeChatModelName ?? ''} // Pass just the model name
                                     selectedImages={selectedImages}
                                     setSelectedImages={() => {}} // Dummy setter
                                     fileInputRef={fileInputRef}

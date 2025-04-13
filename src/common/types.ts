@@ -82,7 +82,9 @@ export type StructuredAiResponse = z.infer<typeof structuredAiResponseSchema>;
 
 // Configuration for a specific chat session
 export interface ChatConfig {
-    chatModelId?: string; // Overrides default if set
+    providerId?: string;   // e.g., "anthropic" - Overrides default if set
+    modelName?: string;    // e.g., "claude-3-5-sonnet-20240620" - Overrides default if set
+    // Keep image/optimize as combined IDs for now, or refactor later if needed
     imageModelId?: string; // Overrides default if set
     optimizeModelId?: string; // Overrides default if set
     useDefaults: boolean; // If true, uses default settings where overrides are not set

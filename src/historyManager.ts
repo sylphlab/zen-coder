@@ -627,35 +627,36 @@ export class HistoryManager {
         const defaults = this.getDefaultConfig();
         const effectiveConfig: EffectiveChatConfig = {}; // Start empty
 
-        // Determine final model IDs based on chat config and defaults
+        // Determine final providerId and modelName based on chat config and defaults
+        let finalProviderId: string | undefined;
+        let finalModelName: string | undefined;
+
         if (chat?.config.useDefaults === false) {
             // Use only chat-specific settings if defined
-            effectiveConfig.chatModelId = chat.config.chatModelId;
-            effectiveConfig.imageModelId = chat.config.imageModelId;
-            effectiveConfig.optimizeModelId = chat.config.optimizeModelId;
+            finalProviderId = chat.config.providerId;
+            finalModelName = chat.config.modelName;
+            effectiveConfig.imageModelId = chat.config.imageModelId; // Keep combined for now
+            effectiveConfig.optimizeModelId = chat.config.optimizeModelId; // Keep combined for now
         } else {
             // Use defaults, overridden by chat specifics if they exist
-            effectiveConfig.chatModelId = chat?.config.chatModelId ?? defaults.defaultChatModelId;
+            finalProviderId = chat?.config.providerId ?? defaults.defaultChatModelId?.split(':')[0]; // Extract provider from default combined ID
+            finalModelName = chat?.config.modelName ?? defaults.defaultChatModelId?.split(':').slice(1).join(':'); // Extract model name from default combined ID
             effectiveConfig.imageModelId = chat?.config.imageModelId ?? defaults.defaultImageModelId;
             effectiveConfig.optimizeModelId = chat?.config.optimizeModelId ?? defaults.defaultOptimizeModelId;
         }
 
-        // Derive providerId from the final chatModelId (assuming "providerId:modelName" format)
-        if (effectiveConfig.chatModelId) {
-            const separatorIndex = effectiveConfig.chatModelId.indexOf(':');
-            if (separatorIndex > 0) {
-                effectiveConfig.providerId = effectiveConfig.chatModelId.substring(0, separatorIndex);
-                // Optional: Store just the model name part if needed elsewhere, though AiService providers expect the full ID
-                // effectiveConfig.chatModelName = effectiveConfig.chatModelId.substring(separatorIndex + 1);
-            } else {
-                // Handle cases without a clear provider prefix
-                // Option 1: Assume a default provider (e.g., 'ollama')
-                // Option 2: Log a warning and leave providerId undefined (safer)
-                console.warn(`[HistoryManager] Could not derive providerId from chatModelId '${effectiveConfig.chatModelId}' for chat ${chatId}. Format should be 'providerId:modelName'.`);
-                effectiveConfig.providerId = undefined; // Leave undefined if format is wrong
-            }
+        // Store the derived providerId
+        effectiveConfig.providerId = finalProviderId;
+
+        // Combine providerId and modelName into the chatModelId expected by AiService
+        if (finalProviderId && finalModelName) {
+            effectiveConfig.chatModelId = `${finalProviderId}:${finalModelName}`;
         } else {
-            effectiveConfig.providerId = undefined; // No chat model, no provider
+            effectiveConfig.chatModelId = undefined; // Set to undefined if either part is missing
+            if (finalProviderId || finalModelName) {
+                 // Log a warning if only one part is defined, indicating inconsistent state
+                 console.warn(`[HistoryManager] Inconsistent chat model config for chat ${chatId}. Provider: ${finalProviderId}, Model: ${finalModelName}. Setting chatModelId to undefined.`);
+            }
         }
 
         // console.log(`[HistoryManager] Effective config for chat ${chatId}:`, effectiveConfig); // Optional logging

@@ -40,6 +40,8 @@ import { OpenOrCreateProjectInstructionsFileHandler } from './webview/handlers/O
 import { SetActiveChatHandler } from './webview/handlers/SetActiveChatHandler';
 import { CreateChatHandler } from './webview/handlers/CreateChatHandler';
 import { DeleteChatHandler } from './webview/handlers/DeleteChatHandler';
+import { UpdateChatConfigHandler } from './webview/handlers/UpdateChatConfigHandler'; // Re-add the import
+// Removed duplicate import
 import { UpdateLastLocationHandler } from './webview/handlers/UpdateLastLocationHandler';
 import { SetDefaultConfigHandler } from './webview/handlers/SetDefaultConfigHandler'; // Import the new handler
 import { DeleteMessageHandler } from './webview/handlers/DeleteMessageHandler'; // Import the delete handler
@@ -188,6 +190,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new SetActiveChatHandler(),
             new CreateChatHandler(),
             new DeleteChatHandler(),
+            new UpdateChatConfigHandler(this._historyManager), // Register the new handler
             new UpdateLastLocationHandler(),
             new SetDefaultConfigHandler(), // Register the new handler
             new DeleteMessageHandler(this._historyManager, this.postMessageToWebview.bind(this)), // Register the delete handler with dependencies
