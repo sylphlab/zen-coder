@@ -5,12 +5,11 @@ Implementing image upload functionality. Backend components (`SendMessageHandler
 
 ## Recent Changes
 - **Updated `src/ai/aiService.ts`:** Modified `getAiResponseStream` to accept `history: CoreMessage[]` (which includes the latest user message with potential image parts) instead of a separate `prompt: string`, aligning with `HistoryManager` updates for image upload support.
-- **Refactored MCP Client Handling (`src/ai/aiService.ts`):**
-    - MCP clients for enabled servers are now initialized when `AiService` starts (in the constructor via `_initializeMcpClients`) and stored in `_activeMcpClients` map.
-    - `getAiResponseStream` now reuses these persistent clients to fetch tools instead of creating/destroying them per request.
-    - Clients are closed and re-initialized if config files change.
-    - All active clients are closed when `AiService` is disposed.
-    - Removed previous per-request client creation/closing logic.
+- **Refactored MCP Management:**
+    - Created `src/ai/mcpManager.ts` to encapsulate all MCP-related logic (config loading/watching, client initialization/management, tool fetching/caching, error tracking, retry logic).
+    - Refactored `src/ai/aiService.ts` to remove MCP logic and delegate calls (getting status, getting tools, retrying connections) to the new `McpManager` instance.
+    - Added `RetryMcpConnectionHandler` and registered it in `extension.ts`.
+    - Updated `SettingPage.tsx` UI to display connection status, errors, fetched tools, and provide a "Retry" button for failed connections, removing the old test logic.
 - **File-Based MCP Server Configuration:**
     - **Refactored MCP configuration:** Removed UI form and VS Code settings (`zencoder.mcp.servers`). Configuration is now managed via JSON files:
         - **Global:** `[VS Code User Data]/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`
@@ -241,7 +240,7 @@ Implementing image upload functionality. Backend components (`SendMessageHandler
 - Activity Bar Entry Changed.
 
 ## Active Decisions
-- **MCP Configuration & Client Lifecycle:** Shifted from UI/VSCode settings to dedicated JSON files (Global: `.../settings/mcp_settings.json`, Project: `.vscode/mcp_servers.json`). Updated JSON structure (object map, `disabled`, `env`, `alwaysAllow`). Settings UI now just provides buttons to open these files. `AiService` reads, merges, and watches these files. **MCP clients are now initialized on service start, reused across requests, and closed on dispose/reload, improving efficiency.**
+- **MCP Architecture:** Shifted from UI/VSCode settings to dedicated JSON files (Global: `.../settings/mcp_settings.json`, Project: `.vscode/mcp_servers.json`). All MCP client lifecycle management (init, retry, close), config handling, and tool fetching/caching is now handled by `McpManager`. `AiService` delegates MCP tasks. Settings UI displays status from `McpManager` and allows triggering retries.
 - **Image Upload:** Implemented UI and basic frontend logic. Backend needs updating (`SendMessageHandler`, `HistoryManager`, `AiService`).
 - **Markdown & Syntax Highlighting:** Implemented using `react-markdown` and `react-syntax-highlighter` (`vscDarkPlus` theme) in the frontend. Fixed initial webview loading issues by correcting root `tsconfig.json` references.
 - **Suggested Actions Implementation:** New strategy: AI appends JSON block with `suggested_actions` to the end of its text response. `StreamProcessor` parses this post-stream, sends actions to UI, and removes the block from history. Schema (`structuredAiResponseSchema`) only defines `suggested_actions`. `experimental_output` is not used. Text streaming relies on standard `text-delta` parts.
