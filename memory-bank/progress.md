@@ -55,7 +55,7 @@
 - Corrected `streamText` Usage.
 - `uuidGenerateTool` updated with progress callback.
 - UI Tool Display refined (inline, human-readable summaries, progress).
-- **Routing Implemented:** Added `wouter` for navigation between Chat (`/`) and Settings (`/settings`) pages. Created basic `SettingPage.tsx` and `ChatPage.tsx`. Replaced settings modal with the `/settings` route. (Previous)
+- **Routing Implemented:** Added `wouter` for navigation between Chat (`/index.html`) and Settings (`/settings`) pages. Created basic `SettingPage.tsx` and `ChatPage.tsx`. Replaced settings modal with the `/settings` route. Routing issues resolved using `<Switch>` and correct path.
 - **Settings Provider Search:** Added a search input to `SettingPage.tsx` to filter the list of providers.
 - **AI Provider Refactoring (Complete):** Implemented modular provider structure under `src/ai/providers`. `AiService` now fully delegates model creation, listing, API key management, and status checks to these modules. Added OpenAI and Ollama providers.
 - **Settings Page API Key Input:** Added input fields and buttons to `SettingPage.tsx` to allow users to set API keys for each provider. Implemented message passing (`setApiKey`) to the extension host, which handles storing the key in `SecretStorage` via `AiService`. (Previous)
@@ -78,7 +78,7 @@
 - Define and use Nanostores stores for managing shared state (e.g., settings, chat history).
 
 ## Current Status
-- **UI:** Basic layout and component styling applied using UnoCSS. Dark mode supported. Rendering errors fixed. Navigation functional.
+- **UI:** Basic layout and component styling applied using UnoCSS. Dark mode supported. Rendering errors fixed. Navigation refactored (removed top nav, added settings icon button, added back button to settings). Routing functional using `wouter` and `<Switch>`.
 - **Initialization:** Webview initializes correctly without infinite loops, loads history and model state.
 - **History Persistence:** User/Assistant messages saved to global state and loaded on init. Tool result saving needs implementation. Clear history function added.
 - **Model Selection:** Provider and Model ID selection now persists across webview reloads.
@@ -92,7 +92,7 @@
 - **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from the correct file path.
 - **View Provider Registration:** Corrected `package.json` ensures the `WebviewViewProvider` is properly registered.
 - **Webview Loading (Troubleshooting):** Relaxed development CSP to potentially resolve blank webview issue. (Previous)
-- **Styling:** UnoCSS is set up but not yet applied to components. Existing CSS (`app.css`, `index.css`) might conflict or be redundant.
+- **Styling:** UnoCSS is set up and applied to components. Existing CSS (`app.css`, `index.css`) might conflict or be redundant.
 
 ## Known Issues
 // - Saving tool results to chat history is not yet implemented in `extension.ts`. // Addressed

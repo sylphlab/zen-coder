@@ -1,9 +1,14 @@
 # Active Context
 
 ## Current Focus
-Implementing image upload functionality. Backend components (`SendMessageHandler`, `HistoryManager`, `AiService`) updated to handle multi-part messages (`UiMessageContentPart[]`) including images. Next step is thorough testing.
+UI Refactoring complete. Next step is likely resuming image upload functionality or addressing other pending tasks.
 
 ## Recent Changes
+- **UI Refactoring (Navigation &amp; Layout):**
+    - Removed top navigation bar (`<nav>`) from `app.tsx`.
+    - Added settings icon button to `HeaderControls.tsx` for navigation to `/settings`.
+    - Added back button to `SettingPage.tsx` for navigation back to chat (`/index.html`).
+    - Resolved complex rendering issues caused by conflicts between `wouter` routing (`<Router>`, `<Route>`) and Flexbox layout (`flex-1`, `h-full`). Final solution involved using `<Switch>`, correcting the chat route path to `/index.html`, and ensuring Flexbox properties were correctly applied within route components.
 - **Updated `src/ai/aiService.ts`:** Modified `getAiResponseStream` to accept `history: CoreMessage[]` (which includes the latest user message with potential image parts) instead of a separate `prompt: string`, aligning with `HistoryManager` updates for image upload support.
 - **Refactored MCP Management:**
     - Created `src/ai/mcpManager.ts` to encapsulate all MCP-related logic (config loading/watching, client initialization/management, tool fetching/caching, error tracking, retry logic).
@@ -196,7 +201,8 @@ Implementing image upload functionality. Backend components (`SendMessageHandler
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** MCP configuration refactored to use JSON files. Next is to continue with the interrupted image upload task: update `AiService.ts` to handle `UiMessageContentPart[]` in `getAiResponseStream`.
+- **Current Task:** UI Refactoring complete.
+- **Next:** Resume image upload task: update `AiService.ts` to handle `UiMessageContentPart[]` in `getAiResponseStream`.
 - **Future:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, `renameSymbol`, `getConfiguration`, debugging tools, `runCommandTool` exit code).
 - **Future:** Confirm `replaceInActiveEditorTool` insertion capability.
 - **Future:** Test structured output and suggested actions thoroughly.
@@ -246,12 +252,13 @@ Implementing image upload functionality. Backend components (`SendMessageHandler
 - **Suggested Actions Implementation:** New strategy: AI appends JSON block with `suggested_actions` to the end of its text response. `StreamProcessor` parses this post-stream, sends actions to UI, and removes the block from history. Schema (`structuredAiResponseSchema`) only defines `suggested_actions`. `experimental_output` is not used. Text streaming relies on standard `text-delta` parts.
 - **VS Code Tool Enhancements (Future):** Plan to add `goToDefinitionTool`, `findReferencesTool`, `renameSymbolTool`, `getConfigurationTool`, debugging tools, and enhance `runCommandTool` (exit code).
 - **VS Code Tool Confirmation:** Need to verify `replaceInActiveEditorTool` insertion capability.
-- **UI Fixes:**
+- **UI Fixes:** (Previous fixes remain relevant)
     - Corrected `app.tsx` to use `providerId` from `AvailableModel` type.
     - Reverted invalid `sandbox allow-modals` CSP directive in `webviewContent.ts`.
     - Implemented custom confirmation dialog in `app.tsx` for Clear Chat.
     - Ensured `app.tsx` adds assistant message frame on `startAssistantMessage`.
-    - Refactored `appendMessageChunk` handler in `app.tsx` using `.map()` for potentially more robust state updates (via `write_to_file` after `apply_diff` failures).
+    - Refactored `appendMessageChunk` handler in `app.tsx` using `.map()` for potentially more robust state updates.
+    - **Resolved UI Rendering/Layout Issues:** Fixed conflicts between `wouter` routing and Flexbox by using `<Switch>`, correcting route paths (`/index.html`), and ensuring proper flex properties (`flex-1`, `h-full`) on routed components.
 - **Architecture:** Adopted handler registration pattern, modularized backend services.
 - **State/History:** Persist UI state (`UiMessage[]`), translate to `CoreMessage[]` on demand.
 - **Model Handling:** Pass `modelId` correctly; delegate provider logic.
@@ -260,4 +267,5 @@ Implementing image upload functionality. Backend components (`SendMessageHandler
    - Prioritize inline status; confirm results passed to AI.
 - **Persistence:** Use `globalState` for history, `vscode.getState/setState` for webview state.
 - **Dependencies/Setup:** Integrated Vite, Preact, UnoCSS, wouter, etc.
+- **UI Navigation:** Finalized navigation using settings icon in `HeaderControls` and back button in `SettingPage`, removing top nav bar. Routing handled by `wouter` with `<Switch>`.
 - **Previous Decisions:** (Includes items like routing, dynamic OpenRouter fetch, API key handling, etc.)

@@ -1,5 +1,6 @@
 import { h } from 'preact';
-import { useState, useMemo, useEffect } from 'preact/hooks';
+import { useState, useMemo, useEffect, useCallback } from 'preact/hooks'; // Added useCallback
+import { useLocation } from "wouter"; // Import useLocation
 import { ProviderInfoAndStatus, ApiProviderKey, postMessage } from '../app';
 import { McpServerStatus } from '../../../src/ai/mcpManager';
 
@@ -84,6 +85,8 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
    const [mcpServers, setMcpServers] = useState<McpCombinedState>({});
    // State for ALL tools (standard + MCP) with their status
    const [allToolsStatus, setAllToolsStatus] = useState<AllToolsStatusPayload>({});
+   // Hook for navigation
+   const [, setLocation] = useLocation(); // Use hook for navigation
 
   // Handle input change for API key fields
   const handleApiKeyInputChange = (providerId: string, value: string) => {
@@ -247,6 +250,11 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
         }
     };
 
+    // Handler for the back button
+    const handleBackClick = useCallback(() => {
+        setLocation('/index.html'); // Navigate back to the chat page (using correct path)
+    }, [setLocation]);
+
 
   // Render logic for a single provider setting
   const renderProviderSetting = (providerInfo: ProviderInfoAndStatus) => {
@@ -356,9 +364,20 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
 
 
   return (
-    // Remove overflow-y-auto from here if it exists, let the parent handle scrolling
-    <div class="p-6">
-      <h1 class="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-200">Zen Coder 設定</h1>
+    // Add relative positioning for the absolute back button
+    <div class="p-6 relative">
+        {/* Back Button */}
+        <button
+            onClick={handleBackClick}
+            class="absolute top-4 left-4 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 z-10" // Added z-index
+            title="Back to Chat"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+        </button>
+
+      <h1 class="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-200 text-center">Zen Coder 設定</h1> {/* Centered Title */}
 
       {/* --- All Tools Section (Categorized) --- */}
       <section class="mb-8">

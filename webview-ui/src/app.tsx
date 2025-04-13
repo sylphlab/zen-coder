@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks';
 import { JSX } from 'preact/jsx-runtime';
-import { Router, Route, Link, useLocation } from "wouter";
+import { Router, Route, Link, useLocation, Switch } from "wouter"; // Import Switch
 import './app.css';
-import { SettingPage } from './pages/SettingPage';
+import { SettingPage } from './pages/SettingPage'; // Restore import usage
 import { useMessageHandler } from './hooks/useMessageHandler';
 import { useImageUpload } from './hooks/useImageUpload';
 import { useModelSelection } from './hooks/useModelSelection'; // Import model selection hook
@@ -77,7 +77,7 @@ export function App() {
     const [inputValue, setInputValue] = useState('');
     const [isStreaming, setIsStreaming] = useState(false);
     const [providerStatus, setProviderStatus] = useState<AllProviderStatus>([]);
-    const [location, setLocation] = useLocation();
+    const [location, setLocation] = useLocation(); // Restore router hook
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
     const [suggestedActionsMap, setSuggestedActionsMap] = useState<Record<string, SuggestedAction[]>>({});
@@ -104,18 +104,22 @@ export function App() {
         handleModelInputChange,
     } = useModelSelection(); // Use the hook
 
+    // Restore real setLocation hook usage
     useMessageHandler(setMessages, setIsStreaming, setSuggestedActionsMap, setLocation);
 
     // --- Effects ---
     // Scroll to bottom
     useEffect(() => {
+        // console.log("[App Effect] Messages updated, scrolling to bottom. Count:", messages.length);
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
     // Handle initial setup messages
     useEffect(() => {
+        // console.log("[App Effect] Initial setup effect running.");
         const handleSetupMessage = (event: MessageEvent) => {
              const message = event.data;
+             // console.log("[App Effect] Received message:", message.type, message.payload);
              switch (message.type) {
                  case 'availableModels':
                      if (Array.isArray(message.payload)) {
@@ -129,7 +133,7 @@ export function App() {
                      break;
                  case 'updateMcpServers':
                       if (Array.isArray(message.payload)) {
-                          console.log("Received MCP server configs:", message.payload);
+                          // console.log("Received MCP server configs:", message.payload);
                           setMcpServerConfigs(message.payload);
                       }
                       break;
@@ -137,11 +141,15 @@ export function App() {
          };
         window.addEventListener('message', handleSetupMessage);
         postMessage({ type: 'webviewReady' });
-        return () => window.removeEventListener('message', handleSetupMessage);
+        return () => {
+            // console.log("[App Effect] Cleaning up setup message listener.");
+            window.removeEventListener('message', handleSetupMessage);
+        }
     }, [setAvailableModels]); // Dependency is the stable setter from the hook
 
     // --- Event Handlers (Remaining in App) ---
     const handleSend = useCallback(() => {
+        // console.log("[App Handler] handleSend called.");
         // Use values from useModelSelection hook
         if ((inputValue.trim() || selectedImages.length > 0) && !isStreaming && currentModelInput && selectedProvider) {
             const contentParts: UiMessageContentPart[] = [];
@@ -152,6 +160,7 @@ export function App() {
                 contentParts.push({ type: 'text', text: inputValue });
             }
             const newUserMessage: Message = { id: generateUniqueId(), sender: 'user', content: contentParts, timestamp: Date.now() };
+            // console.log("[App Handler] Sending new user message:", newUserMessage);
             setMessages(prev => [...prev, newUserMessage]);
             postMessage({ type: 'sendMessage', content: contentParts, providerId: selectedProvider, modelId: currentModelInput });
             setInputValue('');
@@ -163,6 +172,7 @@ export function App() {
     }, [inputValue, selectedImages, isStreaming, currentModelInput, selectedProvider, clearSelectedImages, setMessages, setIsStreaming, setInputValue]);
 
     const handleProviderToggle = useCallback((providerId: string, enabled: boolean) => {
+         // console.log(`[App Handler] Toggling provider ${providerId} to ${enabled}`);
          setProviderStatus(prevStatus =>
              prevStatus.map(p =>
                  p.id === providerId ? { ...p, enabled: enabled } : p
@@ -171,16 +181,23 @@ export function App() {
          postMessage({ type: 'setProviderEnabled', payload: { provider: providerId, enabled: enabled } });
      }, []);
 
-     const handleClearChat = useCallback(() => { setShowClearConfirm(true); }, []);
+     const handleClearChat = useCallback(() => {
+         // console.log("[App Handler] handleClearChat called.");
+         setShowClearConfirm(true);
+     }, []);
      const confirmClearChat = useCallback(() => {
+         // console.log("[App Handler] Confirming clear chat.");
          setMessages([]);
          postMessage({ type: 'clearChatHistory' });
          setShowClearConfirm(false);
      }, [setMessages]);
-     const cancelClearChat = useCallback(() => { setShowClearConfirm(false); }, []);
+     const cancelClearChat = useCallback(() => {
+         // console.log("[App Handler] Cancelling clear chat.");
+         setShowClearConfirm(false);
+     }, []);
 
     const handleSuggestedActionClick = useCallback((action: SuggestedAction) => {
-        console.log("Suggested action clicked:", action);
+        // console.log("[App Handler] Suggested action clicked:", action);
         // Use values from useModelSelection hook
         switch (action.action_type) {
             case 'send_message':
@@ -203,62 +220,73 @@ export function App() {
         }
     }, [currentModelInput, selectedProvider, setInputValue, setIsStreaming]);
 
+    // --- Event Handlers (Navigation) ---
+    const handleSettingsClick = useCallback(() => {
+        // console.log("[App Handler] Settings icon clicked, navigating to /settings");
+        setLocation('/settings'); // Restore router navigation
+    }, [setLocation]); // Restore setLocation dependency
+
     // --- Main Render ---
+    // console.log("[App Render] Rendering App component. Message count:", messages.length);
     return (
         <Router>
             <div class="app-layout h-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-                <nav class="navigation flex items-center p-2 bg-gray-200 dark:bg-gray-800 shadow">
-                    <Link href="/" class="px-3 py-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700 mr-2">Chat</Link>
-                    <Link href="/settings" class="px-3 py-1 rounded hover:bg-gray-300 dark:hover:bg-gray-700">Settings</Link>
-                </nav>
-                <main class="content-area flex-1 overflow-y-auto p-4">
-                    <Route path="/">
-                        <div class="chat-container flex flex-col h-full">
-                            <HeaderControls
-                                uniqueProviders={uniqueProviders} // From hook
-                                selectedProvider={selectedProvider} // From hook
-                                handleProviderChange={handleProviderChange} // From hook
-                                currentModelInput={currentModelInput} // From hook
-                                handleModelInputChange={handleModelInputChange} // From hook
-                                filteredModels={filteredModels} // From hook
-                                handleClearChat={handleClearChat} // From App
-                                isStreaming={isStreaming} // From App
-                                hasMessages={messages.length > 0} // From App
+                <main class="content-area flex-1 flex flex-col overflow-y-auto p-4">
+                    <Switch>
+                        <Route path="/index.html">
+                            <div class="chat-container flex flex-col flex-1 h-full">
+                                <HeaderControls
+                                    uniqueProviders={uniqueProviders}
+                                    selectedProvider={selectedProvider}
+                                    handleProviderChange={handleProviderChange}
+                                    currentModelInput={currentModelInput}
+                                    handleModelInputChange={handleModelInputChange}
+                                    filteredModels={filteredModels}
+                                    handleClearChat={handleClearChat}
+                                    isStreaming={isStreaming}
+                                    hasMessages={messages.length > 0}
+                                    onSettingsClick={handleSettingsClick}
+                                />
+                                <MessagesArea
+                                    messages={messages}
+                                    suggestedActionsMap={suggestedActionsMap}
+                                    handleSuggestedActionClick={handleSuggestedActionClick}
+                                    isStreaming={isStreaming}
+                                    messagesEndRef={messagesEndRef}
+                                />
+                                <InputArea
+                                    inputValue={inputValue}
+                                    setInputValue={setInputValue}
+                                    handleInputChange={(e) => setInputValue(e.currentTarget.value)}
+                                    handleKeyDown={(e) => {
+                                         if (e.key === 'Enter' && !e.shiftKey && !isStreaming) {
+                                             e.preventDefault(); handleSend();
+                                         }
+                                     }}
+                                    handleSend={handleSend}
+                                    isStreaming={isStreaming}
+                                    currentModelInput={currentModelInput}
+                                    selectedImages={selectedImages}
+                                    setSelectedImages={() => {}} // Dummy setter
+                                    fileInputRef={fileInputRef}
+                                    triggerImageUpload={triggerImageUpload}
+                                    removeSelectedImage={removeSelectedImage}
+                                    handleImageFileChange={handleImageFileChange}
+                                />
+                            </div>
+                        </Route>
+                        <Route path="/settings">
+                            {/* Restore SettingPage component */}
+                            <SettingPage
+                                providerStatus={providerStatus}
+                                onProviderToggle={handleProviderToggle}
                             />
-                            <MessagesArea
-                                messages={messages}
-                                suggestedActionsMap={suggestedActionsMap}
-                                handleSuggestedActionClick={handleSuggestedActionClick}
-                                isStreaming={isStreaming}
-                                messagesEndRef={messagesEndRef}
-                            />
-                            <InputArea
-                                inputValue={inputValue}
-                                setInputValue={setInputValue}
-                                handleInputChange={(e) => setInputValue(e.currentTarget.value)}
-                                handleKeyDown={(e) => {
-                                     if (e.key === 'Enter' && !e.shiftKey && !isStreaming) {
-                                         e.preventDefault(); handleSend();
-                                     }
-                                 }}
-                                handleSend={handleSend}
-                                isStreaming={isStreaming}
-                                currentModelInput={currentModelInput} // From hook
-                                selectedImages={selectedImages} // From hook
-                                setSelectedImages={() => {}} // Dummy setter
-                                fileInputRef={fileInputRef} // From hook
-                                triggerImageUpload={triggerImageUpload} // From hook
-                                removeSelectedImage={removeSelectedImage} // From hook
-                                handleImageFileChange={handleImageFileChange} // From hook
-                            />
-                        </div>
-                    </Route>
-                    <Route path="/settings">
-                        <SettingPage
-                            providerStatus={providerStatus}
-                            onProviderToggle={handleProviderToggle}
-                        />
-                    </Route>
+                        </Route>
+                        {/* Default route if no other matches */}
+                        <Route>
+                            <div class="p-6">404: Not Found - Current Path: {location}</div>
+                        </Route>
+                    </Switch>
                 </main>
                 <ConfirmationDialog
                     show={showClearConfirm}
