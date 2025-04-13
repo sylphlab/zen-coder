@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks';
 import { JSX } from 'preact/jsx-runtime';
 import { Router, Route, Link, useLocation } from "wouter"; // Import wouter components
+import ReactMarkdown from 'react-markdown'; // Import ReactMarkdown
+import remarkGfm from 'remark-gfm'; // Import remark-gfm
 import './app.css';
 import { SettingPage } from './pages/SettingPage'; // Import SettingPage
 import { ChatPage } from './pages/ChatPage'; // Import ChatPage
@@ -9,7 +11,8 @@ import { ChatPage } from './pages/ChatPage'; // Import ChatPage
 // Ideally, share this definition via a common types file
 export interface UiTextMessagePart { type: 'text'; text: string; } // Export if needed elsewhere
 export interface UiToolCallPart { type: 'tool-call'; toolCallId: string; toolName: string; args: any; status?: 'pending' | 'running' | 'complete' | 'error'; result?: any; progress?: string; } // Export if needed
-export type UiMessageContentPart = UiTextMessagePart | UiToolCallPart; // Export if needed
+export interface UiImagePart { type: 'image'; mediaType: string; data: string; } // Add image part type
+export type UiMessageContentPart = UiTextMessagePart | UiToolCallPart | UiImagePart; // Export if needed, include image part
 export interface Message { // Renamed from UiMessage to avoid conflict, but structure is the same
     id: string;
     sender: 'user' | 'assistant';
@@ -117,6 +120,9 @@ export function App() {
     const currentAssistantMessageId = useRef<string | null>(null); // To track the ID of the message being streamed
     const [showClearConfirm, setShowClearConfirm] = useState(false); // State for custom confirmation
     const [suggestedActionsMap, setSuggestedActionsMap] = useState<Record<string, SuggestedAction[]>>({}); // State for suggested actions
+    const [selectedImages, setSelectedImages] = useState<{ id: string; data: string; mediaType: string; name: string }[]>([]); // State for selected images (array)
+    const fileInputRef = useRef<HTMLInputElement>(null); // Ref for file input
+    const [thinkingText, setThinkingText] = useState<string>(''); // State for AI thinking process
 
     // --- Derived State ---
     const uniqueProviders = useMemo(() => {
@@ -175,6 +181,7 @@ export function App() {
                     break;
                 case 'startAssistantMessage': // Signal to start a new assistant message block
                      setIsStreaming(true);
+                     setThinkingText(''); // Clear thinking text when new message starts
                      // Use the messageId directly from the payload sent by the backend
                      if (message.messageId) {
                          const newAssistantMessageId = message.messageId;
@@ -332,6 +339,7 @@ export function App() {
                     console.log("Stream finished signal received.");
                     setIsStreaming(false);
                     currentAssistantMessageId.current = null;
+                    setThinkingText(''); // Clear thinking text when stream finishes
                     break;
                 case 'addSuggestedActions': // Handle suggested actions from backend
                     if (message.payload && message.payload.messageId && Array.isArray(message.payload.actions)) {
@@ -342,6 +350,11 @@ export function App() {
                         }));
                     } else {
                         console.warn("Received addSuggestedActions with invalid payload:", message.payload);
+                    }
+                    break;
+                case 'appendThinkingChunk': // Handle thinking process chunks
+                    if (message.textDelta) {
+                        setThinkingText(prev => prev + message.textDelta);
                     }
                     break;
             }
@@ -363,21 +376,37 @@ export function App() {
     };
 
     const handleSend = () => {
-        if (inputValue.trim() && !isStreaming && currentModelInput) {
+        // Allow sending if there's text OR at least one image selected
+        if ((inputValue.trim() || selectedImages.length > 0) && !isStreaming && currentModelInput) {
+            const contentParts: UiMessageContentPart[] = [];
+            // Add all selected images
+            selectedImages.forEach(img => {
+                contentParts.push({ type: 'image', mediaType: img.mediaType, data: img.data });
+            });
+            if (inputValue.trim()) {
+                contentParts.push({ type: 'text', text: inputValue });
+            }
+
             const newUserMessage: Message = {
                 id: generateUniqueId(),
                 sender: 'user',
-                content: [{ type: 'text', text: inputValue }],
+                content: contentParts, // Use combined content parts (can have multiple images + text)
                 timestamp: Date.now()
             };
             // Add user message to UI immediately
             setMessages(prev => [...prev, newUserMessage]);
 
-            // Send message with text, selected provider ID, AND the currently selected model ID to backend
-            postMessage({ type: 'sendMessage', text: inputValue, providerId: selectedProvider, modelId: currentModelInput });
+            // Send message with potentially mixed content (text and image)
+            // Use 'content' key instead of 'text'
+            postMessage({ type: 'sendMessage', content: contentParts, providerId: selectedProvider, modelId: currentModelInput });
 
-            setInputValue(''); // Clear input after adding to state and sending
+            setInputValue(''); // Clear text input
+            setSelectedImages([]); // Clear selected images array
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ''; // Reset file input visually
+            }
             setIsStreaming(true); // Set streaming immediately for responsiveness
+            setThinkingText(''); // Clear thinking text when sending new message
             currentAssistantMessageId.current = null; // Reset before new message stream
         } else if (!currentModelInput) {
              console.warn("Cannot send message: No model selected or entered.");
@@ -452,7 +481,7 @@ export function App() {
                     // const newUserMessage: Message = { id: generateUniqueId(), sender: 'user', content: [{ type: 'text', text: action.value }], timestamp: Date.now() };
                     // setMessages(prev => [...prev, newUserMessage]);
                     // Send message to backend
-                    postMessage({ type: 'sendMessage', text: action.value, modelId: currentModelInput });
+                    postMessage({ type: 'sendMessage', content: [{ type: 'text', text: action.value }], modelId: currentModelInput }); // Send as content array
                     setIsStreaming(true); // Assume assistant will respond
                     currentAssistantMessageId.current = null;
                 } else {
@@ -483,14 +512,94 @@ export function App() {
         // Optionally clear suggestions after click?
         // setSuggestedActionsMap(prev => ({ ...prev })); // Or remove specific messageId entry
     }, [currentModelInput]); // Include dependencies
+
+    const handleImageFileChange = (event: JSX.TargetedEvent<HTMLInputElement>) => {
+        const files = event.currentTarget.files;
+        if (files && files.length > 0) {
+            const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+            if (imageFiles.length === 0) {
+                 setSelectedImages([]); // Clear if no valid images selected
+                 if (fileInputRef.current) fileInputRef.current.value = '';
+                 return;
+            }
+
+            const readPromises = imageFiles.map(file => {
+                return new Promise<{ id: string; data: string; mediaType: string; name: string }>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const base64String = (reader.result as string).split(',')[1];
+                        resolve({
+                            id: generateUniqueId(), // Add unique ID for key prop and removal
+                            data: base64String,
+                            mediaType: file.type,
+                            name: file.name,
+                        });
+                    };
+                    reader.onerror = (error) => {
+                        console.error("Error reading image file:", file.name, error);
+                        reject(error); // Reject promise on error
+                    };
+                    reader.readAsDataURL(file);
+                });
+            });
+
+            Promise.all(readPromises)
+                .then(newImages => {
+                    setSelectedImages(prevImages => [...prevImages, ...newImages]); // Append new images
+                    console.log(`Added ${newImages.length} images.`);
+                })
+                .catch(error => {
+                    console.error("Error processing selected images:", error);
+                    // Optionally show an error message to the user
+                })
+                .finally(() => {
+                     // Reset file input visually after processing is done (success or fail)
+                     if (fileInputRef.current) {
+                         fileInputRef.current.value = '';
+                     }
+                });
+
+        } else {
+            // If no files selected (e.g., user cancelled), don't clear existing images
+            // setSelectedImages([]); // Keep existing images if user cancels
+            if (fileInputRef.current) {
+                fileInputRef.current.value = ''; // Reset file input visually
+            }
+        }
+    };
+
+    const triggerImageUpload = () => {
+        fileInputRef.current?.click();
+    };
+
+    // Update remove function to handle array and specific image ID
+    const removeSelectedImage = (idToRemove: string) => {
+        setSelectedImages(prevImages => prevImages.filter(img => img.id !== idToRemove));
+        // No need to reset fileInputRef here as it's already reset after selection
+    };
+
     // --- Rendering Helpers ---
     const renderContentPart = (part: UiMessageContentPart, index: number) => { // Use UiMessageContentPart
         switch (part.type) {
             case 'text':
-                // Basic Markdown simulation for newlines
-                const htmlText = part.text.replace(/\n/g, '<br />');
-                // TODO: Implement proper Markdown rendering (e.g., using 'marked' or similar)
-                return <span key={`text-${index}`} dangerouslySetInnerHTML={{ __html: htmlText }}></span>;
+                // Wrap ReactMarkdown in a div to apply prose styles
+                return (
+                    <div key={`text-${index}`} className="prose dark:prose-invert prose-sm max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {part.text}
+                        </ReactMarkdown>
+                    </div>
+                );
+            case 'image':
+                 // Render image part
+                 return (
+                     <img
+                         key={`image-${index}`}
+                         src={`data:${part.mediaType};base64,${part.data}`}
+                         alt="User uploaded content"
+                         class="max-w-full h-auto rounded my-2" // Basic styling
+                     />
+                 );
             case 'tool-call':
                 let statusText = `[${part.toolName} requested...]`; // Default text
                 let statusClass = "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300"; // Default style
@@ -612,34 +721,91 @@ export function App() {
                                         </div>
                                     </div>
                                 ))}
-                                {/* Thinking Indicator */}
-                                {isStreaming && (
-                                     <div class="message flex justify-start">
-                                         <div class="message-content p-3 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 italic">
-                                             <span>Thinking...</span>
-                                         </div>
-                                     </div>
-                                 )}
+                                {/* Thinking Indicator / Display */}
+                                {(isStreaming || thinkingText) && ( // Show if streaming OR there's thinking text
+                                    <div class="message flex justify-start">
+                                        <div class="message-content p-3 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 italic text-xs">
+                                            {thinkingText ? (
+                                                <div class="prose dark:prose-invert prose-xs max-w-none">
+                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                        {`Thinking:\n${thinkingText}`}
+                                                    </ReactMarkdown>
+                                                </div>
+                                            ) : (
+                                                <span>Thinking...</span> // Show default if no thinking text yet but streaming
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                                 <div ref={messagesEndRef} />
                             </div>
                             {/* Input Area */}
-                            <div class="input-area p-2 border-t border-gray-300 dark:border-gray-700 flex items-center">
-                                <textarea
-                                    value={inputValue}
-                                    onInput={handleInputChange} // Use correct handler
-                                    onKeyDown={handleKeyDown}
-                                    placeholder="Type your message..."
-                                    rows={3}
-                                    disabled={isStreaming || !currentModelInput}
-                                    class="flex-1 p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 resize-none mr-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                                <button
-                                    onClick={handleSend}
-                                    disabled={isStreaming || !inputValue.trim() || !currentModelInput}
-                                    class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Send
-                                </button>
+                            <div class="input-area p-2 border-t border-gray-300 dark:border-gray-700 flex flex-col">
+                                {/* Selected Images Preview Area */}
+                                {selectedImages.length > 0 && (
+                                    <div class="selected-images-preview mb-2 p-2 border border-dashed border-gray-400 dark:border-gray-600 rounded flex flex-wrap gap-2">
+                                        {selectedImages.map((img) => (
+                                            <div key={img.id} class="relative group">
+                                                <img src={`data:${img.mediaType};base64,${img.data}`} alt={img.name} title={img.name} class="w-12 h-12 object-cover rounded" />
+                                                <button
+                                                    onClick={() => removeSelectedImage(img.id)}
+                                                    class="absolute top-0 right-0 -mt-1 -mr-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    aria-label={`Remove ${img.name}`}
+                                                >
+                                                    &times;
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <div class="flex items-end"> {/* Changed items-center to items-end */}
+                                    {/* Hidden File Input */}
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        ref={fileInputRef}
+                                        onChange={handleImageFileChange}
+                                        multiple // Allow multiple file selection
+                                        style={{ display: 'none' }}
+                                        id="image-upload-input"
+                                    />
+                                    {/* Image Upload Button */}
+                                    <button
+                                        onClick={triggerImageUpload}
+                                        disabled={isStreaming || !currentModelInput} // Allow adding more images even if some are selected
+                                        title="Attach Image"
+                                        class="p-2 mr-2 border rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {/* Simple Paperclip Icon */}
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                        </svg>
+                                    </button>
+                                    {/* Text Input */}
+                                    <textarea
+                                        value={inputValue}
+                                        onInput={(e) => { // Auto-resize logic and call original handler
+                                            const target = e.currentTarget;
+                                            target.style.height = 'auto'; // Reset height
+                                            target.style.height = `${Math.min(target.scrollHeight, 120)}px`; // Set new height up to max
+                                            handleInputChange(e); // Call original handler
+                                        }}
+                                        onKeyDown={handleKeyDown}
+                                        placeholder={selectedImages.length > 0 ? "Add a caption or message..." : "Type your message..."} // Adjust placeholder
+                                        rows={1} // Start with 1 row
+                                        style={{ minHeight: '40px', maxHeight: '120px' }} // Set min/max height
+                                        disabled={isStreaming || !currentModelInput}
+                                        class="flex-1 p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 resize-none mr-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    />
+                                    {/* Send Button */}
+                                    <button
+                                        onClick={handleSend}
+                                        disabled={isStreaming || (!inputValue.trim() && selectedImages.length === 0) || !currentModelInput} // Disable if no text AND no images
+                                        class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed self-end" // Align button to bottom
+                                    >
+                                        Send
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </Route>

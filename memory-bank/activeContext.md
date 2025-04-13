@@ -1,9 +1,27 @@
 # Active Context
 
 ## Current Focus
-Completed cleanup of redundant interaction tools and updated memory banks. Ready for next implementation step or further tool discussion.
+Implementing image upload functionality. Task was interrupted after updating `HistoryManager.ts` to accept `UiMessageContentPart[]` for user messages. The next step is to update `AiService.ts` to handle the new content format.
 
 ## Recent Changes
+- **Updated `src/common/types.ts`:** Added `UiImagePart` interface and included it in the `UiMessageContentPart` union type.
+- **Updated `webview-ui/src/app.tsx`:**
+    - Added state (`selectedImage`, `fileInputRef`) to handle image selection.
+    - Added UI elements (button, preview, remove button) for image upload in the input area.
+    - Implemented `handleImageFileChange`, `triggerImageUpload`, `removeSelectedImage` functions for image handling.
+    - Modified `handleSend` to include selected image data (base64) in the message content sent to the backend.
+    - Updated `renderContentPart` to display `image` type content parts.
+    - Updated `UiMessageContentPart` import to include `UiImagePart`.
+    - Integrated `react-markdown` for proper Markdown rendering in text parts.
+- **Installed Dependencies:** Added `react-markdown` and `remark-gfm` to `webview-ui`.
+- **Updated `src/webview/handlers/SendMessageHandler.ts`:**
+    - Changed message handling to expect a `content: UiMessageContentPart[]` array instead of `text: string`.
+    - Updated import for `UiMessageContentPart` to use `../../common/types`.
+    - Passed the `userMessageContent` array to `historyManager.addUserMessage` and `aiService.getAiResponseStream`.
+- **Updated `src/historyManager.ts`:**
+    - Modified `addUserMessage` to accept `content: UiMessageContentPart[]` instead of `text: string`.
+    - Updated `translateUiHistoryToCoreMessages` to handle user messages with `image` parts, converting base64 data to Buffer for the AI SDK.
+- **(Previous changes before interruption - see below)**
 - **Refactored `AiService._getProviderInstance`:** Removed unreliable logic that inferred `providerId` from `modelId`. The method now requires both `providerId` and `modelId` as arguments, ensuring the correct provider is used directly. Updated UI and handlers to pass `providerId`.
 - **Refactored Stream Processing (`src/streamProcessor.ts`):** Modified `process` method to iterate over `streamResult.fullStream` instead of sequential processing of individual streams (`textStream`, `toolCalls`, etc.). This ensures correct handling of mixed stream part types (text, tool calls, reasoning, etc.) and maintains proper order.
 - **Fixed UI Streaming (Attempt 4 - `write_to_file`):** After `apply_diff` failed repeatedly, used `write_to_file` to apply a simplified state update logic in `webview-ui/src/app.tsx`'s `appendMessageChunk` handler. This version uses `.map()` to create a new messages array and new message/content objects, aiming for more reliable change detection by Preact.
@@ -161,12 +179,14 @@ Completed cleanup of redundant interaction tools and updated memory banks. Ready
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** The streaming bug is fixed. Next step is likely testing the structured output and suggested actions flow, or implementing the tool execution logic within `ExecuteToolActionHandler`.
+- **Current Task:** Update `AiService.ts` to handle `UiMessageContentPart[]` in `getAiResponseStream`.
 - **Future:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, `renameSymbol`, `getConfiguration`, debugging tools, `runCommandTool` exit code).
 - **Future:** Confirm `replaceInActiveEditorTool` insertion capability.
 - **Future:** Test structured output and suggested actions thoroughly.
+- **Future:** Test image upload functionality thoroughly across different providers.
 
 ## Debugging Notes
+- **TypeScript Errors in `SendMessageHandler.ts`:** Resolved import path issue. Remaining errors related to `HistoryManager` and `AiService` expecting `string` instead of `UiMessageContentPart[]` will be addressed by updating those files.
 - **Filesystem Test (`filesystem.test.ts`):** Added tests for `readFileTool`. Fixed TS errors related to `StreamData` mock and missing `encoding` parameter in tool calls.
     - **Persistent Linter Issue:** TypeScript continues to report an overload error for `Buffer.from(content, 'utf8')` in the `createFile` helper function, even though the logic correctly handles `string | Buffer` input. Ignoring for now as the code functions correctly.
 - **Fixed Provider List Display:** Corrected data structure mismatch (`providerId` vs `provider`) in `app.tsx` when handling `availableModels` message. Fixed JSX syntax error in `<datalist>`.
@@ -203,6 +223,8 @@ Completed cleanup of redundant interaction tools and updated memory banks. Ready
 - Activity Bar Entry Changed.
 
 ## Active Decisions
+- **Image Upload:** Implemented UI and basic frontend logic. Backend needs updating (`SendMessageHandler`, `HistoryManager`, `AiService`).
+- **Markdown Rendering:** Implemented using `react-markdown` in the frontend.
 - **Suggested Actions Implementation:** New strategy: AI appends JSON block with `suggested_actions` to the end of its text response. `StreamProcessor` parses this post-stream, sends actions to UI, and removes the block from history. Schema (`structuredAiResponseSchema`) only defines `suggested_actions`. `experimental_output` is not used. Text streaming relies on standard `text-delta` parts.
 - **VS Code Tool Enhancements (Future):** Plan to add `goToDefinitionTool`, `findReferencesTool`, `renameSymbolTool`, `getConfigurationTool`, debugging tools, and enhance `runCommandTool` (exit code).
 - **VS Code Tool Confirmation:** Need to verify `replaceInActiveEditorTool` insertion capability.

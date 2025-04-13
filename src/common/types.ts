@@ -16,7 +16,8 @@ export interface UiToolCallPart {
     result?: any; // Result of the tool execution
     progress?: string; // Optional progress message during execution
 }
-export type UiMessageContentPart = UiTextMessagePart | UiToolCallPart;
+export interface UiImagePart { type: 'image'; mediaType: string; data: string; } // Add image part type
+export type UiMessageContentPart = UiTextMessagePart | UiToolCallPart | UiImagePart; // Include image part
 
 /**
  * Represents a single message displayed in the UI chat history.
@@ -24,7 +25,7 @@ export type UiMessageContentPart = UiTextMessagePart | UiToolCallPart;
 export interface UiMessage {
     id: string; // Unique identifier for the message
     sender: 'user' | 'assistant'; // Who sent the message
-    content: UiMessageContentPart[]; // Array of content parts (text, tool calls)
+    content: UiMessageContentPart[]; // Array of content parts (text, tool calls, images)
     timestamp: number; // When the message was created/received
 }
 

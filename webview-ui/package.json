@@ -13,6 +13,8 @@
     "gsap": "^3.12.7",
     "nanostores": "^1.0.1",
     "preact": "^10.26.2",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "wouter": "^3.6.0"
   },
   "devDependencies": {

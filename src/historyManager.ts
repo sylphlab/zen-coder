@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { CoreMessage, ToolCallPart as CoreToolCallPart, ToolResultPart as CoreToolResultPart, AssistantContent } from 'ai';
-import { UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, structuredAiResponseSchema } from './common/types'; // Import UI types and schema
+import { CoreMessage, ToolCallPart as CoreToolCallPart, ToolResultPart as CoreToolResultPart, AssistantContent, UserContent } from 'ai'; // Import UserContent
+import { UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, UiImagePart, structuredAiResponseSchema } from './common/types'; // Import UI types and schema
 
 /**
  * Manages the chat history, including persistence and translation
@@ -69,12 +69,18 @@ export class HistoryManager {
 
     /**
      * Adds a user message to the history and saves.
+     * Accepts an array of content parts (text and/or images).
      */
-    public async addUserMessage(text: string): Promise<string> {
+    public async addUserMessage(content: UiMessageContentPart[]): Promise<string> {
+        // Validate content before adding
+        if (!Array.isArray(content) || content.length === 0) {
+            console.warn("[HistoryManager] Attempted to add user message with invalid content.");
+            return ''; // Or throw an error
+        }
         const userUiMessage: UiMessage = {
             id: `user-${Date.now()}-${Math.random().toString(16).slice(2)}`,
             sender: 'user',
-            content: [{ type: 'text', text: text }],
+            content: content, // Use the provided content array directly
             timestamp: Date.now()
         };
         if (!Array.isArray(this._history)) { this._history = []; } // Ensure history is array
@@ -305,10 +311,29 @@ export class HistoryManager {
         const coreMessages: CoreMessage[] = [];
         for (const uiMsg of this._history) {
             if (uiMsg.sender === 'user') {
-                // User message: Extract text content
-                const userText = uiMsg.content.find((part): part is UiTextMessagePart => part.type === 'text')?.text || '';
-                if (userText) { // Only add if there's text
-                     coreMessages.push({ role: 'user', content: userText });
+                // User message: Translate content parts
+                const userContent: UserContent = [];
+                let hasContentForAi = false;
+                for (const part of uiMsg.content) {
+                    if (part.type === 'text') {
+                        if (part.text) {
+                            userContent.push({ type: 'text', text: part.text });
+                            hasContentForAi = true;
+                        }
+                    } else if (part.type === 'image') {
+                        // Convert UI image part to CoreMessage image part
+                        userContent.push({
+                            type: 'image',
+                            image: Buffer.from(part.data, 'base64'), // Convert base64 string to Buffer
+                            mimeType: part.mediaType
+                        });
+                        hasContentForAi = true;
+                    }
+                }
+                if (hasContentForAi && userContent.length > 0) {
+                     coreMessages.push({ role: 'user', content: userContent });
+                } else {
+                     console.log(`[HistoryManager] Skipping user message (ID: ${uiMsg.id}) with no AI-relevant content during translation.`);
                 }
             } else if (uiMsg.sender === 'assistant') {
                 // Assistant message: Translate content parts and generate tool results
@@ -343,6 +368,7 @@ export class HistoryManager {
                         }
                         // Ignore pending/running tool calls for AI history translation
                     }
+                    // Ignore image parts for assistant messages
                 }
 
                 // Only add assistant message if it has relevant content for the AI

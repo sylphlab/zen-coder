@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { CoreMessage, Tool, StreamTextResult } from 'ai'; // Import necessary types
 import { MessageHandler, HandlerContext } from './MessageHandler';
 import { StreamProcessor } from '../../streamProcessor'; // Import StreamProcessor
+import { UiMessageContentPart } from '../../common/types'; // Import shared type from common
 
 export class SendMessageHandler implements MessageHandler {
     public readonly messageType = 'sendMessage';
@@ -16,7 +17,8 @@ export class SendMessageHandler implements MessageHandler {
         console.log("[SendMessageHandler] Handling sendMessage message...");
 
         try {
-            const userMessageText = message.text;
+            // Expect 'content' array instead of 'text'
+            const userMessageContent: UiMessageContentPart[] = message.content; // Array of UiMessageContentPart
             const providerId = message.providerId; // Extract providerId
             const modelId = message.modelId;
 
@@ -30,14 +32,24 @@ export class SendMessageHandler implements MessageHandler {
                 context.postMessage({ type: 'addMessage', sender: 'assistant', text: 'Error: No model ID specified.' });
                 return;
             }
-            if (typeof userMessageText !== 'string' || !userMessageText) {
-                console.error("[SendMessageHandler] Invalid or empty text received.");
-                // Optionally inform the user via context.postMessage
-                return;
+            // Validate the content array
+            if (!Array.isArray(userMessageContent) || userMessageContent.length === 0) {
+                 console.error("[SendMessageHandler] Invalid or empty content array received.");
+                 // Optionally inform the user via context.postMessage
+                 return;
             }
+            // Basic validation of parts (can be enhanced)
+            const isValidContent = userMessageContent.every(part =>
+                 (part.type === 'text' && typeof part.text === 'string') ||
+                 (part.type === 'image' && typeof part.mediaType === 'string' && typeof part.data === 'string')
+             );
+             if (!isValidContent) {
+                 console.error("[SendMessageHandler] Invalid content part structure received.");
+                 return;
+             }
 
-            // Add user message via HistoryManager
-            await context.historyManager.addUserMessage(userMessageText);
+            // Add user message with potentially mixed content via HistoryManager
+            await context.historyManager.addUserMessage(userMessageContent);
 
             // Translate history for AI
             const coreMessagesForAi = context.historyManager.translateUiHistoryToCoreMessages();
@@ -49,7 +61,7 @@ export class SendMessageHandler implements MessageHandler {
 
             // Call getAiResponseStream with providerId and modelId
             const streamResult = await context.aiService.getAiResponseStream(
-                userMessageText,
+                "", // Pass an empty string for the prompt, as it's included in the history
                 coreMessagesForAi,
                 providerId, // Pass providerId
                 modelId

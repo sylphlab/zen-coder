@@ -61,9 +61,12 @@ export class StreamProcessor {
                         await this._historyManager.updateToolStatus(part.toolCallId, 'complete', part.result);
                         break;
                     case 'reasoning':
-                        // Handle reasoning steps if needed (e.g., display in UI)
+                        // Handle reasoning steps: send to UI for display
                         console.log("[StreamProcessor] Reasoning:", part.textDelta);
-                        // this._postMessageCallback({ type: 'appendReasoningChunk', textDelta: part.textDelta });
+                        // Send the thinking chunk to the UI
+                        this._postMessageCallback({ type: 'appendThinkingChunk', sender: 'assistant', textDelta: part.textDelta });
+                        // Note: We might not want to save reasoning steps to the main history
+                        // await this._historyManager.appendReasoningChunk(assistantMessageId, part.textDelta); // Requires HistoryManager update if needed
                         break;
                     case 'reasoning-signature':
                         console.log("[StreamProcessor] Reasoning Signature:", part.signature);
