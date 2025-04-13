@@ -1,9 +1,26 @@
 # Active Context
 
 ## Current Focus
-Implementing image upload functionality. Task was interrupted after updating `HistoryManager.ts` to accept `UiMessageContentPart[]` for user messages. The next step is to update `AiService.ts` to handle the new content format.
+Implementing image upload functionality. Backend components (`SendMessageHandler`, `HistoryManager`, `AiService`) updated to handle multi-part messages (`UiMessageContentPart[]`) including images. Next step is thorough testing.
 
 ## Recent Changes
+- **Updated `src/ai/aiService.ts`:** Modified `getAiResponseStream` to accept `history: CoreMessage[]` (which includes the latest user message with potential image parts) instead of a separate `prompt: string`, aligning with `HistoryManager` updates for image upload support.
+- **Refactored MCP Client Handling (`src/ai/aiService.ts`):**
+    - MCP clients for enabled servers are now initialized when `AiService` starts (in the constructor via `_initializeMcpClients`) and stored in `_activeMcpClients` map.
+    - `getAiResponseStream` now reuses these persistent clients to fetch tools instead of creating/destroying them per request.
+    - Clients are closed and re-initialized if config files change.
+    - All active clients are closed when `AiService` is disposed.
+    - Removed previous per-request client creation/closing logic.
+- **File-Based MCP Server Configuration:**
+    - **Refactored MCP configuration:** Removed UI form and VS Code settings (`zencoder.mcp.servers`). Configuration is now managed via JSON files:
+        - **Global:** `[VS Code User Data]/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`
+        - **Project:** `[Workspace]/.vscode/mcp_servers.json`
+    - **Updated JSON Structure:** Config files now use an object map (`mcpServers: { [serverName]: config }`) instead of an array. Server config includes `disabled`, `env`, `alwaysAllow` properties. Project settings override global settings by server name.
+    - **Updated Settings UI (`SettingPage.tsx`):** Replaced MCP form/list with two buttons: "Configure Global Servers" and "Configure Project Servers". These buttons trigger commands to open the respective JSON files.
+    - **Updated Backend (`extension.ts`, `aiService.ts`):**
+        - Added commands (`zen-coder.openGlobalMcpConfig`, `zen-coder.openProjectMcpConfig`) to find/create/open config files.
+        - Modified `AiService` to read/merge/watch these JSON files, using the new structure and `disabled` flag.
+        - Fixed various `apply_diff` errors during implementation using `write_to_file` for `aiService.ts`.
 - **Updated `src/common/types.ts`:** Added `UiImagePart` interface and included it in the `UiMessageContentPart` union type.
 - **Updated `webview-ui/src/app.tsx`:**
     - Added state (`selectedImage`, `fileInputRef`) to handle image selection.
@@ -180,7 +197,7 @@ Implementing image upload functionality. Task was interrupted after updating `Hi
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Syntax highlighting implemented and working. Next is to update `AiService.ts` to handle `UiMessageContentPart[]` in `getAiResponseStream` for image uploads.
+- **Current Task:** MCP configuration refactored to use JSON files. Next is to continue with the interrupted image upload task: update `AiService.ts` to handle `UiMessageContentPart[]` in `getAiResponseStream`.
 - **Future:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, `renameSymbol`, `getConfiguration`, debugging tools, `runCommandTool` exit code).
 - **Future:** Confirm `replaceInActiveEditorTool` insertion capability.
 - **Future:** Test structured output and suggested actions thoroughly.
@@ -224,6 +241,7 @@ Implementing image upload functionality. Task was interrupted after updating `Hi
 - Activity Bar Entry Changed.
 
 ## Active Decisions
+- **MCP Configuration & Client Lifecycle:** Shifted from UI/VSCode settings to dedicated JSON files (Global: `.../settings/mcp_settings.json`, Project: `.vscode/mcp_servers.json`). Updated JSON structure (object map, `disabled`, `env`, `alwaysAllow`). Settings UI now just provides buttons to open these files. `AiService` reads, merges, and watches these files. **MCP clients are now initialized on service start, reused across requests, and closed on dispose/reload, improving efficiency.**
 - **Image Upload:** Implemented UI and basic frontend logic. Backend needs updating (`SendMessageHandler`, `HistoryManager`, `AiService`).
 - **Markdown & Syntax Highlighting:** Implemented using `react-markdown` and `react-syntax-highlighter` (`vscDarkPlus` theme) in the frontend. Fixed initial webview loading issues by correcting root `tsconfig.json` references.
 - **Suggested Actions Implementation:** New strategy: AI appends JSON block with `suggested_actions` to the end of its text response. `StreamProcessor` parses this post-stream, sends actions to UI, and removes the block from history. Schema (`structuredAiResponseSchema`) only defines `suggested_actions`. `experimental_output` is not used. Text streaming relies on standard `text-delta` parts.
