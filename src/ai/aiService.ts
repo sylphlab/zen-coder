@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 // Import Output and the new schema
 // Import necessary types, remove non-exported ones
-import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel, Output, TextStreamPart, ToolSet, generateObject } from 'ai';
+import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel, Output, TextStreamPart, ToolSet, generateObject, wrapLanguageModel, extractReasoningMiddleware } from 'ai';
 import { structuredAiResponseSchema, StructuredAiResponse } from '../common/types';
 import { allTools, ToolName } from '../tools';
 // Import Provider Classes and interface
@@ -217,10 +217,15 @@ export class AiService {
             // Remove the first generic (tools), explicitly provide the second (output schema)
             // Remove all generics from streamText call
             const streamTextResult = await streamText({
+                
                 toolCallStreaming: true,
-                model: modelInstance,
+                model: wrapLanguageModel({
+                    model: modelInstance,
+                    middleware: extractReasoningMiddleware({ tagName: 'think' }),
+                  }),
+                // model: modelInstance,
                 messages: messagesForApi,
-                tools: activeTools,
+                // tools: activeTools,
                 // experimental_output removed - we will parse JSON from the end of the text stream
                 maxSteps: 100,
                 experimental_continueSteps: true,
