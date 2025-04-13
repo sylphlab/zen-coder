@@ -12,6 +12,9 @@ import { OllamaProvider } from './providers/ollamaProvider';
 import z from 'zod';
 import { McpManager, McpServerStatus } from './mcpManager'; // Import McpManager
 
+// Key for storing MCP tool overrides in globalState (consistent with handler)
+const MCP_TOOL_OVERRIDES_KEY = 'mcpToolEnabledOverrides';
+
 // Define ApiProviderKey based on provider IDs
 export type ApiProviderKey = AiService['allProviders'][number]['id'];
 
@@ -47,7 +50,8 @@ export class AiService {
 
     // --- Getters ---
     public getCurrentModelId(): string { return this.currentModelId; }
-    public getActiveToolNames(): ToolName[] { return this._getActiveToolNames(); }
+    // getActiveToolNames is now effectively replaced by _prepareToolSet logic
+    // public getActiveToolNames(): ToolName[] { return this._getActiveToolNames(); }
 
     // --- Setters ---
     public setPostMessageCallback(callback: (message: any) => void): void {
@@ -112,43 +116,59 @@ export class AiService {
         }
     }
 
-    private _getActiveToolNames(): ToolName[] {
-        const config = vscode.workspace.getConfiguration('zencoder.tools');
-        const activeToolNames: ToolName[] = [];
-        for (const toolName of Object.keys(allTools) as ToolName[]) {
-            if (allTools[toolName] && config.get<boolean>(`${toolName}.enabled`, true)) {
-                activeToolNames.push(toolName);
-            }
-        }
-        return activeToolNames;
-    }
+    // This private method is no longer the single source of truth for active tools,
+    // but can be kept for internal use if needed elsewhere, or removed.
+    // For now, _prepareToolSet handles the filtering logic directly.
+    // private _getActiveStandardToolNames(): ToolName[] {
+    //     const config = vscode.workspace.getConfiguration('zencoder.tools');
+    //     const activeToolNames: ToolName[] = [];
+    //     for (const toolName of Object.keys(allTools) as ToolName[]) {
+    //         if (allTools[toolName] && config.get<boolean>(`${toolName}.enabled`, true)) {
+    //             activeToolNames.push(toolName);
+    //         }
+    //     }
+    //     return activeToolNames;
+    // }
 
     /**
-     * Prepares the combined toolset including enabled built-in tools and MCP tools.
+     * Prepares the combined and FILTERED toolset for the AI,
+     * including enabled built-in tools and enabled MCP tools.
      */
     private _prepareToolSet(): ToolSet {
-        // Get active built-in tools
-        const activeBuiltInTools = this._getActiveToolNames().reduce((acc, toolName) => {
+        const finalTools: ToolSet = {};
+        const config = vscode.workspace.getConfiguration('zencoder.tools');
+        const mcpOverrides = this.context.globalState.get<{ [toolId: string]: boolean }>(MCP_TOOL_OVERRIDES_KEY, {});
+
+        // 1. Filter Standard Tools based on VS Code settings
+        const standardToolNames = Object.keys(allTools) as ToolName[];
+        standardToolNames.forEach(toolName => {
             const toolDefinition = allTools[toolName];
-            if (toolDefinition) {
-                acc[toolName] = toolDefinition;
+            const isEnabled = config.get<boolean>(`${toolName}.enabled`, true); // Default to true if setting missing
+            if (toolDefinition && isEnabled) {
+                finalTools[toolName] = toolDefinition;
             }
-            return acc;
-        }, {} as Record<ToolName, Tool>);
+        });
+        console.log(`[AiService] Added ${Object.keys(finalTools).length} enabled standard tools.`);
 
-        // Get MCP Tools from McpManager
-        const mcpToolsMap = this.mcpManager.getMcpServerTools();
-        let allMcpTools: ToolSet = {};
-        console.log(`[AiService] Getting tools from ${mcpToolsMap.size} connected MCP clients managed by McpManager...`);
+        // 2. Filter MCP Tools based on connection status and overrides
+        const mcpToolsMap = this.mcpManager.getMcpServerTools(); // Get all tools from connected servers
+        let mcpToolCount = 0;
         for (const [serverName, tools] of mcpToolsMap.entries()) {
-             console.log(`[AiService] Using ${Object.keys(tools).length} cached tools from McpManager for: ${serverName}`);
-             allMcpTools = { ...allMcpTools, ...tools }; // Merge tools
+             for (const [mcpToolName, mcpToolDefinition] of Object.entries(tools)) {
+                 const toolIdentifier = `${serverName}/${mcpToolName}`;
+                 // Enabled if override is explicitly true OR if override doesn't exist (default true)
+                 const isEnabled = mcpOverrides[toolIdentifier] !== false;
+                 if (isEnabled) {
+                     // Use the identifier as the key in the final toolset to avoid name collisions
+                     finalTools[toolIdentifier] = mcpToolDefinition;
+                     mcpToolCount++;
+                 }
+             }
         }
-        console.log(`[AiService] Total MCP tools obtained from McpManager: ${Object.keys(allMcpTools).length}`);
+        console.log(`[AiService] Added ${mcpToolCount} enabled MCP tools.`);
 
-        const allAvailableTools: ToolSet = { ...activeBuiltInTools, ...allMcpTools };
-        console.log(`[AiService] Total tools available for AI (built-in + MCP): ${Object.keys(allAvailableTools).length}`);
-        return allAvailableTools;
+        console.log(`[AiService] Total tools available for AI (filtered): ${Object.keys(finalTools).length}`);
+        return finalTools;
     }
 
     // --- Core AI Interaction ---
@@ -165,7 +185,7 @@ export class AiService {
         }
 
         const messagesForApi: CoreMessage[] = [...history];
-        const allAvailableTools = this._prepareToolSet();
+        const enabledTools = this._prepareToolSet(); // Get the filtered toolset
 
         // --- Call streamText ---
         try {
@@ -173,7 +193,7 @@ export class AiService {
                 toolCallStreaming: true,
                 model: modelInstance,
                 messages: messagesForApi,
-                tools: allAvailableTools,
+                tools: enabledTools, // Pass the filtered tools
                 maxSteps: 100,
                 experimental_continueSteps: true,
                 onFinish: async ({ text, toolCalls, toolResults, finishReason, usage }) => {
@@ -181,11 +201,13 @@ export class AiService {
                 },
                 experimental_repairToolCall: async ({
                     toolCall,
-                    tools,
+                    tools, // Note: 'tools' here will be the filtered set passed to streamText
                     error,
                     messages,
                     system,
                   }) => {
+                    // Repair logic might need adjustment if it relies on having ALL tools available
+                    // For now, assume it works with the filtered set.
                     const result = await generateText({
                       model: modelInstance,
                       system,
@@ -197,7 +219,7 @@ export class AiService {
                             {
                               type: 'tool-call',
                               toolCallId: toolCall.toolCallId,
-                              toolName: toolCall.toolName,
+                              toolName: toolCall.toolName, // This might be the prefixed name for MCP tools
                               args: toolCall.args,
                             },
                           ],
@@ -214,13 +236,13 @@ export class AiService {
                           ],
                         },
                       ],
-                      tools,
+                      tools, // Pass the filtered set to repair attempt
                     });
-                
+
                     const newToolCall = result.toolCalls.find(
                       newToolCall => newToolCall.toolName === toolCall.toolName,
                     );
-                
+
                     return newToolCall !== undefined
                       ? {
                           toolCallType: 'function' as const,

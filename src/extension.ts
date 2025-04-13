@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { CoreMessage } from 'ai'; // Keep CoreMessage if needed elsewhere, maybe not
+import { CoreMessage, Tool } from 'ai'; // Keep CoreMessage if needed elsewhere, maybe not. Import Tool.
 import { AiService, ApiProviderKey } from './ai/aiService'; // Removed AiServiceResponse import
 // import { providerMap } from './ai/providers'; // Removed - Map is now in AiService
 import { UiMessage } from './common/types'; // Import shared UI types
@@ -21,12 +21,18 @@ import { SetApiKeyHandler } from './webview/handlers/SetApiKeyHandler';
 import { DeleteApiKeyHandler } from './webview/handlers/DeleteApiKeyHandler';
 import { ClearChatHistoryHandler } from './webview/handlers/ClearChatHistoryHandler';
 import { ExecuteToolActionHandler } from './webview/handlers/ExecuteToolActionHandler'; // Import the new handler
+// import { SetStandardToolEnabledHandler } from './webview/handlers/SetStandardToolEnabledHandler'; // Replaced
+import { SetToolEnabledHandler } from './webview/handlers/SetToolEnabledHandler'; // Import the unified handler
 // Removed import for UpdateMcpServersConfigHandler
 // Import new MCP handlers (assuming they exist or will be created)
 import { GetMcpConfiguredStatusHandler } from './webview/handlers/GetMcpConfiguredStatusHandler';
 import { TestMcpConnectionHandler } from './webview/handlers/TestMcpConnectionHandler'; // This handler is now defunct
 import { RetryMcpConnectionHandler } from './webview/handlers/RetryMcpConnectionHandler'; // Import the new retry handler
 import { openOrCreateMcpConfigFile } from './utils/configUtils'; // Import the helper function
+import { allTools, ToolName } from './tools'; // Import allTools map
+
+// Key for storing MCP tool overrides in globalState (consistent with handler)
+const MCP_TOOL_OVERRIDES_KEY = 'mcpToolEnabledOverrides';
 
 let aiServiceInstance: AiService | undefined = undefined;
 
@@ -150,6 +156,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new DeleteApiKeyHandler(this._aiService), // Pass AiService instance
             new ClearChatHistoryHandler(), // Doesn't need AiService
             new ExecuteToolActionHandler(this._aiService), // Register the new handler
+            new SetToolEnabledHandler(), // Register the unified handler
             // Removed registration for UpdateMcpServersConfigHandler
             // Add new MCP handlers
             new GetMcpConfiguredStatusHandler(), // Doesn't need AiService directly, uses context
@@ -198,16 +205,64 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             } else if (message.type === 'openProjectMcpConfig') { // Correctly placed else if
                 console.log("Executing command: zen-coder.openProjectMcpConfig");
                 vscode.commands.executeCommand('zen-coder.openProjectMcpConfig');
-            } else if (message.type === 'settingsPageReady') { // Keep handling for settings page ready
-                 console.log("Settings page reported ready.");
-                 // Optionally send initial MCP configs if needed, though now managed by files
-                 // this.postMessageToWebview({ type: 'updateMcpServers', payload: this._aiService.getMcpServerConfigs() }); // Example if needed
+            } else if (message.type === 'settingsPageReady') {
+                console.log("Settings page reported ready. Sending all tools status...");
+                try {
+                    const allToolsStatus = await this._getAllToolsStatus();
+                    this.postMessageToWebview({ type: 'updateAllToolsStatus', payload: allToolsStatus });
+                    console.log("Sent all tools status to webview:", Object.keys(allToolsStatus).length, "tools");
+                } catch (error) {
+                    console.error("Error getting or sending all tools status:", error);
+                    vscode.window.showErrorMessage("Failed to load tool information.");
+                }
             } else {
                  // Log any other unhandled message types
                  console.warn(`[Extension] No handler registered or direct handling for message type: ${message.type}`);
             }
         }
     }
+
+    // --- Helper to get status of all tools ---
+    private async _getAllToolsStatus(): Promise<{ [toolIdentifier: string]: { description?: string, enabled: boolean, type: 'standard' | 'mcp', serverName?: string } }> {
+        const allToolsStatus: { [toolIdentifier: string]: { description?: string, enabled: boolean, type: 'standard' | 'mcp', serverName?: string } } = {};
+        const config = vscode.workspace.getConfiguration('zencoder.tools');
+        const mcpOverrides = this._context.globalState.get<{ [toolId: string]: boolean }>(MCP_TOOL_OVERRIDES_KEY, {});
+
+        // 1. Get Standard Tools Status
+        const standardToolNames = Object.keys(allTools) as ToolName[];
+        standardToolNames.forEach(toolName => {
+            const toolDefinition = allTools[toolName] as Tool | undefined;
+            if (toolDefinition) {
+                const isEnabled = config.get<boolean>(`${toolName}.enabled`, true); // Get enabled status from config
+                allToolsStatus[toolName] = {
+                    description: toolDefinition.description,
+                    enabled: isEnabled,
+                    type: 'standard'
+                };
+            }
+        });
+
+        // 2. Get MCP Tools Status (from McpManager and overrides)
+        const mcpServersStatus = this._aiService.getMcpServerConfiguredStatus(); // Use AiService getter which delegates
+        for (const [serverName, serverStatus] of Object.entries(mcpServersStatus)) {
+            if (serverStatus.isConnected && serverStatus.tools) {
+                for (const [mcpToolName, mcpToolDefinition] of Object.entries(serverStatus.tools)) {
+                    const toolIdentifier = `${serverName}/${mcpToolName}`;
+                    // Enabled by default unless explicitly overridden to false
+                    const isEnabled = mcpOverrides[toolIdentifier] !== false;
+                    allToolsStatus[toolIdentifier] = {
+                        description: mcpToolDefinition.description,
+                        enabled: isEnabled,
+                        type: 'mcp',
+                        serverName: serverName
+                    };
+                }
+            }
+        }
+
+        return allToolsStatus;
+    }
+
 
     // Removed individual _handle... methods as logic is now in separate handler classes
 
