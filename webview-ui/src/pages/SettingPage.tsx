@@ -1,8 +1,11 @@
 // import { h } from 'preact'; // Removed unused import
-import { useState, useMemo, useEffect, useCallback } from 'preact/hooks'; // Added useCallback
-import { useLocation } from "wouter"; // Import useLocation
-import { ProviderInfoAndStatus, postMessage } from '../app'; // Removed unused ApiProviderKey
+import { useState, useMemo, useEffect, useCallback } from 'preact/hooks';
+import { useLocation } from "wouter";
+import { JSX } from 'preact/jsx-runtime'; // Import JSX namespace
+import { ProviderInfoAndStatus, postMessage } from '../app';
 import { McpServerStatus } from '../../../src/ai/mcpManager';
+import { AvailableModel, DefaultChatConfig } from '../../../src/common/types'; // Import needed types
+import { useModelSelection } from '../hooks/useModelSelection'; // Import the hook
 
 // Define props for the SettingPage
 interface SettingPageProps {
@@ -30,11 +33,6 @@ interface ToolInfo {
 interface AllToolsStatusPayload {
     [toolIdentifier: string]: ToolInfo; // Key is toolName or serverName/toolName
 }
-
-// Define a simple type for MCP tool definitions for display purposes (used internally in MCP section)
-// interface McpToolDisplayInfo { // Removed unused interface
-//     description?: string;
-// }
 
 // --- Tool Categorization Logic ---
 const categorizeTools = (tools: AllToolsStatusPayload): Record<string, AllToolsStatusPayload> => {
@@ -90,7 +88,20 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
    const [projectInstructions, setProjectInstructions] = useState<string>('');
    const [projectInstructionsPath, setProjectInstructionsPath] = useState<string | null>(null); // To display the path
    // Hook for navigation
-   const [, setLocation] = useLocation(); // Use hook for navigation
+   const [, setLocation] = useLocation();
+   // State for default models
+   const [defaultConfig, setDefaultConfig] = useState<DefaultChatConfig>({});
+   const [allAvailableModels, setAllAvailableModels] = useState<AvailableModel[]>([]);
+
+   // Use the model selection hook for the default chat model selector
+   const {
+       selectedProvider: defaultChatProvider,
+       setSelectedProvider: setDefaultChatProvider,
+       displayModelName: defaultChatDisplayModelName,
+       uniqueProviders: defaultChatUniqueProviders,
+       filteredModels: defaultChatFilteredModels,
+       handleProviderChange: handleDefaultChatProviderChange,
+   } = useModelSelection(allAvailableModels, defaultConfig.defaultChatModelId ?? null);
 
   // Handle input change for API key fields
   const handleApiKeyInputChange = (providerId: string, value: string) => {
@@ -142,9 +153,11 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
    // Effect to fetch initial status and listen for updates
    useEffect(() => {
        // Request initial state
-       postMessage({ type: 'settingsPageReady' }); // This triggers backend to send all tools status AND custom instructions
-       postMessage({ type: 'getMcpConfiguredStatus' }); // Still request MCP server status for server-level info
-       console.log('SettingsPage mounted, sent settingsPageReady and getMcpConfiguredStatus');
+       postMessage({ type: 'settingsPageReady' });
+       postMessage({ type: 'getMcpConfiguredStatus' });
+       postMessage({ type: 'getAvailableModels' }); // Request available models
+       postMessage({ type: 'getDefaultConfig' }); // Request current default config
+       console.log('SettingsPage mounted, requested initial data');
 
        // Add message listener for updates
        const handleMessage = (event: MessageEvent) => {
@@ -172,7 +185,21 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
                    setProjectInstructions(message.payload.project || '');
                    setProjectInstructionsPath(message.payload.projectPath || null);
                    break;
-               // Add other message handlers if needed
+               case 'availableModels': // Handle available models list
+                   if (Array.isArray(message.payload)) {
+                       console.log('[SettingsPage] Received availableModels:', message.payload);
+                       setAllAvailableModels(message.payload as AvailableModel[]);
+                   }
+                   break;
+               case 'updateDefaultConfig': // Handle default config updates
+                   if (message.payload && typeof message.payload === 'object') {
+                       console.log('[SettingsPage] Received updateDefaultConfig:', message.payload);
+                       setDefaultConfig(message.payload as DefaultChatConfig);
+                       // Update the provider selection based on the loaded default chat model
+                       const loadedProviderId = message.payload.defaultChatModelId?.split(':')[0];
+                       setDefaultChatProvider(loadedProviderId || null);
+                   }
+                   break;
            }
        };
 
@@ -290,6 +317,32 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
         console.log('Requesting to open project custom instructions file...');
         postMessage({ type: 'openOrCreateProjectInstructionsFile' });
     };
+
+    // --- Default Model Handlers ---
+    const handleDefaultChatModelChange = (newModelId: string) => {
+        console.log(`Setting default chat model to: ${newModelId}`);
+        const newConfig = { ...defaultConfig, defaultChatModelId: newModelId };
+        setDefaultConfig(newConfig); // Optimistic UI update
+        postMessage({ type: 'setDefaultConfig', payload: { config: newConfig } });
+    };
+
+    // Handler for provider change in the default chat model selector
+    const handleDefaultProviderSelect = (e: JSX.TargetedEvent<HTMLSelectElement>) => {
+        handleDefaultChatProviderChange(e); // Update the provider in the hook state
+        // When provider changes, select the first available model for that provider as the new default
+        const newProviderId = e.currentTarget.value;
+        if (newProviderId) {
+            const firstModel = allAvailableModels.find(m => m.providerId === newProviderId);
+            if (firstModel) {
+                handleDefaultChatModelChange(firstModel.id);
+            } else {
+                handleDefaultChatModelChange(''); // Clear model if none available
+            }
+        } else {
+            handleDefaultChatModelChange(''); // Clear model if provider deselected
+        }
+    };
+
   // Render logic for a single provider setting
   const renderProviderSetting = (providerInfo: ProviderInfoAndStatus) => {
     const { id, name, apiKeyUrl, requiresApiKey, enabled, apiKeySet } = providerInfo;
@@ -411,7 +464,60 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
             </svg>
         </button>
 
-      <h1 class="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-200 text-center">Zen Coder 設定</h1> {/* Centered Title */}
+      <h1 class="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-200 text-center">Zen Coder 設定</h1>
+
+      {/* --- Default Models Section --- */}
+      <section class="mb-8">
+          <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-300">Default Models</h3>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Select the default AI models to be used for new chat sessions or when a chat is set to use defaults.
+          </p>
+          <div class="space-y-4">
+              {/* Default Chat Model Selector */}
+              <div class="default-model-selector flex items-center space-x-2 p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
+                  <label htmlFor="default-provider-select" class="text-sm font-medium text-gray-700 dark:text-gray-300 w-24">Default Chat:</label>
+                  <select
+                      id="default-provider-select"
+                      value={defaultChatProvider ?? ''}
+                      onChange={handleDefaultProviderSelect} // Use specific handler
+                      class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm"
+                  >
+                      <option value="">-- Provider --</option>
+                      {defaultChatUniqueProviders.map(providerId => (
+                          <option key={providerId} value={providerId}>{providerId}</option>
+                      ))}
+                  </select>
+
+                  <input
+                      list="default-models-datalist"
+                      id="default-model-input"
+                      name="default-model-input"
+                      value={defaultChatDisplayModelName} // Display derived name
+                      onInput={(e: JSX.TargetedEvent<HTMLInputElement>) => {
+                          const inputValue = e.currentTarget.value;
+                          let fullModelId = inputValue;
+                          if (!inputValue.includes(':') && defaultChatProvider) {
+                              fullModelId = `${defaultChatProvider}:${inputValue}`;
+                          }
+                          handleDefaultChatModelChange(fullModelId); // Update default config
+                      }}
+                      placeholder={defaultChatProvider ? "Select or type model name" : "Select provider"}
+                      disabled={!defaultChatProvider}
+                      class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm flex-1 min-w-40"
+                  />
+                  <datalist id="default-models-datalist">
+                      {defaultChatFilteredModels.map(model => (
+                          <option key={model.id} value={model.id}>
+                              {model.modelNamePart} {/* Display only model name part */}
+                          </option>
+                      ))}
+                  </datalist>
+              </div>
+              {/* TODO: Add selectors for defaultImageModelId and defaultOptimizeModelId later */}
+              {/* <p class="text-xs text-gray-500 dark:text-gray-400">Default Image Generation Model: (Coming Soon)</p> */}
+              {/* <p class="text-xs text-gray-500 dark:text-gray-400">Default Instruction Optimization Model: (Coming Soon)</p> */}
+          </div>
+      </section>
 
       {/* --- Custom Instructions Section --- */}
       <section class="mb-8">
@@ -513,8 +619,8 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
                                   {Object.entries(toolsInCategory).map(([toolId, toolInfo]) => renderToolItem(toolId, toolInfo))}
                               </ul>
                           </div>
-                      );
-                  })}
+                        );
+                     })}
               </div>
           ) : (
               <p class="text-gray-500 dark:text-gray-400 italic">Loading available tools...</p>
@@ -633,7 +739,6 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
                <p class="text-gray-500 dark:text-gray-400 italic">Loading MCP server configurations or none found...</p>
            )}
        </section>
-
     </div>
   );
 }

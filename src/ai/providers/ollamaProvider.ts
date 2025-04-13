@@ -108,7 +108,8 @@ export class OllamaProvider implements AiProvider { // Add export back to class
 
             const models: ModelDefinition[] = jsonResponse.models
                 .map((model: any) => ({
-                    id: model.name,
+                    // Standardize the ID format
+                    id: `${this.id}:${model.name}`,
                     name: model.name,
                 }))
                 .sort((a: ModelDefinition, b: ModelDefinition) => a.name.localeCompare(b.name));

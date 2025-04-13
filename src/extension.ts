@@ -36,7 +36,12 @@ import { GetCustomInstructionsHandler } from './webview/handlers/GetCustomInstru
 import { SetGlobalCustomInstructionsHandler } from './webview/handlers/SetGlobalCustomInstructionsHandler';
 import { SetProjectCustomInstructionsHandler } from './webview/handlers/SetProjectCustomInstructionsHandler';
 import { OpenOrCreateProjectInstructionsFileHandler } from './webview/handlers/OpenOrCreateProjectInstructionsFileHandler';
-
+// Import new chat management handlers
+import { SetActiveChatHandler } from './webview/handlers/SetActiveChatHandler';
+import { CreateChatHandler } from './webview/handlers/CreateChatHandler';
+import { DeleteChatHandler } from './webview/handlers/DeleteChatHandler';
+import { UpdateLastLocationHandler } from './webview/handlers/UpdateLastLocationHandler';
+import { SetDefaultConfigHandler } from './webview/handlers/SetDefaultConfigHandler'; // Import the new handler
 // Key for storing MCP tool overrides in globalState (consistent with handler)
 const MCP_TOOL_OVERRIDES_KEY = 'mcpToolEnabledOverrides';
 
@@ -45,7 +50,9 @@ let aiServiceInstance: AiService | undefined = undefined;
 export async function activate(context: vscode.ExtensionContext) {
     console.log('--- Zen Coder Extension Activating ---');
 
-    aiServiceInstance = new AiService(context);
+    // HistoryManager needs to be created first
+    const historyManagerInstance = new HistoryManager(context);
+    aiServiceInstance = new AiService(context, historyManagerInstance); // Pass historyManager
     await aiServiceInstance.initialize();
 
     if (!aiServiceInstance) {
@@ -53,7 +60,8 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage("Zen Coder failed to initialize. Please check logs or restart VS Code.");
         return;
     }
-    const provider = new ZenCoderChatViewProvider(context, aiServiceInstance);
+    // Pass historyManager to the provider as well
+    const provider = new ZenCoderChatViewProvider(context, aiServiceInstance, historyManagerInstance);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(ZenCoderChatViewProvider.viewType, provider)
     );
@@ -94,13 +102,14 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
 
     constructor(
         context: vscode.ExtensionContext,
-        aiService: AiService
+        aiService: AiService,
+        historyManager: HistoryManager // Add historyManager parameter
     ) {
         this._context = context;
         this._extensionUri = context.extensionUri;
         this._extensionMode = context.extensionMode;
         this._aiService = aiService;
-        this._historyManager = new HistoryManager(context);
+        this._historyManager = historyManager; // Use the passed instance
         // Pass AiService instance to managers
         this._providerStatusManager = new ProviderStatusManager(context, aiService);
         this._modelResolver = new ModelResolver(context, this._providerStatusManager, aiService);
@@ -174,6 +183,12 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new SetProjectCustomInstructionsHandler(),
             new OpenOrCreateProjectInstructionsFileHandler(),
 
+            // New Chat Management Handlers
+            new SetActiveChatHandler(),
+            new CreateChatHandler(),
+            new DeleteChatHandler(),
+            new UpdateLastLocationHandler(),
+            new SetDefaultConfigHandler(), // Register the new handler
             // Add other handlers here
         ];
 
@@ -206,7 +221,9 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             // Handle simple cases directly or log unknown types for messages without dedicated handlers
             if (message.type === 'setModel') {
                  if (typeof message.modelId === 'string') {
-                     this._aiService.setModel(message.modelId);
+                     // this._aiService.setModel(message.modelId); // setModel is deprecated
+                     console.warn("Received deprecated 'setModel' message. Model selection is now per-chat.");
+                     // TODO: Implement logic to update chat config via historyManager if needed
                      console.log(`Model changed to: ${message.modelId}`);
                  } else {
                      console.error('Invalid modelId received', message);

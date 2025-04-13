@@ -4,10 +4,15 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Message, SuggestedAction, UiMessageContentPart } from '../app'; // Removed unused UiToolCallPart
+import { SuggestedAction } from '../app'; // Keep SuggestedAction if defined there
+import { UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, UiImagePart } from '../../../src/common/types'; // Import directly from common types
+// Define a UI-specific message type that includes the 'thinking' state
+interface DisplayMessage extends UiMessage {
+    thinking?: string;
+}
 
 interface MessagesAreaProps {
-    messages: Message[];
+    messages: DisplayMessage[]; // Use the local DisplayMessage type
     suggestedActionsMap: Record<string, SuggestedAction[]>;
     handleSuggestedActionClick: (action: SuggestedAction) => void;
     isStreaming: boolean;

@@ -24,14 +24,14 @@ export class StreamProcessor {
      * @param assistantMessageId The ID of the UI message frame for this response.
      */
     // Update parameter type to StreamTextResult with both generics
-    public async process<TOOLS extends ToolSet, PARTIAL_OUTPUT>(streamResult: StreamTextResult<TOOLS, PARTIAL_OUTPUT>, assistantMessageId: string): Promise<void> { // Return void now
+    public async process<TOOLS extends ToolSet, PARTIAL_OUTPUT>(streamResult: StreamTextResult<TOOLS, PARTIAL_OUTPUT>, chatId: string, assistantMessageId: string): Promise<void> { // Add chatId parameter
         console.log(`[StreamProcessor] Starting processing for message ID: ${assistantMessageId}`);
         // Removed accumulatedStructuredResponse variable
 
         // --- Process Full Stream ---
         try {
             for await (const part of streamResult.fullStream) {
-                await this._handleStreamPart(part, assistantMessageId);
+                await this._handleStreamPart(part, chatId, assistantMessageId); // Pass chatId
             }
             console.log("[StreamProcessor] Finished processing fullStream.");
         } catch (error) {
@@ -66,14 +66,14 @@ export class StreamProcessor {
     /**
      * Handles a single part from the AI stream.
      */
-    private async _handleStreamPart(part: any, assistantMessageId: string): Promise<void> {
+    private async _handleStreamPart(part: any, chatId: string, assistantMessageId: string): Promise<void> { // Add chatId
         // console.log("[StreamProcessor] Handling part:", part.type); // DEBUG
         switch (part.type) {
             case 'text-delta':
-                await this._handleTextDelta(part, assistantMessageId);
+                await this._handleTextDelta(part, chatId, assistantMessageId); // Pass chatId
                 break;
             case 'tool-call':
-                await this._handleToolCall(part, assistantMessageId);
+                await this._handleToolCall(part, chatId, assistantMessageId); // Pass chatId
                 break;
             case 'tool-call-streaming-start':
                 this._handleToolCallStreamingStart(part);
@@ -82,7 +82,7 @@ export class StreamProcessor {
                 this._handleToolCallDelta(part);
                 break;
             case 'tool-result':
-                await this._handleToolResult(part);
+                await this._handleToolResult(part, chatId); // Pass chatId
                 break;
             case 'reasoning':
                 this._handleReasoning(part);
@@ -118,14 +118,14 @@ export class StreamProcessor {
 
     // --- Private Handlers for Specific Stream Part Types ---
 
-    private async _handleTextDelta(part: any, assistantMessageId: string): Promise<void> { // Use any for part type
+    private async _handleTextDelta(part: any, chatId: string, assistantMessageId: string): Promise<void> { // Add chatId
         this._postMessageCallback({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
-        await this._historyManager.appendTextChunk(assistantMessageId, part.textDelta);
+        await this._historyManager.appendTextChunk(chatId, assistantMessageId, part.textDelta); // Pass chatId
     }
 
-    private async _handleToolCall(part: ToolCallPart, assistantMessageId: string): Promise<void> {
+    private async _handleToolCall(part: ToolCallPart, chatId: string, assistantMessageId: string): Promise<void> { // Add chatId
         this._postMessageCallback({ type: 'addToolCall', payload: { toolCallId: part.toolCallId, toolName: part.toolName, args: part.args } });
-        await this._historyManager.addToolCall(assistantMessageId, part.toolCallId, part.toolName, part.args);
+        await this._historyManager.addToolCall(chatId, assistantMessageId, part.toolCallId, part.toolName, part.args); // Pass chatId
     }
 
     private _handleToolCallStreamingStart(part: { type: 'tool-call-streaming-start', toolCallId: string, toolName: string }): void {
@@ -138,9 +138,9 @@ export class StreamProcessor {
         // Optional UI update: this._postMessageCallback({ type: 'toolCallDelta', payload: { toolCallId: part.toolCallId, argsTextDelta: part.argsTextDelta } });
     }
 
-    private async _handleToolResult(part: ToolResultPart): Promise<void> {
+    private async _handleToolResult(part: ToolResultPart, chatId: string): Promise<void> { // Add chatId
         this._postMessageCallback({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, status: 'complete', message: part.result, toolName: part.toolName });
-        await this._historyManager.updateToolStatus(part.toolCallId, 'complete', part.result);
+        await this._historyManager.updateToolStatus(chatId, part.toolCallId, 'complete', part.result); // Pass chatId
     }
 
     private _handleReasoning(part: { type: 'reasoning', textDelta: string }): void {

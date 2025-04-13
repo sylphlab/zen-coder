@@ -1,7 +1,21 @@
 # Active Context
 
 ## Current Focus
-Implemented stream cancellation functionality.
+Implementing multi-chat functionality. Backend services (`HistoryManager`, `AiService`, `StreamProcessor`) and core handlers (`SendMessageHandler`, `ClearChatHistoryHandler`, `WebviewReadyHandler`) have been updated to handle `chatId`. New handlers (`SetActiveChatHandler`, `CreateChatHandler`, `DeleteChatHandler`) created and registered. Frontend (`app.tsx`, `MessagesArea.tsx`, `HeaderControls.tsx`) updated to manage chat sessions state and integrate `ChatListPage.tsx`. Model ID format standardized to `providerId:modelName` in `ModelResolver`.
+
+## Next Steps (Multi-Chat Implementation)
+1.  **Standardize Model IDs (Complete):**
+    *   Verified provider implementations (`src/ai/providers/*`) already return model IDs in `providerId:modelName` format.
+    *   Verified default configuration settings in `package.json` already use the correct format.
+    *   Refactored frontend model selection logic (`webview-ui/src/hooks/useModelSelection.ts`, `webview-ui/src/components/HeaderControls.tsx`, `webview-ui/src/app.tsx`) to correctly handle, display, and update the standardized IDs, ensuring the UI reflects the active chat's configuration.
+2.  **Refine Frontend (Complete):**
+    *   Verified confirmation dialog for chat deletion is already implemented in `ChatListPage.tsx`.
+    *   Verified `useMessageHandler` hook correctly handles `loadChatState` and sets `activeChatId`.
+    *   Verified UI elements for chat-specific model selection exist in `HeaderControls.tsx` and are correctly linked to update the active chat's configuration via `app.tsx`.
+3.  **Refine Backend (Complete):**
+    *   Verified default configuration loading is implemented in `HistoryManager` (reads from VS Code settings).
+    *   Verified `AiService` correctly uses the effective config (including provider ID) derived by `HistoryManager`.
+4.  **Testing:** Next step is to thoroughly test creating, selecting, deleting chats, sending messages in different chats, and configuration persistence (defaults vs. chat-specific).
 
 ## Recent Changes
 - **UI Refactoring (Navigation &amp; Layout):**
@@ -223,8 +237,8 @@ Implemented stream cancellation functionality.
 - **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
 
 ## Next Steps
-- **Current Task:** Stream cancellation implemented.
-- **Next:** Resume image upload task (verify `AiService.ts` handles `UiMessageContentPart[]` correctly, test thoroughly).
+- **Current Task:** Implementing multi-chat functionality (see Next Steps above).
+- **Paused:** Image upload task (will resume after multi-chat).
 - **Future:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, `renameSymbol`, `getConfiguration`, debugging tools, `runCommandTool` exit code).
 - **Future:** Confirm `replaceInActiveEditorTool` insertion capability.
 - **Future:** Test structured output and suggested actions thoroughly.
@@ -290,4 +304,6 @@ Implemented stream cancellation functionality.
 - **Persistence:** Use `globalState` for history, `vscode.getState/setState` for webview state. Existing history logic should handle saving partial messages on stream abort.
 - **Dependencies/Setup:** Integrated Vite, Preact, UnoCSS, wouter, etc.
 - **UI Navigation:** Finalized navigation using settings icon in `HeaderControls` and back button in `SettingPage`, removing top nav bar. Routing handled by `wouter` with `<Switch>`.
+- **Multi-Chat Architecture:** Storing chat sessions (`ChatSession[]`) including history and config per chat in `workspaceState`. Backend services and handlers updated to operate based on `chatId`. Frontend manages `chatSessions` state and `activeChatId`.
+- **Model ID Standardization:** Adopted `providerId:modelName` format for model IDs. `ModelResolver` updated; provider implementations and frontend need updates.
 - **Previous Decisions:** (Includes items like routing, dynamic OpenRouter fetch, API key handling, etc.)

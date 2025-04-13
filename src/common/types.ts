@@ -78,3 +78,37 @@ export const structuredAiResponseSchema = z.object({
 });
 
 export type StructuredAiResponse = z.infer<typeof structuredAiResponseSchema>;
+// --- Multi-Chat Types ---
+
+// Configuration for a specific chat session
+export interface ChatConfig {
+    chatModelId?: string; // Overrides default if set
+    imageModelId?: string; // Overrides default if set
+    optimizeModelId?: string; // Overrides default if set
+    useDefaults: boolean; // If true, uses default settings where overrides are not set
+    // We can add more config options later, e.g., temperature, custom instructions per chat
+}
+
+// Represents a single chat session within a project
+export interface ChatSession {
+    id: string; // Unique identifier for the chat
+    name: string; // User-editable name for the chat
+    history: UiMessage[]; // The chat messages
+    config: ChatConfig; // Chat-specific configuration
+    createdAt: number; // Timestamp of creation
+    lastModified: number; // Timestamp of last modification
+}
+
+// Structure for storing chat data in workspaceState
+export interface WorkspaceChatState {
+    chats: { [chatId: string]: ChatSession }; // Map of chatId to ChatSession
+    lastActiveChatId: string | null; // ID of the last viewed chat in this workspace
+    lastLocation?: string; // Last viewed route/path (e.g., '/index.html', '/chats', '/settings')
+}
+
+// Structure for default chat configuration (global scope)
+export interface DefaultChatConfig {
+    defaultChatModelId?: string;
+    defaultImageModelId?: string;
+    defaultOptimizeModelId?: string;
+}

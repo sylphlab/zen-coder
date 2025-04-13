@@ -189,8 +189,9 @@ export class OpenAiProvider implements AiProvider { // Add export back to class
                 // Basic filtering for likely chat models
                 .filter((model: any) => model.id.includes('gpt') || model.id.includes('instruct'))
                 .map((model: any) => ({
-                    id: model.id,
-                    name: model.id, // Use ID as name
+                    // Standardize the ID format
+                    id: `${this.id}:${model.id}`,
+                    name: model.id, // Use ID as name for OpenAI
                 }))
                 .sort((a: ModelDefinition, b: ModelDefinition) => a.id.localeCompare(b.id));
 

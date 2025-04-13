@@ -1,6 +1,23 @@
 # Project Progress
 
 ## What Works
+- **Multi-Chat Backend Structure:**
+    - `HistoryManager` refactored to manage multiple `ChatSession` objects (including history and config) stored in `workspaceState`.
+    - `HistoryManager` includes methods for creating, deleting, updating, and retrieving chat sessions and the last active chat ID.
+    - `HistoryManager` includes basic logic for determining effective chat configuration (merging defaults and chat-specific settings) and deriving `providerId` from a standardized `chatModelId` (`providerId:modelName`).
+    - Core backend services (`AiService`, `StreamProcessor`) and handlers (`SendMessageHandler`, `ClearChatHistoryHandler`, `WebviewReadyHandler`) updated to accept and use `chatId`.
+    - New backend handlers (`SetActiveChatHandler`, `CreateChatHandler`, `DeleteChatHandler`) created and registered in `extension.ts` to manage chat sessions.
+- **Multi-Chat Frontend Structure:**
+    - `app.tsx` state updated to manage `chatSessions` array and `activeChatId`.
+    - `app.tsx` includes handlers (`handleSelectChat`, `handleCreateChat`, `handleDeleteChat`) to post messages to the new backend handlers.
+    - `ChatListPage.tsx` component created to display the list of chats.
+    - Basic routing added in `app.tsx` to navigate between the chat view (`/index.html`) and the chat list view (`/chats`).
+    - `HeaderControls.tsx` updated with a button to navigate to the chat list view.
+    - `MessagesArea.tsx` updated to display messages from the currently active chat session.
+- **Model ID Standardization (Complete):**
+    - Verified provider implementations format IDs correctly.
+    - Verified `package.json` defaults use the correct format.
+    - Refactored frontend (`useModelSelection`, `HeaderControls`, `app.tsx`) to handle standardized IDs and link UI selection to active chat config.
 +- **MCP Server Configuration:**
 +    - Defined `zencoder.mcp.servers` setting in `package.json`.
 +    - `AiService.ts` updated to dynamically load MCP servers based on settings.
@@ -64,45 +81,47 @@
 - **`package.json` Corrected:** Contributions (`activationEvents`, `views`) updated and obsolete sections (`menus`, `commands`) removed to align with `WebviewViewProvider` implementation, resolving the "No data provider registered" error.
 - **Development CSP Relaxed (Testing):** Added `'unsafe-eval'` to `script-src` in development mode CSP to test HMR compatibility.
 
-## What's Left (Potential Future Enhancements)
-- Thorough testing and debugging of core chat and tool execution.
-// - Implement saving of tool results to chat history (TODO in `extension.ts`). // Addressed in latest extension.ts write
-// - Implement actual MCP client integration for tools like `search` (currently placeholder/disabled). // Addressed by dynamic loading
-- Refine Preact component structure.
-- **Markdown & Syntax Highlighting:** Implemented using `react-markdown` and `react-syntax-highlighter` (`vscDarkPlus` theme) in the Preact UI. Initial webview loading/TS errors resolved by fixing root `tsconfig.json` references.
-- Improve error handling in Preact UI.
-- Re-implement tool status updates using recommended Vercel AI SDK APIs (if desired).
-- If relaxing CSP works, investigate if a more specific CSP rule can be used instead of `'unsafe-eval'`.
-- Apply UnoCSS classes for styling.
-- Implement animations using GSAP where appropriate.
-- Define and use Nanostores stores for managing shared state (e.g., settings, chat history).
+## What's Left (Multi-Chat Implementation)
+- **Standardize Model IDs (Complete):** All parts verified/completed.
+- **Refine Frontend (Partially Complete):**
+    - Chat deletion confirmation dialog verified.
+    - `useMessageHandler` hook verified for `loadChatState`.
+    - Chat-specific model selection UI verified in `HeaderControls`.
+    - **TODO:** Improve UI feedback during chat creation/deletion.
+    - **TODO:** Style `ChatListPage.tsx`.
+- **Refine Backend (Complete):**
+    - Default config loading from VS Code settings verified in `HistoryManager`.
+    - VS Code settings definitions exist in `package.json`.
+    - `AiService` usage of effective config verified.
+- **Testing:** Next major step.
 
-## Current Status
-- **UI:** Basic layout and component styling applied using UnoCSS. Dark mode supported. Rendering errors fixed. Navigation refactored (removed top nav, added settings icon button, added back button to settings). Routing functional using `wouter` and `<Switch>`.
-- **Initialization:** Webview initializes correctly without infinite loops, loads history and model state.
-- **History Persistence:** User/Assistant messages saved to global state and loaded on init. Tool result saving needs implementation. Clear history function added.
-- **Model Selection:** Provider and Model ID selection now persists across webview reloads.
-- **Stream Handling:** Explicit end-of-stream signaling implemented between backend and frontend.
-- **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
-- **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
-- **Tool Execution:** Tools execute and return results to the AI. MCP tools are now dynamically loaded based on configuration.
-- **Streaming & Structured Output:** Refactored `streamProcessor.ts` to iterate over `fullStream`, correctly handling mixed stream part types and order. Kept separate handling for `experimental_partialOutputStream`.
-- **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
-- **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
-- **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from the correct file path.
-- **View Provider Registration:** Corrected `package.json` ensures the `WebviewViewProvider` is properly registered.
-- **Webview Loading (Troubleshooting):** Relaxed development CSP to potentially resolve blank webview issue. (Previous)
-- **Styling:** UnoCSS is set up and applied to components. Existing CSS (`app.css`, `index.css`) might conflict or be redundant.
+## What's Left (Other Features/Enhancements)
+- Resume and complete image upload functionality.
+- Implement remaining VS Code tool enhancements (`goToDefinition`, etc.).
+- Confirm `replaceInActiveEditorTool` insertion capability.
+- Test structured output and suggested actions thoroughly.
+- Improve error handling throughout.
+- Refine UI styling and potentially add animations.
+- Consider using Nanostores for state management.
 
-## Known Issues
-// - Saving tool results to chat history is not yet implemented in `extension.ts`. // Addressed
-- Search tool functionality relies on the external `search_files` tool (requires environment support).
-// - `@vscode/webview-ui-toolkit` dependency is unused but still listed. // Removed
-- **AI Response Behavior:** AI models might not always explicitly list tool results (e.g., all generated UUIDs) in their text response, even though they receive the results. This depends on the model and prompt.
-- Custom tool execution status updates (beyond the inline display) are currently disabled.
-- Model resolver logic now iterates through all enabled providers using their `getAvailableModels` method. Dynamic model fetching implemented for OpenRouter, Anthropic, DeepSeek, OpenAI, and Ollama (local tags).
-// - Conversation history is not persisted. // Implemented (Persistence works, Clear button added)
-- API Key management is now handled by individual provider modules, interacting with `vscode.SecretStorage`. `AiService` delegates these operations. Input fields remain in the Settings page webview.
-- **Blank Settings Page:** Resolved. Fixed prop passing and initialization logic between `App.tsx` and `SettingPage.tsx`.
-- **Blank Webview (Development):** Resolved by adding a reference to `webview-ui/tsconfig.json` in the root `tsconfig.json`.
-- **Routing CSS:** Basic navigation links added, but styling (`.app-layout`, `.navigation`, `.content-area`) needs to be implemented in `app.css`.
+## Current Status (Multi-Chat Implementation)
+- Backend services (`HistoryManager`, `AiService`, `StreamProcessor`) and core handlers updated for `chatId`.
+- New backend handlers created and registered (`SetActiveChatHandler`, `CreateChatHandler`, `DeleteChatHandler`).
+- Frontend state (`app.tsx`) updated to manage `chatSessions` and `activeChatId`.
+- `ChatListPage.tsx` component created and integrated into routing.
+- Basic navigation between chat view and chat list implemented.
+- Model ID format standardized and integrated.
+- Frontend model selection UI updated to reflect active chat config.
+- Backend config loading and usage verified.
+
+## Known Issues / TODOs (Multi-Chat)
+- **Model ID Standardization:** Completed.
+- **Frontend State Hook (`useMessageHandler`):** Verified.
+- **Chat Deletion:** Confirmation dialog verified.
+- **Chat Configuration UI:** Implemented via `HeaderControls`.
+- **Default Config Loading:** Implemented in `HistoryManager`.
+- **`AiService._getProviderInstance`:** Verified.
+- **Testing:** Multi-chat functionality is largely untested.
+- **TODO:** Improve UI feedback during chat creation/deletion (e.g., loading indicators).
+- **TODO:** Style `ChatListPage.tsx`.
+- **(Previous Known Issues Still Apply where relevant)**

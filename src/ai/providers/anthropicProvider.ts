@@ -90,7 +90,8 @@ export class AnthropicProvider implements AiProvider {
 
             const models: ModelDefinition[] = jsonResponse.data
                 .map((model: any) => ({
-                    id: model.id,
+                    // Standardize the ID format
+                    id: `${this.id}:${model.id}`,
                     name: model.display_name || model.id,
                 }))
                 .sort((a: ModelDefinition, b: ModelDefinition) => a.name.localeCompare(b.name));

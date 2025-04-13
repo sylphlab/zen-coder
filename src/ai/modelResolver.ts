@@ -57,14 +57,19 @@ export class ModelResolver {
                     // Get models from the specific provider implementation
                     const modelsFromProvider: ModelDefinition[] = await provider.getAvailableModels(apiKey);
 
-                    // Map to the common AvailableModel format
-                    const resolvedPortion: AvailableModel[] = modelsFromProvider.map(m => ({
-                        id: m.id,
-                        name: m.name, // Use 'name' for display label
-                        providerId: provider.id,
-                        providerName: provider.name,
-                        // 'source' could be added here if needed, based on provider logic
-                    }));
+                    // Map to the common AvailableModel format, standardizing the ID
+                    const resolvedPortion: AvailableModel[] = modelsFromProvider.map(m => {
+                        // Standardize ID to "providerId:modelName"
+                        // Assuming m.id is the modelName part from the provider
+                        const standardizedId = `${provider.id}:${m.id}`;
+                        return {
+                            id: standardizedId, // Use standardized ID
+                            name: m.name, // Use 'name' for display label
+                            providerId: provider.id,
+                            providerName: provider.name,
+                            // 'source' could be added here if needed, based on provider logic
+                        };
+                    });
                     allResolvedModels.push(...resolvedPortion);
                     console.log(`[ModelResolver] Successfully fetched/retrieved ${resolvedPortion.length} models from ${provider.name}.`);
                 } catch (error) {

@@ -67,6 +67,10 @@ export class OpenRouterProvider implements AiProvider {
         try {
             const openRouter = createOpenRouter({
                 apiKey: keyToUse,
+                headers: {
+                    'HTTP-Referrer': 'https://github.com/sylphlab/zen-coder',
+                    'X-Title': 'zen-coder',
+                },
             });
             // OpenRouter provider instance takes the model ID directly.
             return openRouter(modelId);
@@ -137,7 +141,8 @@ export class OpenRouterProvider implements AiProvider {
             const models: ModelDefinition[] = data.data
                 .filter((model): model is OpenRouterApiModel => !!model && !!model.id && !!model.name)
                 .map((model) => ({
-                    id: model.id,
+                    // Standardize the ID format
+                    id: `${this.id}:${model.id}`,
                     name: model.name,
                 }))
                 .sort((a, b) => a.name.localeCompare(b.name));

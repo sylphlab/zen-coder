@@ -12,9 +12,19 @@ export class WebviewReadyHandler implements MessageHandler {
             context.postMessage({ type: 'availableModels', payload: models });
             console.log("[WebviewReadyHandler] Sent available models.");
 
-            // Send loaded UI history from HistoryManager
-            context.postMessage({ type: 'loadUiHistory', payload: context.historyManager.getHistory() });
-            console.log("[WebviewReadyHandler] Sent loaded UI history.");
+            // Send chat sessions and last active ID from HistoryManager
+            const allChats = context.historyManager.getAllChatSessions();
+            const lastActiveId = context.historyManager.getLastActiveChatId();
+            const lastLocation = context.historyManager.getLastLocation(); // Get last location
+            context.postMessage({
+                type: 'loadChatState',
+                payload: {
+                    chats: allChats,
+                    lastActiveChatId: lastActiveId,
+                    lastLocation: lastLocation // Include last location
+                }
+            });
+            console.log(`[WebviewReadyHandler] Sent ${allChats.length} chats, last active ID (${lastActiveId}), last location (${lastLocation}).`);
 
             // Use ProviderStatusManager
             const statusList = await context.providerStatusManager.getProviderStatus();
@@ -26,7 +36,7 @@ export class WebviewReadyHandler implements MessageHandler {
             // Send empty states on error to prevent UI hanging
             context.postMessage({ type: 'availableModels', payload: [] });
             context.postMessage({ type: 'providerStatus', payload: [] });
-            context.postMessage({ type: 'loadUiHistory', payload: [] });
+            context.postMessage({ type: 'loadChatState', payload: { chats: [], lastActiveChatId: null, lastLocation: '/index.html' } }); // Include default location on error
         }
     }
 }

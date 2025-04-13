@@ -64,10 +64,11 @@ export class GoogleProvider implements AiProvider {
         // Google doesn't have a simple public API to list models dynamically easily.
         // Return the hardcoded list for now.
         // We could potentially try the discovery API if authenticated, but keep it simple.
+        // Return the hardcoded list, but format the IDs correctly
         const GOOGLE_MODELS_STATIC: ModelDefinition[] = [
-            { id: 'models/gemini-1.5-pro-latest', name: 'Gemini 1.5 Pro (latest)' },
-            { id: 'models/gemini-1.5-flash-latest', name: 'Gemini 1.5 Flash (latest)' },
-            { id: 'models/gemini-1.0-pro', name: 'Gemini 1.0 Pro' },
+            { id: `${this.id}:models/gemini-1.5-pro-latest`, name: 'Gemini 1.5 Pro (latest)' },
+            { id: `${this.id}:models/gemini-1.5-flash-latest`, name: 'Gemini 1.5 Flash (latest)' },
+            { id: `${this.id}:models/gemini-1.0-pro`, name: 'Gemini 1.0 Pro' },
         ];
         return Promise.resolve(GOOGLE_MODELS_STATIC);
     }
