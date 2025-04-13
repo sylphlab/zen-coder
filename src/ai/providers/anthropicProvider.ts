@@ -2,92 +2,128 @@ import * as vscode from 'vscode';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { LanguageModel } from 'ai';
 import { AiProvider, ModelDefinition } from './providerInterface';
+// import { fetchWithTimeout } from '../../utils/fetchWithTimeout'; // Removed import
 
-// Define the models known to be available from Anthropic
-// Note: Anthropic doesn't have a standard public API endpoint to list models dynamically without authentication.
-// This list might need manual updates or a more sophisticated approach if dynamic listing is crucial.
-const ANTHROPIC_MODELS: ModelDefinition[] = [
-  { id: 'claude-3-5-sonnet-20240620', name: 'Claude 3.5 Sonnet' },
-  { id: 'claude-3-opus-20240229', name: 'Claude 3 Opus' },
-  { id: 'claude-3-sonnet-20240229', name: 'Claude 3 Sonnet' },
-  { id: 'claude-3-haiku-20240307', name: 'Claude 3 Haiku' },
-  // Older models (might be deprecated)
-  // { id: 'claude-2.1', name: 'Claude 2.1' },
-  // { id: 'claude-2.0', name: 'Claude 2.0' },
-  // { id: 'claude-instant-1.2', name: 'Claude Instant 1.2' },
-];
+// Removed hardcoded model list
 
-export const anthropicProvider: AiProvider = {
-  id: 'anthropic',
-  name: 'Anthropic',
-  requiresApiKey: true,
-  apiKeyUrl: 'https://console.anthropic.com/settings/keys',
-  secretStorageKey: 'zenCoder.anthropicApiKey',
-  settingsEnabledKey: 'zencoder.provider.anthropic.enabled',
+export class AnthropicProvider implements AiProvider {
+    readonly id = 'anthropic';
+    readonly name = 'Anthropic';
+    readonly requiresApiKey = true;
+    readonly apiKeyUrl = 'https://console.anthropic.com/settings/keys';
+    readonly secretStorageKey = 'zenCoder.anthropicApiKey';
+    readonly settingsEnabledKey = 'zencoder.provider.anthropic.enabled';
 
-  /**
-   * Creates an Anthropic language model instance.
-   */
-  createModel(apiKey: string | undefined, modelId: string): LanguageModel {
-    if (!apiKey) {
-      throw new Error('Anthropic API key is required.');
-    }
-    // Validate if the modelId is one of the known ones (optional but good practice)
-    if (!ANTHROPIC_MODELS.some(m => m.id === modelId)) {
-        console.warn(`Anthropic model '${modelId}' not in known list. Attempting to create anyway.`);
-        // Or throw new Error(`Unknown Anthropic model ID: ${modelId}`);
+    // Store context for secretStorage access
+    private _secretStorage: vscode.SecretStorage;
+
+    constructor(context: vscode.ExtensionContext) {
+        this._secretStorage = context.secrets;
     }
 
-    const anthropic = createAnthropic({
-      apiKey: apiKey,
-      // baseURL: '...', // Optional: If using a proxy or different endpoint
-    });
+    /**
+     * Creates an Anthropic language model instance.
+     */
+    createModel(apiKey: string | undefined, modelId: string): LanguageModel {
+        const keyToUse = apiKey; // Use the apiKey passed to createModel
+        if (!keyToUse) {
+            // Key is required
+            throw new Error('Anthropic API key is required to create a model instance but was not provided.');
+        }
 
-    // Dynamically select the model function based on the modelId
-    // The ai-sdk might simplify this in the future, but currently, you often need the specific model function.
-    // For now, we assume the SDK handles the modelId string directly within the provider instance.
-    // If specific model functions were needed:
-    // switch (modelId) {
-    //   case 'claude-3-5-sonnet-20240620':
-    //     return anthropic(modelId);
-    //   // ... other cases
-    //   default:
-    //     // Fallback or error
-    //     return anthropic(modelId); // Try the generic way
-    // }
-    // Assuming the SDK's createAnthropic instance can take the model ID directly in chat/generate calls,
-    // or that a generic model function exists. Let's return the provider instance itself,
-    // and the modelId will be passed during the actual API call (e.g., streamText).
-    // The `LanguageModel` interface is satisfied by the provider instance itself.
-    // Correction: The provider instance (`anthropic`) is not the LanguageModel.
-    // We need to call the provider instance with the model ID.
-    return anthropic(modelId);
-  },
+        try {
+            const anthropic = createAnthropic({
+                apiKey: keyToUse,
+            });
+            // The instance returned by createAnthropic is the factory for models
+            return anthropic(modelId);
+        } catch (error: any) {
+            console.error(`Failed to create Anthropic model instance for ${modelId}:`, error);
+            throw new Error(`Failed to create Anthropic model instance: ${error.message || error}`);
+        }
+    }
 
-  /**
-   * Retrieves the list of known available Anthropic models.
-   */
-  async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
-    // For Anthropic, we return the hardcoded list as there's no public listing API.
-    // An API key isn't strictly needed for *this* implementation, but the interface allows it.
-    return Promise.resolve(ANTHROPIC_MODELS);
-  },
-  // --- New methods required by interface ---
+    /**
+     * Retrieves the list of known available Anthropic models.
+     */
+    async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
+        console.log(`[AnthropicProvider] getAvailableModels called. Provided apiKey: ${!!apiKey}`); // Log entry
+        // Use the provided API key or fetch from storage
+        const keyToUse = apiKey || await this.getApiKey(this._secretStorage);
+        console.log(`[AnthropicProvider] Using API key: ${keyToUse ? '******' + keyToUse.slice(-4) : 'Not found'}`); // Log key usage (masked)
+        if (!keyToUse) {
+            console.warn("[AnthropicProvider] API key not available for fetching Anthropic models.");
+            return [];
+        }
 
-  async getApiKey(secretStorage: vscode.SecretStorage): Promise<string | undefined> {
-    return await secretStorage.get(this.secretStorageKey);
-  },
+        const endpoint = 'https://api.anthropic.com/v1/models';
+        const timeoutMs = 10000;
+        console.log(`[AnthropicProvider] Fetching from endpoint: ${endpoint}`); // Log endpoint
+        try {
+            const response = await fetch(endpoint, { // Use native fetch
+                method: 'GET',
+                headers: {
+                    'x-api-key': keyToUse,
+                    'anthropic-version': '2023-06-01', // Required header
+                    'Content-Type': 'application/json',
+                },
+                signal: AbortSignal.timeout(timeoutMs) // Use AbortSignal for timeout
+            });
 
-  async setApiKey(secretStorage: vscode.SecretStorage, apiKey: string): Promise<void> {
-    await secretStorage.store(this.secretStorageKey, apiKey);
-  },
+            console.log(`[AnthropicProvider] API Response Status: ${response.status}`); // Log status
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Failed to fetch Anthropic models: ${response.status} ${response.statusText}`, errorText);
+                return [];
+            }
 
-  async deleteApiKey(secretStorage: vscode.SecretStorage): Promise<void> {
-    await secretStorage.delete(this.secretStorageKey);
-  },
+            const jsonResponse: any = await response.json();
+            // console.log("[AnthropicProvider] API Response JSON:", JSON.stringify(jsonResponse, null, 2)); // Log raw response (optional, can be large)
 
-  isEnabled(): boolean {
-    const config = vscode.workspace.getConfiguration();
-    return config.get<boolean>(this.settingsEnabledKey, true); // Default to true
-  },
-};
+            if (!jsonResponse || !Array.isArray(jsonResponse.data)) {
+                 console.error("[AnthropicProvider] Invalid response format from Anthropic /v1/models:", jsonResponse);
+                 console.error("Invalid response format from Anthropic /v1/models:", jsonResponse);
+                 return [];
+            }
+
+            const models: ModelDefinition[] = jsonResponse.data
+                .map((model: any) => ({
+                    id: model.id,
+                    name: model.display_name || model.id, // Use display_name if available
+                }))
+                .sort((a: ModelDefinition, b: ModelDefinition) => a.name.localeCompare(b.name)); // Sort by name
+
+            console.log(`[AnthropicProvider] Parsed ${models.length} models.`); // Log count
+            return models;
+
+        } catch (error: any) {
+            if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+                 console.error(`Error fetching Anthropic models: Request timed out after ${timeoutMs}ms`);
+            } else {
+                 console.error("Error fetching available Anthropic models:", error);
+            }
+            return [];
+        }
+    }
+    // --- Interface methods using stored secretStorage ---
+
+    async getApiKey(secretStorage: vscode.SecretStorage): Promise<string | undefined> {
+        // Parameter secretStorage is ignored, use the instance's _secretStorage
+        return await this._secretStorage.get(this.secretStorageKey);
+    }
+
+    async setApiKey(secretStorage: vscode.SecretStorage, apiKey: string): Promise<void> {
+        // Parameter secretStorage is ignored, use the instance's _secretStorage
+        await this._secretStorage.store(this.secretStorageKey, apiKey);
+    }
+
+    async deleteApiKey(secretStorage: vscode.SecretStorage): Promise<void> {
+        // Parameter secretStorage is ignored, use the instance's _secretStorage
+        await this._secretStorage.delete(this.secretStorageKey);
+    }
+
+    isEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration();
+        return config.get<boolean>(this.settingsEnabledKey, true); // Default to true
+    }
+}

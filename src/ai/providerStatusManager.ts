@@ -1,12 +1,21 @@
 import * as vscode from 'vscode';
-import { allProviders, providerMap } from './providers'; // Import provider definitions
+// import { allProviders, providerMap } from './providers'; // Removed direct import
+import { AiProvider } from './providers/providerInterface'; // Import interface
+import { AiService } from './aiService'; // Import AiService
 import { ProviderInfoAndStatus } from '../common/types'; // Use shared type
 
 /**
  * Manages retrieving the status (enabled, API key set) of AI providers.
  */
 export class ProviderStatusManager {
-    constructor(private context: vscode.ExtensionContext) {}
+    private _aiService: AiService; // Store AiService instance
+
+    constructor(
+        private context: vscode.ExtensionContext,
+        aiService: AiService // Inject AiService
+    ) {
+        this._aiService = aiService;
+    }
 
     /**
      * Checks if the API key is set for each provider that requires one.
@@ -14,7 +23,8 @@ export class ProviderStatusManager {
      */
     public async getApiKeyStatus(): Promise<Record<string, boolean>> {
         const status: Record<string, boolean> = {};
-        for (const provider of allProviders) {
+        // Use providers from AiService instance
+        for (const provider of this._aiService.allProviders) {
             if (provider.requiresApiKey) {
                 try {
                     // Use the provider's method to check the key
@@ -41,12 +51,14 @@ export class ProviderStatusManager {
         const apiKeyStatusMap = await this.getApiKeyStatus();
         const combinedStatusList: ProviderInfoAndStatus[] = [];
 
-        for (const provider of allProviders) {
+        // Use providers from AiService instance
+        for (const provider of this._aiService.allProviders) {
             const isEnabled = provider.isEnabled(); // Use provider's method
             const hasApiKey = apiKeyStatusMap[provider.id] ?? false;
 
             // Find the provider details from the map to get name, URL etc.
-            const providerDetails = providerMap.get(provider.id);
+            // Use providerMap from AiService instance
+            const providerDetails = this._aiService.providerMap.get(provider.id);
 
             combinedStatusList.push({
                 id: provider.id,

@@ -17,60 +17,76 @@ const GOOGLE_MODELS: ModelDefinition[] = [
   // { id: 'models/gemini-pro-vision', name: 'Gemini Pro Vision' }, // Vision model, might have different interface needs
 ];
 
-export const googleProvider: AiProvider = {
-  id: 'google',
-  name: 'Google Gemini',
-  requiresApiKey: true,
-  apiKeyUrl: 'https://aistudio.google.com/app/apikey',
-  secretStorageKey: 'zenCoder.googleApiKey',
-  settingsEnabledKey: 'zencoder.provider.google.enabled',
+export class GoogleProvider implements AiProvider {
+    readonly id = 'google';
+    readonly name = 'Google Gemini';
+    readonly requiresApiKey = true;
+    readonly apiKeyUrl = 'https://aistudio.google.com/app/apikey';
+    readonly secretStorageKey = 'zenCoder.googleApiKey';
+    readonly settingsEnabledKey = 'zencoder.provider.google.enabled';
 
-  /**
-   * Creates a Google Gemini language model instance.
-   */
-  createModel(apiKey: string | undefined, modelId: string): LanguageModel {
-    if (!apiKey) {
-      throw new Error('Google API key is required.');
-    }
-    // Validate if the modelId is one of the known ones (optional)
-    if (!GOOGLE_MODELS.some(m => m.id === modelId)) {
-        console.warn(`Google model '${modelId}' not in known list. Attempting to create anyway.`);
+    // Store context for secretStorage access
+    private _secretStorage: vscode.SecretStorage;
+
+    constructor(context: vscode.ExtensionContext) {
+        this._secretStorage = context.secrets;
     }
 
-    const google = createGoogleGenerativeAI({
-      apiKey: apiKey,
-      // baseURL: '...', // Optional: If using a proxy
-      // apiVersion: 'v1beta', // Optional: Specify API version if needed
-    });
+    /**
+     * Creates a Google Gemini language model instance.
+     */
+    createModel(apiKey: string | undefined, modelId: string): LanguageModel {
+        const keyToUse = apiKey;
+        if (!keyToUse) {
+            throw new Error('Google API key is required to create a model instance but was not provided.');
+        }
+        // Validate if the modelId is one of the known ones (optional)
+        // if (!GOOGLE_MODELS.some(m => m.id === modelId)) { // Keep hardcoded list for validation? Or remove? Let's remove for now.
+        //     console.warn(`Google model '${modelId}' not in known list. Attempting to create anyway.`);
+        // }
 
-    // The google provider instance from ai-sdk takes the model ID directly.
-    return google(modelId);
-  },
+        try {
+            const google = createGoogleGenerativeAI({
+                apiKey: keyToUse,
+            });
+            // The google provider instance from ai-sdk takes the model ID directly.
+            return google(modelId);
+        } catch (error: any) {
+             console.error(`Failed to create Google model instance for ${modelId}:`, error);
+             throw new Error(`Failed to create Google model instance: ${error.message || error}`);
+        }
+    }
 
-  /**
-   * Retrieves the list of known available Google Gemini models.
-   */
-  async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
-    // Similar to Anthropic, return the hardcoded list.
-    // A future enhancement could involve trying to list models if an API becomes available.
-    return Promise.resolve(GOOGLE_MODELS);
-  },
-  // --- New methods required by interface ---
+    /**
+     * Retrieves the list of known available Google Gemini models.
+     */
+    async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
+        // Google doesn't have a simple public API to list models dynamically easily.
+        // Return the hardcoded list for now.
+        // We could potentially try the discovery API if authenticated, but keep it simple.
+        const GOOGLE_MODELS_STATIC: ModelDefinition[] = [
+            { id: 'models/gemini-1.5-pro-latest', name: 'Gemini 1.5 Pro (latest)' },
+            { id: 'models/gemini-1.5-flash-latest', name: 'Gemini 1.5 Flash (latest)' },
+            { id: 'models/gemini-1.0-pro', name: 'Gemini 1.0 Pro' },
+        ];
+        return Promise.resolve(GOOGLE_MODELS_STATIC);
+    }
+    // --- Interface methods using stored secretStorage ---
 
-  async getApiKey(secretStorage: vscode.SecretStorage): Promise<string | undefined> {
-    return await secretStorage.get(this.secretStorageKey);
-  },
+    async getApiKey(secretStorage: vscode.SecretStorage): Promise<string | undefined> {
+        return await this._secretStorage.get(this.secretStorageKey);
+    }
 
-  async setApiKey(secretStorage: vscode.SecretStorage, apiKey: string): Promise<void> {
-    await secretStorage.store(this.secretStorageKey, apiKey);
-  },
+    async setApiKey(secretStorage: vscode.SecretStorage, apiKey: string): Promise<void> {
+        await this._secretStorage.store(this.secretStorageKey, apiKey);
+    }
 
-  async deleteApiKey(secretStorage: vscode.SecretStorage): Promise<void> {
-    await secretStorage.delete(this.secretStorageKey);
-  },
+    async deleteApiKey(secretStorage: vscode.SecretStorage): Promise<void> {
+        await this._secretStorage.delete(this.secretStorageKey);
+    }
 
-  isEnabled(): boolean {
-    const config = vscode.workspace.getConfiguration();
-    return config.get<boolean>(this.settingsEnabledKey, true); // Default to true
-  },
-};
+    isEnabled(): boolean {
+        const config = vscode.workspace.getConfiguration();
+        return config.get<boolean>(this.settingsEnabledKey, true); // Default to true
+    }
+}

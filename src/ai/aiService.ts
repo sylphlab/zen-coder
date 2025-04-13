@@ -1,10 +1,17 @@
 import * as vscode from 'vscode';
 // Import Output and the new schema
 // Import necessary types, remove non-exported ones
-import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel, Output, TextStreamPart, ToolSet } from 'ai';
+import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel, Output, TextStreamPart, ToolSet, generateObject } from 'ai';
 import { structuredAiResponseSchema, StructuredAiResponse } from '../common/types';
 import { allTools, ToolName } from '../tools';
-import { allProviders, providerMap, AiProvider, ModelDefinition } from './providers'; // Import new provider structure
+// Import Provider Classes and interface
+import { AiProvider, ModelDefinition } from './providers/providerInterface';
+import { AnthropicProvider } from './providers/anthropicProvider';
+import { GoogleProvider } from './providers/googleProvider';
+import { OpenRouterProvider } from './providers/openRouterProvider';
+import { DeepseekProvider } from './providers/deepseekProvider';
+import { OpenAiProvider } from './providers/openaiProvider';
+import { OllamaProvider } from './providers/ollamaProvider';
 // Import the specific execution logic, callback type, AND the standard tool definition
 import { executeUuidGenerateWithProgress, UuidUpdateCallback, uuidGenerateTool as uuidGenerateToolDefinition } from '../tools/utils/uuidGenerate';
 import z from 'zod';
@@ -16,8 +23,8 @@ import z from 'zod';
 // Define ApiProviderKey based on provider IDs
 // This assumes provider IDs match the keys previously used in SECRET_KEYS
 // If IDs change, this might need adjustment or a different approach.
-export type ApiProviderKey = typeof allProviders[number]['id'];
-
+// Re-export ApiProviderKey type derived from the instances
+export type ApiProviderKey = AiService['allProviders'][number]['id'];
 // Model list (Removed as models are resolved dynamically)
 // const availableModelIds = [...]
 
@@ -40,7 +47,24 @@ export class AiService {
     // private conversationHistory: CoreMessage[] = [];
     private postMessageCallback?: (message: any) => void;
 
-    constructor(private context: vscode.ExtensionContext) {}
+    // Store providers and map internally
+    public readonly allProviders: AiProvider[];
+    public readonly providerMap: Map<string, AiProvider>;
+
+    constructor(private context: vscode.ExtensionContext) {
+        // Instantiate all providers and create the map
+        const providerClasses = [
+            AnthropicProvider,
+            GoogleProvider,
+            OpenRouterProvider,
+            DeepseekProvider,
+            OpenAiProvider,
+            OllamaProvider,
+        ];
+        this.allProviders = providerClasses.map(ProviderClass => new ProviderClass(context));
+        this.providerMap = new Map(this.allProviders.map(provider => [provider.id, provider]));
+        console.log(`[AiService] Initialized ${this.allProviders.length} providers.`);
+    }
 
     public async initialize(): Promise<void> {
         console.log('[AiService] Initializing... (API keys will be loaded on demand)');
@@ -67,36 +91,25 @@ export class AiService {
 
     // --- Private Helpers ---
 
-    // Modified signature to accept modelId
-    private async _getProviderInstance(modelId: string): Promise<LanguageModel | null> {
-        console.log(`[AiService] _getProviderInstance called for model: ${modelId}`);
-        // Use the passed modelId directly
-        let providerId: string | null = null;
+    // Modified signature to accept providerId and modelId
+    private async _getProviderInstance(providerId: string, modelId: string): Promise<LanguageModel | null> {
+        console.log(`[AiService] _getProviderInstance called for provider: ${providerId}, model: ${modelId}`);
+        // Use the passed providerId directly
         let actualModelId = modelId; // Use the passed modelId for creating the instance
 
-        // 1. Determine Provider ID based on modelId pattern
-        if (modelId.startsWith('claude-')) {
-            providerId = 'anthropic';
-        } else if (modelId.startsWith('models/')) {
-            providerId = 'google';
-            // Keep the full 'models/...' ID for Gemini
-        } else if (modelId.startsWith('deepseek-')) {
-            providerId = 'deepseek';
-        } else if (modelId.includes('/')) { // Assume OpenRouter if it contains a slash
-            providerId = 'openrouter';
-            // Keep the full ID like 'openrouter/google/gemini-pro-1.5'
-        } else {
-            console.error(`[AiService] Cannot determine provider for model ID: ${modelId} using pattern matching.`);
-        }
+        // 1. Determine Provider ID based on modelId pattern - REMOVED
+        // Removed the logic that infers providerId from modelId pattern.
 
-        console.log(`[AiService] Determined provider ID: ${providerId}`);
+        // Use the passed providerId directly
         if (!providerId) {
-            vscode.window.showErrorMessage(`無法從模型 ID "${modelId}" 判斷 Provider.`);
-            return null;
+             console.error(`[AiService] No providerId passed to _getProviderInstance.`);
+             vscode.window.showErrorMessage(`內部錯誤：未提供 Provider ID。`);
+             return null;
         }
 
         // 2. Get Provider Implementation from Map
-        const provider = providerMap.get(providerId);
+        // Use the instance's providerMap
+        const provider = this.providerMap.get(providerId);
         if (!provider) {
             console.error(`[AiService] Internal error: Provider implementation not found in map for ID: ${providerId}`);
             vscode.window.showErrorMessage(`內部錯誤：找不到 Provider ${providerId} 的實作。`);
@@ -161,9 +174,10 @@ export class AiService {
     public async getAiResponseStream<TOOLS extends ToolSet, PARTIAL_OUTPUT>(
         prompt: string,
         history: CoreMessage[] = [],
+        providerId: string, // Add providerId parameter
         modelId: string
     ) {
-        const modelInstance = await this._getProviderInstance(modelId); // Pass modelId
+        const modelInstance = await this._getProviderInstance(providerId, modelId); // Pass providerId and modelId
 
         if (!modelInstance) {
             // Error handled in _getProviderInstance
@@ -203,37 +217,61 @@ export class AiService {
             // Remove the first generic (tools), explicitly provide the second (output schema)
             // Remove all generics from streamText call
             const streamTextResult = await streamText({
+                toolCallStreaming: true,
                 model: modelInstance,
                 messages: messagesForApi,
                 tools: activeTools,
-                // Add experimental_output to request structured data
-                experimental_output: Output.object({ schema: structuredAiResponseSchema }),
-                maxSteps: 5,
+                // experimental_output removed - we will parse JSON from the end of the text stream
+                maxSteps: 100,
+                experimental_continueSteps: true,
                 // Use 'any' for event type temporarily to bypass complex type checking issues with experimental_output
                 // We will use optional chaining and safeParse inside
                 // onFinish callback removed
                 experimental_repairToolCall: async ({ toolCall, error, messages, system }) => {
-                    // ... (repair logic remains the same)
-                     console.warn(`Attempting to repair tool call for ${toolCall.toolName} due to error: ${error.message}`);
-                     try {
-                         const repairResult = await generateText({
-                             model: modelInstance, system, messages: [
-                                 ...messages,
-                                 { role: 'assistant', content: [{ type: 'tool-call', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: toolCall.args }] },
-                                 { role: 'tool', content: [{ type: 'tool-result', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, result: `Error executing tool: ${error.message}. Please try again.` }] }
-                             ],
-                             tools: activeTools, // Ensure activeTools is used
-                         });
-                         const newToolCall = repairResult.toolCalls.find(newTc => newTc.toolName === toolCall.toolName);
-                         if (newToolCall) {
-                             console.log(`Tool call ${toolCall.toolName} successfully repaired.`);
-                             return { toolCallType: 'function', toolCallId: toolCall.toolCallId, toolName: newToolCall.toolName, args: JSON.stringify(newToolCall.args) };
-                         }
-                         console.error(`Tool call repair failed for ${toolCall.toolName}: Model did not generate a new call.`); return null;
-                     } catch (repairError: any) {
-                         console.error(`Error during tool call repair attempt for ${toolCall.toolName}:`, repairError); return null;
-                     }
-                }
+                    const result = await generateText({
+                        model: modelInstance,
+                        system,
+                        messages: [
+                          ...messages,
+                          {
+                            role: 'assistant',
+                            content: [
+                              {
+                                type: 'tool-call',
+                                toolCallId: toolCall.toolCallId,
+                                toolName: toolCall.toolName,
+                                args: toolCall.args,
+                              },
+                            ],
+                          },
+                          {
+                            role: 'tool' as const,
+                            content: [
+                              {
+                                type: 'tool-result',
+                                toolCallId: toolCall.toolCallId,
+                                toolName: toolCall.toolName,
+                                result: error.message,
+                              },
+                            ],
+                          },
+                        ],
+                        tools: activeTools,
+                      });
+                  
+                      const newToolCall = result.toolCalls.find(
+                        newToolCall => newToolCall.toolName === toolCall.toolName,
+                      );
+                  
+                      return newToolCall !== undefined
+                        ? {
+                            toolCallType: 'function' as const,
+                            toolCallId: toolCall.toolCallId,
+                            toolName: toolCall.toolName,
+                            args: JSON.stringify(newToolCall.args),
+                          }
+                        : null;
+                    },
             });
 
             // Return the StreamTextResult object directly
@@ -260,7 +298,7 @@ export class AiService {
 
     // --- API Key Management (Delegated to Providers) ---
     public async setApiKey(providerId: string, apiKey: string): Promise<void> {
-        const provider = providerMap.get(providerId);
+        const provider = this.providerMap.get(providerId); // Use this.providerMap
         if (!provider) {
             const errorMsg = `[AiService] Cannot set API key: Unknown provider ID '${providerId}'.`;
             console.error(errorMsg);
@@ -282,7 +320,7 @@ export class AiService {
     }
 
     public async deleteApiKey(providerId: string): Promise<void> {
-         const provider = providerMap.get(providerId);
+         const provider = this.providerMap.get(providerId); // Use this.providerMap
          if (!provider) {
              const errorMsg = `[AiService] Cannot delete API key: Unknown provider ID '${providerId}'.`;
              console.error(errorMsg);

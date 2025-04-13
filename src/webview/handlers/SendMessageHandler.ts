@@ -17,8 +17,14 @@ export class SendMessageHandler implements MessageHandler {
 
         try {
             const userMessageText = message.text;
+            const providerId = message.providerId; // Extract providerId
             const modelId = message.modelId;
 
+            if (!providerId) { // Check for providerId
+                console.error("[SendMessageHandler] No providerId provided.");
+                context.postMessage({ type: 'addMessage', sender: 'assistant', text: 'Error: No provider ID specified.' });
+                return;
+            }
             if (!modelId) {
                 console.error("[SendMessageHandler] No modelId provided.");
                 context.postMessage({ type: 'addMessage', sender: 'assistant', text: 'Error: No model ID specified.' });
@@ -41,10 +47,11 @@ export class SendMessageHandler implements MessageHandler {
             // Add assistant message frame *before* calling AI to get the ID
             const assistantUiMsgId = await context.historyManager.addAssistantMessageFrame();
 
-            // Call getAiResponseStream without historyManager/assistantUiMsgId
+            // Call getAiResponseStream with providerId and modelId
             const streamResult = await context.aiService.getAiResponseStream(
                 userMessageText,
                 coreMessagesForAi,
+                providerId, // Pass providerId
                 modelId
             );
 
@@ -56,26 +63,22 @@ export class SendMessageHandler implements MessageHandler {
 
             // Process the stream using the StreamProcessor instance
             // Pass the StreamTextResult object to the processor and get the final structured object
-            const finalStructuredResponse = await this._streamProcessor.process(streamResult, assistantUiMsgId);
+            // Process the stream. This now returns void.
+            await this._streamProcessor.process(streamResult, assistantUiMsgId);
 
             // --- Final AI History Update & Suggested Actions ---
+            // --- Final AI History Update ---
+            // Suggested actions are no longer handled here as StreamProcessor doesn't return them.
+            // This logic will be moved to HistoryManager.reconcileFinalAssistantMessage.
             try {
-                console.log(`[SendMessageHandler] Received final StructuredResponse from processor:`, finalStructuredResponse);
+                console.log(`[SendMessageHandler] Stream processing finished for ${assistantUiMsgId}. Reconciling history.`);
 
                 // We no longer await streamResult.text here.
                 // HistoryManager will use the accumulated text from appendTextChunk.
 
-                // Handle suggested actions if they exist in the structured response
-                if (finalStructuredResponse?.suggested_actions && finalStructuredResponse.suggested_actions.length > 0) {
-                    console.log("[SendMessageHandler] Received suggested actions:", finalStructuredResponse.suggested_actions);
-                    context.postMessage({ type: 'addSuggestedActions', payload: { messageId: assistantUiMsgId, actions: finalStructuredResponse.suggested_actions } });
-                } else if (!finalStructuredResponse) {
-                     console.warn(`[SendMessageHandler] Stream processor returned null final structured response for ID: ${assistantUiMsgId}. Suggested actions might be missing.`);
-                }
-
                 // Reconcile history using the accumulated text (handled internally by HistoryManager)
                 // and passing null for finalCoreMessage as we only need it for tool calls.
-                await context.historyManager.reconcileFinalAssistantMessage(assistantUiMsgId, null);
+                await context.historyManager.reconcileFinalAssistantMessage(assistantUiMsgId, null, context.postMessage);
 
                 // Optionally await the final promise from AiServiceResponse for usage/finishReason
                 // const finalDetails = await streamResult.finalPromise;

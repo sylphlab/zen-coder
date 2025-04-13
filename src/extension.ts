@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { CoreMessage } from 'ai'; // Keep CoreMessage if needed elsewhere, maybe not
 import { AiService, ApiProviderKey } from './ai/aiService'; // Removed AiServiceResponse import
-import { providerMap } from './ai/providers';
+// import { providerMap } from './ai/providers'; // Removed - Map is now in AiService
 import { UiMessage } from './common/types'; // Import shared UI types
 import { getWebviewContent } from './webview/webviewContent'; // Import webview content generator
 import { HistoryManager } from './historyManager'; // Import History Manager
@@ -69,9 +69,10 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._extensionUri = context.extensionUri;
         this._extensionMode = context.extensionMode;
         this._aiService = aiService;
-        this._historyManager = new HistoryManager(context); // Instantiate HistoryManager
-        this._providerStatusManager = new ProviderStatusManager(context); // Instantiate Status Manager
-        this._modelResolver = new ModelResolver(context, this._providerStatusManager); // Instantiate Model Resolver
+        this._historyManager = new HistoryManager(context);
+        // Pass AiService instance to managers
+        this._providerStatusManager = new ProviderStatusManager(context, aiService);
+        this._modelResolver = new ModelResolver(context, this._providerStatusManager, aiService);
         this._messageHandlers = new Map(); // Initialize the map
         console.log("ZenCoderChatViewProvider constructed.");
     }
@@ -124,11 +125,11 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new WebviewReadyHandler(),
             new SendMessageHandler(this._streamProcessor), // Pass StreamProcessor instance
             new GetAvailableModelsHandler(),
-            new GetProviderStatusHandler(),
-            new SetProviderEnabledHandler(),
-            new SetApiKeyHandler(),
-            new DeleteApiKeyHandler(),
-            new ClearChatHistoryHandler(),
+            new GetProviderStatusHandler(), // Needs AiService? No, uses ProviderStatusManager
+            new SetProviderEnabledHandler(this._aiService), // Pass AiService instance
+            new SetApiKeyHandler(this._aiService), // Pass AiService instance
+            new DeleteApiKeyHandler(this._aiService), // Pass AiService instance
+            new ClearChatHistoryHandler(), // Doesn't need AiService
             new ExecuteToolActionHandler(this._aiService), // Register the new handler
             // Add other handlers here
         ];

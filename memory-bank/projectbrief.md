@@ -1,4 +1,4 @@
-# Project Brief: Zen Coder VS Code Extension (MVP)
+# Project Brief: Zen Coder VS Code Extension
 
 ## Objective
 Build a lightweight VS Code extension that provides a simple chat interface to interact with selected AI models for coding assistance. Focus on core functionality, ease of use for a single developer, and direct integration with essential VS Code actions via AI tools.
@@ -54,7 +54,7 @@ Build a lightweight VS Code extension that provides a simple chat interface to i
 - Use `vsce` for packaging.
 - Clear code structure (extension logic, webview UI, AI service).
 
-## Exclusions for MVP
+## Initial Exclusions (May be revisited)
 - No RAG.
 - No complex multi-assistant features.
 - No advanced state management/checkpointing.

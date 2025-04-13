@@ -1,34 +1,34 @@
 import { AiProvider } from './providerInterface';
-import { anthropicProvider } from './anthropicProvider';
-import { googleProvider } from './googleProvider';
-import { openRouterProvider } from './openRouterProvider';
-import { deepseekProvider } from './deepseekProvider';
+// Import Provider Classes instead of instances
+import { AnthropicProvider } from './anthropicProvider'; // Assuming class export now
+import { GoogleProvider } from './googleProvider';       // Assuming class export now
+import { OpenRouterProvider } from './openRouterProvider'; // Assuming class export now
+import { DeepseekProvider } from './deepseekProvider';   // Assuming class export now
+import { OpenAiProvider } from './openaiProvider';
+import { OllamaProvider } from './ollamaProvider';
 
-/**
- * A list containing all implemented AI provider modules.
- * This list is used by AiService to manage and access different providers.
- */
-export const allProviders: AiProvider[] = [
-  anthropicProvider,
-  googleProvider,
-  openRouterProvider,
-  deepseekProvider,
-  // Add new providers here as they are implemented
-];
+// Remove comments related to instantiation here
+// Remove instantiation logic and instance imports
+
+
+// Remove allProviders array export - this needs context for instantiation
+// export const allProviders: AiProvider[] = [ ... ];
 
 /**
  * A map for quick lookup of providers by their unique ID.
  */
-export const providerMap: Map<string, AiProvider> = new Map(
-  allProviders.map(provider => [provider.id, provider])
-);
+// Remove providerMap export - this needs context for instantiation
+// export const providerMap: Map<string, AiProvider> = new Map( ... );
 
 // Export individual providers if needed elsewhere, though using the list/map is preferred.
+// Export the Provider Classes
 export {
-  anthropicProvider,
-  googleProvider,
-  openRouterProvider,
-  deepseekProvider,
+  AnthropicProvider,
+  GoogleProvider,
+  OpenRouterProvider,
+  DeepseekProvider,
+  OpenAiProvider,
+  OllamaProvider,
 };
 
 // Export the core interface as well

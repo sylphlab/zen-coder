@@ -1,17 +1,24 @@
 import * as vscode from 'vscode';
-import { providerMap, ModelDefinition } from './providers'; // Import provider map and model def type
-import { ProviderStatusManager } from './providerStatusManager'; // Needs status manager
-import { ApiProviderKey } from './aiService'; // Need ApiProviderKey type
+// import { providerMap } from './providers'; // Removed direct import
+import { ModelDefinition } from './providers/providerInterface'; // Import interface
+import { ProviderStatusManager } from './providerStatusManager';
+import { AiService } from './aiService'; // Import AiService
+// ApiProviderKey is not needed here
 import { AvailableModel } from '../common/types'; // Use shared type
 
 /**
  * Resolves the list of available AI models based on enabled providers and set API keys.
  */
 export class ModelResolver {
+    private _aiService: AiService; // Store AiService instance
+
     constructor(
-        private context: vscode.ExtensionContext,
-        private providerStatusManager: ProviderStatusManager // Inject status manager
-    ) {}
+        private context: vscode.ExtensionContext, // Keep context for secrets access
+        private providerStatusManager: ProviderStatusManager,
+        aiService: AiService // Inject AiService
+    ) {
+        this._aiService = aiService;
+    }
 
     /**
      * Fetches and compiles a list of available models from all enabled providers
@@ -28,7 +35,8 @@ export class ModelResolver {
         for (const providerInfo of providerInfoList) {
             // Check if provider is enabled and has API key if required
             if (providerInfo.enabled && (providerInfo.apiKeySet || !providerInfo.requiresApiKey)) {
-                const provider = providerMap.get(providerInfo.id);
+                // Use providerMap from AiService instance
+                const provider = this._aiService.providerMap.get(providerInfo.id);
 
                 if (!provider) {
                     console.warn(`[ModelResolver] Provider implementation not found for ID '${providerInfo.id}'. Skipping.`);

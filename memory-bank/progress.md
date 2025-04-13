@@ -1,6 +1,7 @@
 # Project Progress
 
 ## What Works
++- **Stream Processing Refactoring:** Refactored `src/streamProcessor.ts` to correctly handle mixed stream parts by iterating over `fullStream`.
 +- **Filesystem Tool Refactoring & Enhancement:**
 +    - Tools (`listFiles`, `statItems`, `deleteItems`, `searchContent`, `replaceContent`) now support Glob patterns for path inputs where appropriate.
 +    - Tools processing content (`readFiles`, `searchContent`, `replaceContent`) use a consistent `lineRange` parameter (with negative indexing) for range control.
@@ -50,7 +51,7 @@
 - UI Tool Display refined (inline, human-readable summaries, progress).
 - **Routing Implemented:** Added `wouter` for navigation between Chat (`/`) and Settings (`/settings`) pages. Created basic `SettingPage.tsx` and `ChatPage.tsx`. Replaced settings modal with the `/settings` route. (Previous)
 - **Settings Provider Search:** Added a search input to `SettingPage.tsx` to filter the list of providers.
-- **AI Provider Refactoring (Complete):** Implemented modular provider structure under `src/ai/providers`. `AiService` now fully delegates model creation, listing, API key management, and status checks to these modules.
+- **AI Provider Refactoring (Complete):** Implemented modular provider structure under `src/ai/providers`. `AiService` now fully delegates model creation, listing, API key management, and status checks to these modules. Added OpenAI and Ollama providers.
 - **Settings Page API Key Input:** Added input fields and buttons to `SettingPage.tsx` to allow users to set API keys for each provider. Implemented message passing (`setApiKey`) to the extension host, which handles storing the key in `SecretStorage` via `AiService`. (Previous)
 - **Settings Page Restored:** Moved provider settings logic from `App.tsx` to `SettingPage.tsx` and passed necessary props (`providerStatus`, `handleProviderToggle`) to restore functionality after routing refactor. Exported required types from `App.tsx`. (Previous)
 - **Vite Port Discovery Implemented & Fixed:** Extension now reads the actual Vite dev server port from the correct file path (`.vite.port` in the project root) during development, ensuring reliable HMR connection even if the default port changes.
@@ -79,7 +80,7 @@
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
 - **UI Streaming & Tool Display:** Core chat streaming works. Tool calls are displayed inline with human-readable summaries and progress updates.
 - **Tool Execution:** Tools execute and return results to the AI.
-- **Streaming & Structured Output:** Corrected stream handling logic in `streamProcessor.ts` based on user feedback, simplifying `textStream` iteration and fixing import paths. Using `any` type for `streamResult` as a workaround for SDK type complexities.
+- **Streaming & Structured Output:** Refactored `streamProcessor.ts` to iterate over `fullStream`, correctly handling mixed stream part types and order. Kept separate handling for `experimental_partialOutputStream`.
 - **Settings Integration & State Sync:** Settings UI (`/settings`) correctly uses backend data. Setting/deleting keys now triggers a refresh of the available models list in the Chat UI (`App.tsx`), ensuring newly enabled providers are immediately selectable.
 - **Activation:** Extension now activates and displays the webview directly in the activity bar using `WebviewViewProvider`.
 - **Development Mode Reliability:** Extension reliably connects to the Vite dev server for HMR by reading the port from the correct file path.
@@ -93,7 +94,7 @@
 // - `@vscode/webview-ui-toolkit` dependency is unused but still listed. // Removed
 - **AI Response Behavior:** AI models might not always explicitly list tool results (e.g., all generated UUIDs) in their text response, even though they receive the results. This depends on the model and prompt.
 - Custom tool execution status updates (beyond the inline display) are currently disabled.
-- Model resolver logic now iterates through all enabled providers using their `getAvailableModels` method. Dynamic fetching is implemented only for OpenRouter currently; others use hardcoded lists within their modules.
+- Model resolver logic now iterates through all enabled providers using their `getAvailableModels` method. Dynamic model fetching implemented for OpenRouter, Anthropic, DeepSeek, OpenAI, and Ollama (local tags).
 // - Conversation history is not persisted. // Implemented (Persistence works, Clear button added)
 - API Key management is now handled by individual provider modules, interacting with `vscode.SecretStorage`. `AiService` delegates these operations. Input fields remain in the Settings page webview.
 - **Blank Webview (Development):** Still investigating the cause of the blank webview in development mode, currently testing relaxed CSP. (Previous issue)

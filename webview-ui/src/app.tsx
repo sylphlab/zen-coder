@@ -373,8 +373,8 @@ export function App() {
             // Add user message to UI immediately
             setMessages(prev => [...prev, newUserMessage]);
 
-            // Send message with text AND the currently selected model ID to backend
-            postMessage({ type: 'sendMessage', text: inputValue, modelId: currentModelInput });
+            // Send message with text, selected provider ID, AND the currently selected model ID to backend
+            postMessage({ type: 'sendMessage', text: inputValue, providerId: selectedProvider, modelId: currentModelInput });
 
             setInputValue(''); // Clear input after adding to state and sending
             setIsStreaming(true); // Set streaming immediately for responsiveness

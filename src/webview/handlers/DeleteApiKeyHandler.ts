@@ -1,16 +1,23 @@
 import * as vscode from 'vscode';
 import { MessageHandler, HandlerContext } from './MessageHandler';
-import { providerMap } from '../../ai/providers'; // Need providerMap to validate key
+// import { providerMap } from '../../ai/providers'; // Removed direct import
+import { AiService } from '../../ai/aiService'; // Import AiService
 
 export class DeleteApiKeyHandler implements MessageHandler {
     public readonly messageType = 'deleteApiKey';
+    private _aiService: AiService; // Store AiService instance
+
+    constructor(aiService: AiService) { // Inject AiService
+        this._aiService = aiService;
+    }
 
     public async handle(message: any, context: HandlerContext): Promise<void> {
         console.log("[DeleteApiKeyHandler] Handling deleteApiKey message...");
         if (message.payload && typeof message.payload.provider === 'string') {
             const providerId = message.payload.provider;
 
-            if (providerMap.has(providerId)) {
+            // Use providerMap from AiService instance
+            if (this._aiService.providerMap.has(providerId)) {
                 try {
                     await context.aiService.deleteApiKey(providerId);
                     console.log(`[DeleteApiKeyHandler] API Key delete request processed for ${providerId}`);

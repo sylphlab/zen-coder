@@ -1,10 +1,15 @@
 import * as vscode from 'vscode';
 import { MessageHandler, HandlerContext } from './MessageHandler';
-import { providerMap } from '../../ai/providers'; // Need providerMap to validate key
-import { ApiProviderKey } from '../../ai/aiService'; // Need ApiProviderKey type
+// import { providerMap } from '../../ai/providers'; // Removed direct import
+import { AiService, ApiProviderKey } from '../../ai/aiService'; // Import AiService and ApiProviderKey
 
 export class SetApiKeyHandler implements MessageHandler {
     public readonly messageType = 'setApiKey';
+    private _aiService: AiService; // Store AiService instance
+
+    constructor(aiService: AiService) { // Inject AiService
+        this._aiService = aiService;
+    }
 
     public async handle(message: any, context: HandlerContext): Promise<void> {
         console.log("[SetApiKeyHandler] Handling setApiKey message...");
@@ -12,7 +17,8 @@ export class SetApiKeyHandler implements MessageHandler {
             const providerKey = message.payload.provider as ApiProviderKey;
             const apiKey = message.payload.apiKey;
 
-            if (providerMap.has(providerKey)) {
+            // Use providerMap from AiService instance
+            if (this._aiService.providerMap.has(providerKey)) {
                 try {
                     await context.aiService.setApiKey(providerKey, apiKey);
                     console.log(`[SetApiKeyHandler] API Key set request processed for ${providerKey}`);

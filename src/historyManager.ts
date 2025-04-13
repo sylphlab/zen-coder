@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { CoreMessage, ToolCallPart as CoreToolCallPart, ToolResultPart as CoreToolResultPart, AssistantContent } from 'ai';
-import { UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart } from './common/types'; // Import UI types
+import { UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, structuredAiResponseSchema } from './common/types'; // Import UI types and schema
 
 /**
  * Manages the chat history, including persistence and translation
@@ -175,8 +175,9 @@ export class HistoryManager {
      * to get the definitive list of tool calls intended by the AI.
      * @param assistantMessageId The ID of the assistant message to reconcile.
      * @param finalCoreMessage The final CoreMessage from the SDK (can be null if stream failed or didn't produce one).
+     * @param postMessageCallback Callback function to send messages (like suggested actions) to the webview.
      */
-    public async reconcileFinalAssistantMessage(assistantMessageId: string, finalCoreMessage: CoreMessage | null): Promise<void> {
+    public async reconcileFinalAssistantMessage(assistantMessageId: string, finalCoreMessage: CoreMessage | null, postMessageCallback: (message: any) => void): Promise<void> {
         // Find the UI message frame
         const uiMessageIndex = this._history.findIndex(msg => msg.id === assistantMessageId);
         if (uiMessageIndex === -1) {
@@ -189,7 +190,9 @@ export class HistoryManager {
 
         // 1. Extract accumulated text from the existing UI message content parts
         // This is the most reliable source, especially for interrupted streams.
-        const finalAccumulatedText = finalUiMessage.content.filter(part => part.type === 'text').map(part => part.text).join('');
+        let finalAccumulatedText = finalUiMessage.content.filter(part => part.type === 'text').map(part => part.text).join('');
+        let textToSave = finalAccumulatedText; // Default to full text
+        let parsedActions: any[] | null = null;
 
         // 2. Extract tool calls ONLY from the finalCoreMessage (if provided and valid)
         //    We trust the finalCoreMessage for the definitive list of tool calls the AI intended.
@@ -203,6 +206,38 @@ export class HistoryManager {
         } else if (finalCoreMessage) {
              console.warn(`[HistoryManager] Received finalCoreMessage for reconcile, but it's not a valid assistant message with array content. ID: ${assistantMessageId}. Tool calls might be missing.`);
         }
+
+        // --- Reverted: Parse for trailing JSON block for suggested actions ---
+        const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```$/;
+        const match = finalAccumulatedText.match(jsonBlockRegex);
+
+        if (match && match[1]) {
+            const jsonString = match[1].trim();
+            console.log("[HistoryManager] Found potential JSON block:", jsonString);
+            try {
+                const parsedJson = JSON.parse(jsonString);
+                // Validate against the schema (which now only expects suggested_actions)
+                const validationResult = structuredAiResponseSchema.safeParse(parsedJson);
+
+                if (validationResult.success && validationResult.data.suggested_actions && validationResult.data.suggested_actions.length > 0) {
+                    console.log("[HistoryManager] Successfully parsed and validated suggested actions:", validationResult.data.suggested_actions);
+                    parsedActions = validationResult.data.suggested_actions; // Store actions
+                    // Remove JSON block from the text to be saved
+                    textToSave = finalAccumulatedText.substring(0, match.index).trimEnd();
+                    console.log("[HistoryManager] JSON block will be removed from saved history.");
+                } else {
+                    console.warn("[HistoryManager] Parsed JSON block failed validation or missing suggested_actions:", validationResult.success ? 'Missing/empty actions' : validationResult.error);
+                    // Keep the block in the text if validation fails
+                }
+            } catch (parseError) {
+                console.error("[HistoryManager] Error parsing JSON block:", parseError);
+                // Keep the block in the text if parsing fails
+            }
+        } else {
+             console.log("[HistoryManager] No JSON block found at the end of the message.");
+        }
+        // --- End Reverted Parsing Logic ---
+        // Removed extra closing brace here
 
         // 3. Reconstruct the UI content
         const reconstructedUiContent: UiMessageContentPart[] = [];
@@ -221,13 +256,13 @@ export class HistoryManager {
             });
         });
 
-        // Add the final accumulated text content (from appendTextChunk)
-        if (finalAccumulatedText) {
-            reconstructedUiContent.push({ type: 'text', text: finalAccumulatedText });
+        // Add the final text content (either full or from <content> tag)
+        if (textToSave) {
+            reconstructedUiContent.push({ type: 'text', text: textToSave });
         } else {
             // If somehow no text was accumulated, log a warning.
             // We won't use finalText from streamResult.text as it might be unreliable on interruption.
-            console.warn(`[HistoryManager] No accumulated text found for message ID: ${assistantMessageId} during reconcile.`);
+            console.warn(`[HistoryManager] No text content found or extracted for message ID: ${assistantMessageId} during reconcile.`);
         }
 
         // Replace the old content with the reconciled content
@@ -235,7 +270,13 @@ export class HistoryManager {
 
         // Save the final reconciled UI message state
         await this.saveHistoryIfNeeded();
-        console.log(`[HistoryManager] Reconciled final UI state for message ID: ${assistantMessageId} using accumulated text.`);
+        console.log(`[HistoryManager] Reconciled final UI state for message ID: ${assistantMessageId}.`);
+
+        // --- NEW: Send parsed actions to UI ---
+        if (parsedActions && parsedActions.length > 0) {
+            postMessageCallback({ type: 'addSuggestedActions', payload: { messageId: assistantMessageId, actions: parsedActions } });
+            console.log(`[HistoryManager] Sent suggested actions to UI for message ${assistantMessageId}.`);
+        }
     }
 
 
@@ -278,6 +319,7 @@ export class HistoryManager {
                 for (const part of uiMsg.content) {
                     if (part.type === 'text') {
                         if (part.text) { // Only add non-empty text parts
+                            // Send the reconciled text part (which might have had JSON block removed)
                             assistantContent.push({ type: 'text', text: part.text });
                             hasContentForAi = true;
                         }

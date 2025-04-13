@@ -4,11 +4,11 @@
 - **VS Code Extension:** Standard structure (`extension.ts`, `package.json`).
 - **Webview UI:** A separate web application (HTML/CSS/JS) running inside a VS Code webview panel for the chat interface. Communication between the extension host and the webview via message passing.
 - **Core Services (Extension Host):**
-    - `AiService (`src/ai/aiService.ts`): Focused on core AI interaction (calling `streamText`), API key storage (`setApiKey`, `deleteApiKey`), and tool execution wrapping.
+    - `AiService (`src/ai/aiService.ts`): Focused on core AI interaction (calling `streamText` using explicit `providerId` and `modelId`), API key storage delegation (`setApiKey`, `deleteApiKey`), and tool execution wrapping.
     - `ProviderStatusManager` (`src/ai/providerStatusManager.ts`): Determines provider enablement and API key status.
-    - `ModelResolver` (`src/ai/modelResolver.ts`): Fetches and lists available models from enabled providers.
+    - `ModelResolver` (`src/ai/modelResolver.ts`): Fetches and lists available models from enabled providers (including `providerId`).
     - `HistoryManager` (`src/historyManager.ts`): Manages chat history persistence (`globalState`) and translation between UI/Core formats.
-    - `StreamProcessor` (`src/streamProcessor.ts`): Handles parsing the AI response stream and updating history/UI.
+    - `StreamProcessor` (`src/streamProcessor.ts`): Handles parsing the AI response stream (`fullStream` via `text-delta`), and performs post-stream parsing of appended JSON blocks (e.g., for `suggested_actions`) before updating history/UI.
 - **Webview Message Handling:** Uses a registration pattern (`src/webview/handlers/`). `ZenCoderChatViewProvider` delegates incoming messages to specific `MessageHandler` implementations.
 - **State Management:** Chat history (`UiMessage[]`) persisted in `context.globalState`. API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`).
 
@@ -25,6 +25,14 @@
        - **Safety:** Workspace boundaries are enforced, and potentially dangerous operations (like deleting `.git`) are prevented.
 - **Security:** Prioritize security by using `SecretStorage` and requiring explicit user confirmation for potentially harmful actions like `runCommand`. File operations confined to the workspace.
 - **UI Choice:** Start with the VS Code Webview UI Toolkit for simplicity and native feel, unless specific needs dictate a minimal framework like Preact later.
+- **AI Response Format (Suggested Actions):** To handle suggested actions from the AI without conflicting with user content or complex streaming parsing:
+    - AI streams text content normally using `streamText`.
+    - For suggested actions, AI appends a specific JSON block (```json { "suggested_actions": [...] } ```) at the *very end* of its response.
+    - The backend (`HistoryManager`) parses this trailing block *after* the stream completes.
+    - A strict Zod schema (`structuredAiResponseSchema`) validates the parsed JSON.
+    - If valid, the actions are sent to the UI (likely displayed near the input box), and the JSON block is *removed* from the text saved to history.
+    - If invalid (parsing error or schema mismatch), the block is treated as regular text and remains in the history.
+    - This approach balances streaming simplicity, robustness against conflicts (via validation), and avoids requiring AI to generate complex XML/CDATA or frontend Markdown parsing for actions.
 
 ## Design Patterns
 - **Service Layer:** Core functionalities (AI interaction, status, models, history) are encapsulated in dedicated services/managers.

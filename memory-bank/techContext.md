@@ -9,6 +9,8 @@
     - `@ai-sdk/google`: For Gemini models.
     - `@openrouter/ai-sdk-provider`: For OpenRouter models.
     - `@ai-sdk/deepseek`: For DeepSeek models.
+    - `@ai-sdk/openai`: For OpenAI models.
+    - `ollama-ai-provider`: For Ollama models (community provider).
 - **Zod:** For defining tool parameter schemas.
 - **HTML/CSS/JavaScript:** For the webview UI.
 - **Preact + Vite:** Used for the webview UI.
@@ -39,6 +41,8 @@
 - *(Removed @vscode/webview-ui-toolkit)*
 - `node-fetch`: ^3.3.2 (Used for fetchUrlTool, getPublicIpTool - dynamic import used for CJS compat)
 - `@types/node-fetch`: ^2.6.12
+- `@ai-sdk/openai`: 1.3.10
+- `ollama-ai-provider`: 1.2.0
 - *(Plus transitive dependencies)*
 
 ## Guideline Checksums
