@@ -141,9 +141,9 @@ export class OpenRouterProvider implements AiProvider {
             const models: ModelDefinition[] = data.data
                 .filter((model): model is OpenRouterApiModel => !!model && !!model.id && !!model.name)
                 .map((model) => ({
-                    // Standardize the ID format
-                    id: `${this.id}:${model.id}`,
-                    name: model.name,
+                    // ID should be just the model identifier from the API
+                    id: model.id, // Let ModelResolver add the provider prefix
+                    name: model.name, // Use API name for display
                 }))
                 .sort((a, b) => a.name.localeCompare(b.name));
 

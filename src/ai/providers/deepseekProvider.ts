@@ -85,9 +85,9 @@ export class DeepseekProvider implements AiProvider {
 
             const models: ModelDefinition[] = jsonResponse.data
                 .map((model: any) => ({
-                    // Standardize the ID format
-                    id: `${this.id}:${model.id}`,
-                    name: model.id, // Use ID as name for DeepSeek
+                    // ID should be just the model name part from the API
+                    id: model.id, // Let ModelResolver add the provider prefix
+                    name: model.id, // Use ID as name for DeepSeek display
                 }))
                 .sort((a: ModelDefinition, b: ModelDefinition) => a.id.localeCompare(b.id));
 
