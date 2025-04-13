@@ -1,71 +1,92 @@
-import { useState, useMemo, useCallback } from 'preact/hooks';
+import { useState, useMemo, useCallback, useEffect } from 'preact/hooks';
 import { JSX } from 'preact/jsx-runtime';
 import { ApiProviderKey } from '../app'; // Import ApiProviderKey from app
 import { AvailableModel } from '../../../src/common/types'; // Import AvailableModel from common types
 
-export function useModelSelection(
-    initialModels: AvailableModel[] = [],
-    activeChatModelId: string | null // Receive active chat's model ID
-) {
-    const [availableModels, setAvailableModels] = useState<AvailableModel[]>(initialModels);
-    const [selectedProvider, setSelectedProvider] = useState<ApiProviderKey | null>(null);
-    // Removed internal currentModelInput state
-    // --- Derived State ---
-    const uniqueProviders = useMemo(() => {
-        const providers = new Set<ApiProviderKey>();
-        availableModels.forEach(model => providers.add(model.providerId as ApiProviderKey));
-        return Array.from(providers);
-    }, [availableModels]);
+// Define props for the hook
+interface UseModelSelectionProps {
+    availableProviders: AvailableModel[]; // List of available providers (quick load)
+    providerModelsMap: Record<string, AvailableModel[]>; // Map of providerId -> loaded models
+    activeChatModelId: string | null; // Currently selected model ID for the active chat
+}
 
+export function useModelSelection({
+    availableProviders,
+    providerModelsMap,
+    activeChatModelId
+}: UseModelSelectionProps) {
+    // State managed by the hook: only the currently selected provider filter
+    const [selectedProvider, setSelectedProvider] = useState<ApiProviderKey | null>(null);
+
+    // --- Derived State ---
+
+    // Derive unique providers from the availableProviders prop
+    const uniqueProviders = useMemo(() => {
+        // Assuming availableProviders contains provider info (even with placeholder model IDs)
+        const providers = new Map<string, { id: string; name: string }>();
+        availableProviders.forEach(providerInfo => {
+            if (!providers.has(providerInfo.providerId)) {
+                providers.set(providerInfo.providerId, { id: providerInfo.providerId, name: providerInfo.providerName });
+            }
+        });
+        // Sort providers alphabetically by name
+        return Array.from(providers.values()).sort((a, b) => a.name.localeCompare(b.name));
+    }, [availableProviders]);
+
+    // Derive the list of models to display based on the selected provider filter
     const filteredModels = useMemo(() => {
         if (!selectedProvider) return [];
-        // Filter models and ensure the returned array conforms to AvailableModel[]
-        // while adding the modelNamePart for potential display use.
-        return availableModels
-            .filter(model => model.providerId === selectedProvider)
-            .map(model => ({
-                ...model, // Spread the original AvailableModel properties
-                // Extract model name part for display in datalist option text
-                modelNamePart: model.id.split(':').slice(1).join(':') || model.name
-            }));
-    }, [availableModels, selectedProvider]);
+        // Get models from the map for the selected provider
+        const models = providerModelsMap[selectedProvider] || [];
+        // Add the modelNamePart for display
+        return models.map(model => ({
+            ...model,
+            modelNamePart: model.id.split(':').slice(1).join(':') || model.name
+        }));
+    }, [providerModelsMap, selectedProvider]);
 
-    // Derived state for the displayable part of the model ID
-    // Derive display name directly from the passed-in activeChatModelId
+    // Derive the displayable part of the active model ID (remains the same)
     const displayModelName = useMemo(() => {
         return activeChatModelId ? activeChatModelId.split(':').slice(1).join(':') : '';
     }, [activeChatModelId]);
+
+    // Effect to set the initial selectedProvider based on the activeChatModelId
+    useEffect(() => {
+        if (activeChatModelId && activeChatModelId.includes(':')) {
+            const providerId = activeChatModelId.split(':')[0] as ApiProviderKey;
+            // Check if this provider is actually available before setting it
+            if (uniqueProviders.some(p => p.id === providerId)) {
+                 setSelectedProvider(providerId);
+            } else {
+                 // If the active chat's provider isn't available, clear the selection
+                 setSelectedProvider(null);
+            }
+        } else {
+            setSelectedProvider(null); // Clear selection if no active model ID
+        }
+        // Re-run when the active chat model changes OR when the list of available providers changes
+    }, [activeChatModelId, uniqueProviders]);
+
+
     // --- Handlers ---
-    // Adjusted handleProviderChange: It now only sets the provider.
-    // The logic to set the default model for the chat should be handled
-    // by the component calling this hook (e.g., in App.tsx via handleChatModelChange).
+
+    // Handler to update the selected provider filter
     const handleProviderChange = useCallback((e: JSX.TargetedEvent<HTMLSelectElement>) => {
         const newProvider = e.currentTarget.value as ApiProviderKey | '';
         setSelectedProvider(newProvider || null);
-        // setCurrentModelInput(''); // Removed - App.tsx will handle setting the model via handleChatModelChange
-    }, []); // No dependency needed now
-
-    // Removed handleModelInputChange - model changes are handled by handleChatModelChange in App.tsx
-
-    // Function to update available models (called from App component's useEffect)
-    const updateAvailableModels = useCallback((models: AvailableModel[]) => {
-        setAvailableModels(models);
-        // Optionally, re-select provider/model if current selection becomes invalid?
-        // For now, just update the list. Let App handle initial selection logic.
+        // The component using this hook (App.tsx) is responsible for
+        // deciding which model to select when the provider changes (e.g., the first one).
     }, []);
 
 
     return {
-        availableModels,
-        setAvailableModels: updateAvailableModels,
-        selectedProvider,       // Still useful for filtering
-        setSelectedProvider,    // Still useful for UI control
-        // currentModelInput,   // Removed
-        // setCurrentModelInput,// Removed
+        // availableModels, // Removed - Data comes from props now
+        // setAvailableModels, // Removed
+        selectedProvider,       // State managed by the hook
+        setSelectedProvider,    // Setter for the state
         displayModelName,       // Derived from prop
-        uniqueProviders,
-        filteredModels,
-        handleProviderChange,   // Modified
-        // handleModelInputChange, // Removed
+        uniqueProviders,        // Derived from prop
+        filteredModels,         // Derived from prop and state
+        handleProviderChange,   // Handler managed by the hook
     };
 }

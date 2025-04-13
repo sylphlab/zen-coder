@@ -7,10 +7,12 @@ import { useModelSelection } from '../hooks/useModelSelection';
 type FilteredModel = AvailableModel & { modelNamePart: string };
 
 interface ModelSelectorProps {
-    labelPrefix?: string; // Optional prefix for labels (e.g., "Default Chat")
-    availableModels: AvailableModel[];
-    selectedModelId: string | null; // The full providerId:modelName
-    onModelChange: (newModelId: string) => void; // Callback when the effective model ID changes
+    labelPrefix?: string;
+    // Replace availableModels with the new structure
+    availableProviders: AvailableModel[]; // List of available providers (quick load)
+    providerModelsMap: Record<string, AvailableModel[]>; // Map of providerId -> loaded models
+    selectedModelId: string | null;
+    onModelChange: (newModelId: string) => void;
     // Optional: If provider selection should be handled externally (like in HeaderControls)
     // externalSelectedProvider?: string | null;
     // externalHandleProviderChange?: (e: JSX.TargetedEvent<HTMLSelectElement>) => void;
@@ -18,7 +20,9 @@ interface ModelSelectorProps {
 
 export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     labelPrefix = '',
-    availableModels,
+    // availableModels, // Removed
+    availableProviders, // Added
+    providerModelsMap, // Added
     selectedModelId,
     onModelChange,
     // externalSelectedProvider,
@@ -32,7 +36,8 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
         uniqueProviders,
         filteredModels,
         handleProviderChange: internalHandleProviderChange,
-    } = useModelSelection(availableModels, selectedModelId);
+    // Pass the new props structure to the hook
+    } = useModelSelection({ availableProviders, providerModelsMap, activeChatModelId: selectedModelId }); // Pass selectedModelId as activeChatModelId
 
     // Determine which provider change handler to use
     // const effectiveHandleProviderChange = externalHandleProviderChange ?? internalHandleProviderChange;
@@ -45,11 +50,14 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
         internalHandleProviderChange(e); // Update the provider in the hook state
         const newProviderId = e.currentTarget.value;
         if (newProviderId) {
-            const firstModel = availableModels.find(m => m.providerId === newProviderId);
-            if (firstModel) {
-                onModelChange(firstModel.id); // Trigger change with the first model of the new provider
+            // Use providerModelsMap to find the first model
+            const modelsForProvider = providerModelsMap[newProviderId] || [];
+            if (modelsForProvider.length > 0) {
+                onModelChange(modelsForProvider[0].id); // Trigger change with the first model
             } else {
-                onModelChange(''); // Clear model if none available for the provider
+                // If models haven't loaded yet or none exist, maybe send a placeholder or clear?
+                // Let's clear for now. The UI might show "Loading..." based on map content.
+                onModelChange('');
             }
         } else {
             onModelChange(''); // Clear model if provider deselected
@@ -62,16 +70,23 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
         let finalModelId = ''; // Default to empty if no match
 
         // Check if the input value exactly matches a known model ID
-        const modelFromDataList = availableModels.find(m => m.id === rawInputValue);
+        // Check against all loaded models across all providers first for an exact ID match
+        const allLoadedModels = Object.values(providerModelsMap).flat();
+        const modelFromDataList = allLoadedModels.find(m => m.id === rawInputValue);
 
         if (modelFromDataList) {
             finalModelId = modelFromDataList.id; // Exact match found
         } else if (selectedProvider) {
             // If not an exact ID match, and a provider is selected,
-            // check if the input value matches a modelNamePart for the current provider
-            const selectedModelByNamePart = filteredModels.find(m => m.modelNamePart === rawInputValue && m.providerId === selectedProvider);
+            // check if the input value matches a modelNamePart for the *currently selected provider*
+            const modelsForSelectedProvider = providerModelsMap[selectedProvider] || [];
+            // We need the modelNamePart logic here or rely on filteredModels from the hook
+            const selectedModelByNamePart = modelsForSelectedProvider
+                .map(m => ({ ...m, modelNamePart: m.id.split(':').slice(1).join(':') || m.name })) // Add modelNamePart temporarily
+                .find(m => m.modelNamePart === rawInputValue);
+
             if (selectedModelByNamePart) {
-                finalModelId = selectedModelByNamePart.id; // Match by name part found
+                finalModelId = selectedModelByNamePart.id; // Match by name part found for the selected provider
             } else {
                 // Input doesn't match a known model ID or name part for the selected provider.
                 // Assume user is typing a model name (or potentially a full ID).
@@ -117,8 +132,9 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                 class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm"
             >
                 <option value="">-- Provider --</option>
-                {uniqueProviders.map(providerId => (
-                    <option key={providerId} value={providerId}>{providerId}</option>
+                {/* Use the new uniqueProviders structure */}
+                {uniqueProviders.map(provider => (
+                    <option key={provider.id} value={provider.id}>{provider.name}</option>
                 ))}
             </select>
 

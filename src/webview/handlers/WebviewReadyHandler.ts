@@ -22,9 +22,12 @@ export class WebviewReadyHandler implements MessageHandler {
         console.log("[WebviewReadyHandler] Handling webviewReady message...");
         try {
             // Use ModelResolver
-            const models = await context.modelResolver.resolveAvailableModels();
-            context.postMessage({ type: 'availableModels', payload: models });
-            console.log("[WebviewReadyHandler] Sent available models.");
+            // Fetch available *providers* (enabled and with key if needed)
+            const providers = await context.modelResolver.getAvailableProviders();
+            // Send this list immediately so the UI can show providers quickly
+            context.postMessage({ type: 'availableProviders', payload: providers }); // Changed type to 'availableProviders'
+            console.log("[WebviewReadyHandler] Sent available providers.");
+            // Note: Fetching actual models for each provider will be triggered by the frontend separately.
 
             // Send chat sessions and last active ID from HistoryManager
             const allChats = context.historyManager.getAllChatSessions();

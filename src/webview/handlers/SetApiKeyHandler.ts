@@ -27,10 +27,10 @@ export class SetApiKeyHandler implements MessageHandler {
                     const updatedStatusList = await context.providerStatusManager.getProviderStatus();
                     context.postMessage({ type: 'providerStatus', payload: updatedStatusList });
 
-                    // Refresh available models as new ones might be available using ModelResolver
-                    const currentModels = await context.modelResolver.resolveAvailableModels();
-                    context.postMessage({ type: 'availableModels', payload: currentModels });
-
+                    // Refresh available *providers* as a new one might be available
+                    const currentProviders = await context.modelResolver.getAvailableProviders();
+                    context.postMessage({ type: 'availableProviders', payload: currentProviders }); // Changed type
+                    // Note: Fetching actual models for the newly available provider will be triggered by the frontend.
                 } catch (error: any) {
                     // Error message is likely shown by AiService, just log here
                     console.error(`[SetApiKeyHandler] Error setting API Key for ${providerKey}:`, error);

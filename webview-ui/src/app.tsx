@@ -131,16 +131,23 @@ export function App() {
         return null;
     }, [activeChatProviderId, activeChatModelName]);
 
-    const {
-        availableModels, // Add back availableModels
-        setAvailableModels,
-        selectedProvider,
-        setSelectedProvider,
-        displayModelName,
-        uniqueProviders,
-        filteredModels,
-        handleProviderChange: handleProviderSelectChange,
-    } = useModelSelection(undefined, activeChatCombinedModelId); // Pass combined ID to hook for now
+    // State for available providers (received quickly)
+    const [availableProviders, setAvailableProviders] = useState<AvailableModel[]>([]);
+    // State to store models loaded per provider
+    const [providerModelsMap, setProviderModelsMap] = useState<Record<string, AvailableModel[]>>({});
+
+    // TODO: Refactor or replace useModelSelection hook later to use availableProviders and providerModelsMap
+    // The useModelSelection hook is called within the useEffect below.
+    // We don't need to destructure its return values here.
+    // Call the hook inside useEffect to potentially avoid linter issues and run its internal effect once.
+    useEffect(() => {
+        useModelSelection({
+            availableProviders,
+            providerModelsMap,
+            activeChatModelId: activeChatCombinedModelId
+        });
+        // We don't use the return value here, just calling for potential side effects within the hook.
+    }, [availableProviders, providerModelsMap, activeChatCombinedModelId]); // Re-run if these inputs change
 
     // Update useMessageHandler hook call to manage chatSessions and activeChatId
     // Pass the required state and setters to the updated hook
@@ -181,14 +188,33 @@ export function App() {
              // Remove immediate update to vscode.setState, rely on backend persistence via HistoryManager
         }
     }, [location]); // Depend only on location
-    // Handle initial setup messages (now includes loadChatState with lastLocation)
-    useEffect(() => {
-        const handleSetupMessage = (event: MessageEvent) => {
+    // Handle initial setup messages and model loading responses
+     useEffect(() => {
+         const handleSetupAndModelMessage = (event: MessageEvent) => {
              const message = event.data;
              switch (message.type) {
-                 case 'availableModels':
+                 // Renamed from 'availableModels'
+                 case 'availableProviders':
                      if (Array.isArray(message.payload)) {
-                         setAvailableModels(message.payload as AvailableModel[]);
+                         const providers = message.payload as AvailableModel[];
+                         console.log("[App Effect] Received available providers:", providers);
+                         setAvailableProviders(providers);
+                         // Trigger model fetching for each provider
+                         providers.forEach(provider => {
+                             console.log(`[App Effect] Requesting models for provider: ${provider.providerId}`);
+                             postMessage({ type: 'getAvailableModels', payload: { providerId: provider.providerId } });
+                         });
+                     }
+                     break;
+                 // New message type from backend
+                 case 'providerModelsLoaded':
+                     if (message.payload && message.payload.providerId && Array.isArray(message.payload.models)) {
+                         const { providerId, models } = message.payload;
+                         console.log(`[App Effect] Received ${models.length} models for provider: ${providerId}`);
+                         setProviderModelsMap(prevMap => ({
+                             ...prevMap,
+                             [providerId]: models as AvailableModel[]
+                         }));
                      }
                      break;
                  case 'providerStatus':
@@ -196,42 +222,41 @@ export function App() {
                          setProviderStatus(message.payload);
                      }
                      break;
-                case 'loadChatState': // Handle new message type with lastLocation
-                    if (message.payload && Array.isArray(message.payload.chats)) {
-                        const loadedChats = message.payload.chats;
-                        const loadedActiveId = message.payload.lastActiveChatId;
-                        const loadedLocation = message.payload.lastLocation;
+                 case 'loadChatState': // Handle new message type with lastLocation
+                     if (message.payload && Array.isArray(message.payload.chats)) {
+                         const loadedChats = message.payload.chats;
+                         const loadedActiveId = message.payload.lastActiveChatId;
+                         const loadedLocation = message.payload.lastLocation;
 
-                        setChatSessions(loadedChats);
-                        setActiveChatId(loadedActiveId);
-                        setIsChatListLoading(false); // Stop loading indicator
-                        console.log(`[App Effect] Loaded ${loadedChats.length} chats. Active: ${loadedActiveId}. Location: ${loadedLocation}`);
+                         setChatSessions(loadedChats);
+                         setActiveChatId(loadedActiveId);
+                         setIsChatListLoading(false); // Stop loading indicator
+                         console.log(`[App Effect] Loaded ${loadedChats.length} chats. Active: ${loadedActiveId}. Location: ${loadedLocation}`);
 
-                        // Restore location AFTER setting state, only if it's different from current
-                        // and not the root path (which is handled by redirect)
-                        if (loadedLocation && loadedLocation !== location && loadedLocation !== '/') {
-                            console.log(`[App Effect] Restoring location from loadChatState: ${loadedLocation}`);
-                            // Use timeout to allow state updates to potentially settle before navigation
-                            setTimeout(() => setLocation(loadedLocation, { replace: true }), 50); // Slightly longer delay?
-                        }
-                        // No need for fallback navigation here, the Router's default route handles '/'
-                    }
-                    break;
-                case 'updateMcpServers':
-                     if (Array.isArray(message.payload)) {
-                         // console.log("Received MCP server configs (now unused in App state):", message.payload);
+                         // Restore location AFTER setting state, only if it's different from current
+                         // and not the root path (which is handled by redirect)
+                         if (loadedLocation && loadedLocation !== location && loadedLocation !== '/') {
+                             console.log(`[App Effect] Restoring location from loadChatState: ${loadedLocation}`);
+                             // Use timeout to allow state updates to potentially settle before navigation
+                             setTimeout(() => setLocation(loadedLocation, { replace: true }), 50);
+                         }
                      }
                      break;
-            }
-        };
-       window.addEventListener('message', handleSetupMessage);
-       postMessage({ type: 'webviewReady' }); // Request initial data
-       return () => {
-           window.removeEventListener('message', handleSetupMessage);
-       }
-        // Dependencies: setAvailableModels is stable. setLocation might cause re-renders if not stable.
-        // location is needed for the logic inside loadChatState handler.
-    }, [setAvailableModels, setLocation, location]); // Removed activeChatId dependency as it's handled within the message payload now
+                 case 'updateMcpServers':
+                     // This message type might be deprecated or handled elsewhere now
+                     // if (Array.isArray(message.payload)) {
+                     //     // console.log("Received MCP server configs (now unused in App state):", message.payload);
+                     // }
+                     break;
+             }
+         };
+         window.addEventListener('message', handleSetupAndModelMessage);
+         postMessage({ type: 'webviewReady' }); // Request initial data (will trigger 'availableProviders')
+         return () => {
+             window.removeEventListener('message', handleSetupAndModelMessage);
+         };
+         // Dependencies: setLocation and location are needed for route restoration.
+     }, [setLocation, location]); // Removed setAvailableModels, added setProviderModelsMap (implicitly stable)
 
     // --- Event Handlers (Remaining in App) ---
     const handleSend = useCallback(() => {
@@ -483,9 +508,10 @@ export function App() {
                             <div class="chat-container flex flex-col flex-1 h-full">
                                 {/* TODO: Update HeaderControls to potentially show chat name/list button */}
                                 <HeaderControls
-                                    // Pass props matching the new ModelSelector integration
-                                    allAvailableModels={availableModels}
-                                    selectedModelId={activeChatCombinedModelId ?? null} // Pass combined ID for now
+                                    // Pass the new props
+                                    availableProviders={availableProviders}
+                                    providerModelsMap={providerModelsMap}
+                                    selectedModelId={activeChatCombinedModelId ?? null}
                                     onModelChange={handleModelSelectorChange} // Use the new wrapper handler
                                     // Removed: handleClearChat, isStreaming, hasMessages
                                     hasMessages={activeChatMessages.length > 0}

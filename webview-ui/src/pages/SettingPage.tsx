@@ -92,7 +92,9 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
    const [, setLocation] = useLocation();
    // State for default models
    const [defaultConfig, setDefaultConfig] = useState<DefaultChatConfig>({});
-   const [allAvailableModels, setAllAvailableModels] = useState<AvailableModel[]>([]);
+   // Replace allAvailableModels state with the new structure
+   const [availableProviders, setAvailableProviders] = useState<AvailableModel[]>([]);
+   const [providerModelsMap, setProviderModelsMap] = useState<Record<string, AvailableModel[]>>({});
 
   // Handle input change for API key fields
   const handleApiKeyInputChange = (providerId: string, value: string) => {
@@ -146,7 +148,8 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
        // Request initial state
        postMessage({ type: 'settingsPageReady' });
        postMessage({ type: 'getMcpConfiguredStatus' });
-       postMessage({ type: 'getAvailableModels' }); // Request available models
+       // Don't request all models here anymore. Request providers via settingsPageReady.
+       // postMessage({ type: 'getAvailableModels' }); // Removed
        postMessage({ type: 'getDefaultConfig' }); // Request current default config
        console.log('SettingsPage mounted, requested initial data');
 
@@ -176,10 +179,27 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
                    setProjectInstructions(message.payload.project || '');
                    setProjectInstructionsPath(message.payload.projectPath || null);
                    break;
-               case 'availableModels': // Handle available models list
+               // Handle the new provider/model messages
+               case 'availableProviders':
                    if (Array.isArray(message.payload)) {
-                       console.log('[SettingsPage] Received availableModels:', message.payload);
-                       setAllAvailableModels(message.payload as AvailableModel[]);
+                       const providers = message.payload as AvailableModel[];
+                       console.log("[SettingsPage] Received available providers:", providers);
+                       setAvailableProviders(providers);
+                       // Trigger model fetching for each provider
+                       providers.forEach(provider => {
+                           console.log(`[SettingsPage] Requesting models for provider: ${provider.providerId}`);
+                           postMessage({ type: 'getAvailableModels', payload: { providerId: provider.providerId } });
+                       });
+                   }
+                   break;
+               case 'providerModelsLoaded':
+                   if (message.payload && message.payload.providerId && Array.isArray(message.payload.models)) {
+                       const { providerId, models } = message.payload;
+                       console.log(`[SettingsPage] Received ${models.length} models for provider: ${providerId}`);
+                       setProviderModelsMap(prevMap => ({
+                           ...prevMap,
+                           [providerId]: models as AvailableModel[]
+                       }));
                    }
                    break;
                case 'updateDefaultConfig': // Handle default config updates
@@ -332,6 +352,10 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
                 onChange={(e) => onProviderToggle(id, (e.target as HTMLInputElement).checked)}
               />
               {name}
+              {/* Display model count */}
+              <span class="text-sm font-normal text-gray-500 dark:text-gray-400 ml-2">
+                ({providerModelsMap[id]?.length ?? '...'} models)
+              </span>
             </label>
             <span class={`text-sm font-medium ${apiKeyColor === 'green' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{apiKeyText}</span>
         </div>
@@ -449,7 +473,9 @@ export function SettingPage({ providerStatus, onProviderToggle }: SettingPagePro
               <div class="p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
                    <ModelSelector
                        labelPrefix="Default Chat"
-                       availableModels={allAvailableModels}
+                       // Pass the new props to ModelSelector
+                       availableProviders={availableProviders}
+                       providerModelsMap={providerModelsMap}
                        selectedModelId={defaultConfig.defaultChatModelId ?? null}
                        onModelChange={handleDefaultChatModelChange}
                    />

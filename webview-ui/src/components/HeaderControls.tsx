@@ -8,7 +8,9 @@ import { ModelSelector } from './ModelSelector'; // Import the new component
 
 interface HeaderControlsProps {
     // Removed: uniqueProviders, selectedProvider, handleProviderChange, displayModelName, filteredModels
-    allAvailableModels: AvailableModel[]; // Add prop for all models
+    // Replace allAvailableModels with the new structure
+    availableProviders: AvailableModel[];
+    providerModelsMap: Record<string, AvailableModel[]>;
     selectedModelId: string | null; // Renamed from currentModelInput
     onModelChange: (newModelId: string) => void; // Renamed from handleChatModelChange
     // Removed: handleClearChat, isStreaming, hasMessages
@@ -19,7 +21,9 @@ interface HeaderControlsProps {
 
 export const HeaderControls: FunctionalComponent<HeaderControlsProps> = ({
     // Removed props
-    allAvailableModels,
+    // allAvailableModels, // Removed
+    availableProviders, // Added
+    providerModelsMap, // Added
     selectedModelId,
     onModelChange,
     // Removed props
@@ -33,7 +37,9 @@ export const HeaderControls: FunctionalComponent<HeaderControlsProps> = ({
             {/* Original model selector layout */}
             {/* Replace with the new ModelSelector component */}
             <ModelSelector
-                availableModels={allAvailableModels}
+                // Pass the new props to ModelSelector
+                availableProviders={availableProviders}
+                providerModelsMap={providerModelsMap}
                 selectedModelId={selectedModelId}
                 onModelChange={onModelChange}
                 // No labelPrefix needed here

@@ -26,10 +26,10 @@ export class DeleteApiKeyHandler implements MessageHandler {
                     const updatedStatusList = await context.providerStatusManager.getProviderStatus();
                     context.postMessage({ type: 'providerStatus', payload: updatedStatusList });
 
-                    // Refresh available models as some might become unavailable using ModelResolver
-                    const currentModels = await context.modelResolver.resolveAvailableModels();
-                    context.postMessage({ type: 'availableModels', payload: currentModels });
-
+                    // Refresh available *providers* as one might become unavailable
+                    const currentProviders = await context.modelResolver.getAvailableProviders();
+                    context.postMessage({ type: 'availableProviders', payload: currentProviders }); // Changed type
+                    // Note: The frontend should handle removing models associated with the now unavailable provider.
                 } catch (error: any) {
                     // Error message is likely shown by AiService, just log here
                     console.error(`[DeleteApiKeyHandler] Error deleting API Key for ${providerId}:`, error);
