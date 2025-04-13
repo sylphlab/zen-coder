@@ -350,6 +350,62 @@
               }
             ]
           }
+        },
+        "zencoder.toolAuthorization": {
+          "type": "object",
+          "scope": "window",
+          "description": "Configure authorization requirements for tool categories, MCP servers, and individual tools.",
+          "default": {
+            "categories": {},
+            "mcpServers": {},
+            "tools": {}
+          },
+          "properties": {
+            "categories": {
+              "type": "object",
+              "description": "Authorization status for standard tool categories (e.g., 'filesystem', 'vscode', 'utils', 'system').",
+              "additionalProperties": {
+                "type": "string",
+                "enum": [
+                  "disabled",
+                  "requiresAuthorization",
+                  "alwaysAllow"
+                ],
+                "description": "Status: 'disabled', 'requiresAuthorization', 'alwaysAllow'."
+              },
+              "default": {}
+            },
+            "mcpServers": {
+              "type": "object",
+              "description": "Authorization status for connected MCP servers (use server name as key).",
+              "additionalProperties": {
+                "type": "string",
+                "enum": [
+                  "disabled",
+                  "requiresAuthorization",
+                  "alwaysAllow"
+                ],
+                "description": "Status: 'disabled', 'requiresAuthorization', 'alwaysAllow'."
+              },
+              "default": {}
+            },
+            "tools": {
+              "type": "object",
+              "description": "Specific authorization overrides for individual tools (use tool ID as key, e.g., 'readFileTool', 'mcp_github_create_issue').",
+              "additionalProperties": {
+                "type": "string",
+                "enum": [
+                  "disabled",
+                  "requiresAuthorization",
+                  "alwaysAllow",
+                  "inherit"
+                ],
+                "description": "Status: 'disabled', 'requiresAuthorization', 'alwaysAllow', 'inherit' (default)."
+              },
+              "default": {}
+            }
+          },
+          "additionalProperties": false
         }
       }
     }

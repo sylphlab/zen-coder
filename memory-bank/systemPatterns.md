@@ -9,8 +9,10 @@
     - `ModelResolver` (`src/ai/modelResolver.ts`): Fetches and lists available models from enabled providers (including `providerId`).
     - `HistoryManager` (`src/historyManager.ts`): Manages chat history persistence (`globalState`) and translation between UI/Core formats.
     - `StreamProcessor` (`src/streamProcessor.ts`): Handles parsing the AI response stream (`fullStream` via `text-delta`), and performs post-stream parsing of appended JSON blocks (e.g., for `suggested_actions`) before updating history/UI.
+    - `McpManager` (`src/ai/mcpManager.ts`): Manages lifecycle, configuration, and tool fetching for MCP servers.
 - **Webview Message Handling:** Uses a registration pattern (`src/webview/handlers/`). `ZenCoderChatViewProvider` delegates incoming messages to specific `MessageHandler` implementations.
-- **State Management:** Chat history (`UiMessage[]`) persisted in `context.workspaceState` (per workspace). API keys stored securely in `context.secrets`. **Tool enablement (standard & MCP)** stored uniformly in `context.globalState` (`toolEnabledStatus`). Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`).
+- **State Management:** Chat history (`UiMessage[]`) persisted in `context.workspaceState` (per workspace). API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`).
+- **Tool Authorization:** Managed via VS Code setting `zencoder.toolAuthorization`. This object defines status (`disabled`, `requiresAuthorization`, `alwaysAllow`) for standard tool categories (e.g., `filesystem`, `vscode`) and MCP servers. It also allows specific overrides (`disabled`, `requiresAuthorization`, `alwaysAllow`, `inherit`) for individual tools (standard or MCP). `AiService` reads this config to determine the final availability of each tool based on inheritance rules. (Replaces previous `zencoder.tools.*.enabled` settings and `globalState` `toolEnabledStatus` key).
 - **Configuration Files:**
     - Global MCP Servers: `[VS Code User Data]/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`
     - Project MCP Servers: `[Workspace]/.zen/mcp_servers.json`
@@ -18,7 +20,7 @@
 
 ## Key Technical Decisions
 - **Vercel AI SDK:** Central library for AI model interaction, streaming, and tool definition/execution.
-- **Tool Implementation:** Tools are defined using the `ai` package's `tool` function with `zod` schemas. They are organized modularly under `src/tools/` (filesystem, utils, system, vscode). Execution logic uses `vscode` API or Node.js modules as appropriate. MCP tools are identified using the `mcp_serverName_toolName` format.
+- **Tool Implementation:** Tools are defined using the `ai` package's `tool` function with `zod` schemas. They are organized modularly under `src/tools/` (filesystem, utils, system, vscode). Standard tools are categorized logically (see `STANDARD_TOOL_CATEGORIES` in `AiService`). Execution logic uses `vscode` API or Node.js modules. MCP tools are identified using the `mcp_serverName_toolName` format and categorized by server name. Authorization is checked via the `zencoder.toolAuthorization` setting before a tool is made available to the AI.
    - **Filesystem Tool Design Philosophy:**
        - **Consistency:** Strive for consistent parameter names and return structures across tools.
        - **Batch Operations:** Tools generally accept arrays of paths/items to minimize AI roundtrips.

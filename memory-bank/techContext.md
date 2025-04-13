@@ -17,7 +17,7 @@
 - **pnpm:** Package management (v10.8.0 used for initial install).
 - **esbuild:** Bundler (as indicated by `esbuild.js` in the project root).
 - **eslint:** Linter (as indicated by `eslint.config.mjs`).
-- **Modular Tools:** Tool logic refactored into `src/tools/` with categories (filesystem, utils, system, vscode). Standard tools use their function name as identifier (e.g., `readFile`). MCP tools use the format `mcp_serverName_toolName` (e.g., `mcp_github_create_issue`).
+- **Modular Tools:** Tool logic refactored into `src/tools/` with categories (filesystem, utils, system, vscode). Standard tools are categorized logically (see `STANDARD_TOOL_CATEGORIES` in `AiService`). MCP tools use the format `mcp_serverName_toolName` and are categorized by server name. Tool authorization is managed via the `zencoder.toolAuthorization` VS Code setting.
 
 ## Development Setup
 - Standard VS Code extension development environment.

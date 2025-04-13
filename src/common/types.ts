@@ -105,6 +105,34 @@ export interface WorkspaceChatState {
     lastActiveChatId: string | null; // ID of the last viewed chat in this workspace
     lastLocation?: string; // Last viewed route/path (e.g., '/index.html', '/chats', '/settings')
 }
+/**
+ * Defines the possible authorization states for a tool category or an individual tool.
+ */
+export enum ParentStatus {
+  Disabled = 'disabled', // Completely disables the category/server and its tools unless overridden.
+  RequiresAuthorization = 'requiresAuthorization', // Requires authorization for tools unless overridden.
+  AlwaysAllow = 'alwaysAllow', // Allows tools by default unless overridden.
+}
+
+/**
+ * Defines the possible authorization states for an individual tool, including inheriting from its parent.
+ */
+export enum ToolStatus {
+  Disabled = 'disabled', // Explicitly disables this tool.
+  RequiresAuthorization = 'requiresAuthorization', // Explicitly requires authorization for this tool.
+  AlwaysAllow = 'alwaysAllow', // Explicitly allows this tool without authorization.
+  Inherit = 'inherit', // Inherits the status from its parent category/server (default).
+}
+
+/**
+ * Structure for tool authorization settings.
+ */
+export interface ToolAuthorizationConfig {
+  categories: Record<string, ParentStatus>; // Status for standard tool categories
+  mcpServers: Record<string, ParentStatus>; // Status for MCP servers
+  tools: Record<string, ToolStatus>; // Specific status overrides for individual tools
+}
+
 
 // Structure for default chat configuration (global scope)
 export interface DefaultChatConfig {

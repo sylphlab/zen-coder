@@ -13,9 +13,53 @@ import z from 'zod';
 import { McpManager, McpServerStatus } from './mcpManager';
 import * as path from 'path';
 import { HistoryManager } from '../historyManager'; // Import HistoryManager
+import { ParentStatus, ToolAuthorizationConfig, ToolStatus } from '../common/types'; // Import new types
 
-// Key for storing MCP tool overrides in globalState
-const MCP_TOOL_OVERRIDES_KEY = 'mcpToolEnabledOverrides';
+// Define standard tool categories using the correct exported tool names
+const STANDARD_TOOL_CATEGORIES: { [key in ToolName]?: string } = {
+    // Filesystem
+    readFilesTool: 'filesystem',
+    writeFilesTool: 'filesystem',
+    listFilesTool: 'filesystem',
+    createFolderTool: 'filesystem',
+    statItemsTool: 'filesystem', // Corrected from getStatTool
+    deleteItemsTool: 'filesystem', // Replaces deleteFileTool and deleteFolderTool
+    moveRenameTool: 'filesystem',
+    copyFileTool: 'filesystem',
+    copyFolderTool: 'filesystem',
+    editFileTool: 'filesystem',
+    searchContentTool: 'filesystem',
+    replaceContentTool: 'filesystem',
+    // VS Code Interaction
+    getOpenTabsTool: 'vscode',
+    getActiveEditorContextTool: 'vscode',
+    replaceInActiveEditorTool: 'vscode',
+    // Removed: showInformationMessageTool, showWarningMessageTool, showErrorMessageTool, showInputBoxTool, showQuickPickTool
+    formatDocumentTool: 'vscode',
+    saveActiveFileTool: 'vscode',
+    closeActiveFileTool: 'vscode',
+    openFileTool: 'vscode',
+    // Utils
+    fetchUrlTool: 'utils',
+    base64EncodeTool: 'utils',
+    base64DecodeTool: 'utils',
+    md5HashTool: 'utils',
+    sha256HashTool: 'utils',
+    uuidGenerateTool: 'utils',
+    jsonParseTool: 'utils',
+    jsonStringifyTool: 'utils',
+    // System
+    getOsInfoTool: 'system',
+    getCurrentTimeTool: 'system',
+    getTimezoneTool: 'system',
+    getPublicIpTool: 'system',
+    getActiveTerminalsTool: 'system',
+    runCommandTool: 'system', // runCommandTool is sensitive, might default to requiresAuthorization later
+};
+
+// Default status if not specified in config
+const DEFAULT_PARENT_STATUS = ParentStatus.AlwaysAllow; // Or RequiresAuthorization? Let's start permissive.
+const DEFAULT_TOOL_STATUS = ToolStatus.Inherit;
 
 // Define ApiProviderKey based on provider IDs
 export type ApiProviderKey = AiService['allProviders'][number]['id'];
@@ -142,40 +186,70 @@ export class AiService {
 
     /**
      * Prepares the combined and FILTERED toolset for the AI,
-     * including enabled built-in tools and enabled MCP tools.
+     * Prepares the combined and FILTERED toolset for the AI based on the new
+     * authorization configuration (`zencoder.toolAuthorization`).
      */
     private _prepareToolSet(): ToolSet {
         const finalTools: ToolSet = {};
-        // Unified key for storing enablement status of ALL tools
-        const TOOL_ENABLED_STATUS_KEY = 'toolEnabledStatus';
-        const toolEnabledStatus = this.context.globalState.get<{ [toolIdentifier: string]: boolean }>(TOOL_ENABLED_STATUS_KEY, {});
+        const config = vscode.workspace.getConfiguration('zencoder');
+        const authConfig = config.get<ToolAuthorizationConfig>('toolAuthorization', { categories: {}, mcpServers: {}, tools: {} });
+
+        const getFinalToolStatus = (
+            toolId: string,
+            parentType: 'category' | 'mcpServer',
+            parentId: string | undefined
+        ): ToolStatus | ParentStatus => {
+            const toolOverride = authConfig.tools[toolId] ?? DEFAULT_TOOL_STATUS;
+
+            if (toolOverride !== ToolStatus.Inherit) {
+                return toolOverride; // Use explicit tool override
+            }
+
+            // Inherit from parent
+            let parentStatus = DEFAULT_PARENT_STATUS;
+            if (parentId) {
+                if (parentType === 'category') {
+                    parentStatus = authConfig.categories[parentId] ?? DEFAULT_PARENT_STATUS;
+                } else if (parentType === 'mcpServer') {
+                    parentStatus = authConfig.mcpServers[parentId] ?? DEFAULT_PARENT_STATUS;
+                }
+            }
+            return parentStatus;
+        };
 
         // 1. Process Standard Tools
         const standardToolNames = Object.keys(allTools) as ToolName[];
         standardToolNames.forEach(toolName => {
             const toolDefinition = allTools[toolName];
-            // Check enablement status in globalState, default to true if not found
-            const isEnabled = toolEnabledStatus[toolName] !== false;
-            if (toolDefinition && isEnabled) {
+            if (!toolDefinition) return;
+
+            const category = STANDARD_TOOL_CATEGORIES[toolName];
+            const finalStatus = getFinalToolStatus(toolName, 'category', category);
+
+            // Add tool if its final status is not Disabled
+            if (finalStatus !== ParentStatus.Disabled && finalStatus !== ToolStatus.Disabled) {
                 finalTools[toolName] = toolDefinition;
+                // TODO: Later, check if finalStatus === ParentStatus.RequiresAuthorization or ToolStatus.RequiresAuthorization
+                // and potentially wrap the tool execution to add confirmation prompts.
             }
         });
 
         // 2. Process MCP Tools
         const mcpToolsMap = this.mcpManager.getMcpServerTools();
         for (const [serverName, tools] of mcpToolsMap.entries()) {
-             for (const [mcpToolName, mcpToolDefinition] of Object.entries(tools)) {
-                 // Use the unified format mcp_serverName_toolName everywhere
-                 const unifiedIdentifier = `mcp_${serverName}_${mcpToolName}`;
-                 // Check enablement status in globalState using the unified ID, default to true
-                 const isEnabled = toolEnabledStatus[unifiedIdentifier] !== false;
-                 if (isEnabled) {
-                     finalTools[unifiedIdentifier] = mcpToolDefinition;
-                 }
-             }
+            for (const [mcpToolName, mcpToolDefinition] of Object.entries(tools)) {
+                const unifiedIdentifier = `mcp_${serverName}_${mcpToolName}`;
+                const finalStatus = getFinalToolStatus(unifiedIdentifier, 'mcpServer', serverName);
+
+                // Add tool if its final status is not Disabled
+                if (finalStatus !== ParentStatus.Disabled && finalStatus !== ToolStatus.Disabled) {
+                    finalTools[unifiedIdentifier] = mcpToolDefinition;
+                    // TODO: Add authorization check wrapping later if needed.
+                }
+            }
         }
 
-        // console.log(`[AiService] Total tools available for AI (filtered): ${Object.keys(finalTools).length}`);
+        // console.log(`[AiService] Total tools available for AI (filtered by auth config): ${Object.keys(finalTools).length}`);
         return finalTools;
     }
 
