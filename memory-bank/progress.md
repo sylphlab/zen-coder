@@ -19,6 +19,7 @@
 +    - State management (e.g., `isChatListLoadingAtom`), event handlers, and navigation logic (`setLocation` + `updateLocationAtom`) moved from `app.tsx` into relevant child components (`ChatListPage`, `HeaderControls`, `SettingPage`).
 +    - Home page route changed from `/chats` to `/`, and navigation targets updated accordingly.
 +    - Cleaned up unused code and imports in `app.tsx`.
++- **Refactored Communication Initialization:** Moved global `window.addEventListener('message', ...)` logic from `main.tsx` into an `initializeCommunication()` function within `communication.ts`. `main.tsx` now calls this function once for setup.
 - **Default Config Pub/Sub:**
     - Implemented explicit subscribe/unsubscribe mechanism for real-time Default Config updates.
     - Frontend (`SettingPage`) now subscribes on mount and unsubscribes on unmount.

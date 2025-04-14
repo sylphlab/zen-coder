@@ -163,8 +163,11 @@ Refactoring frontend components (`app.tsx`, `ChatListPage`, `HeaderControls`, `S
 +    - Moved navigation logic (`setLocation` + `updateLocationAtom`) into the components triggering navigation: `HeaderControls`, `ChatListPage`, `SettingPage`.
 +    - Changed default/home route from `/chats` to `/`. Updated relevant navigation targets.
 +    - Removed props related to navigation and chat list actions from `app.tsx`'s rendering of child components.
++    - Cleaned up unused code and imports in `app.tsx`.
++ - **Refactored Communication Initialization:** Moved global `window.addEventListener('message', ...)` logic from `main.tsx` into an `initializeCommunication()` function within `communication.ts`. `main.tsx` now calls this function once for setup.
 + - **Fixed Backend Handler Imports (TS2307):** Corrected import paths in all handlers within `src/webview/handlers/` to import from `./RequestHandler.ts` instead of the non-existent `./MessageHandler.ts`. Updated classes to implement `RequestHandler` and adjusted `handle` method signatures/return types for the Request/Response pattern. Fixed follow-up TS errors related to this change.
 + - **Fixed Webview Routing 404:** Corrected back button navigation in `SettingPage.tsx` to point to `/` instead of `/index.html`.
++ - **Cleaned `webview-ui/src/main.tsx`:** Removed unnecessary communication service initialization logic.
 
 ## Next Steps
 - **Current Task:** Implementing multi-chat functionality (see Next Steps above).
@@ -214,17 +217,21 @@ Refactoring frontend components (`app.tsx`, `ChatListPage`, `HeaderControls`, `S
 - Activity Bar Entry Changed.
 
 ## Active Decisions
-- **Model ID Handling:** Confirmed decision to use separate `providerId` and `modelId` for now, abandoning the problematic combined ID format. Planned future refactor to a more robust data structure (`{ internal_id, provider_id, display_name, reference_id }`).
-- **Communication Model:** Refactored to a strict Request/Response model. All FE -> BE messages MUST be sent via `requestData` (in `communication.ts`) which always generates a `requestId` and sends a `type: 'requestData'` message with the actual operation in `requestType`. The backend (`extension.ts`) MUST always reply with a `responseData` message containing the same `requestId`. Fire-and-forget is no longer used from FE to BE.
-- **Pub/Sub Model:** Backend pushes state updates (e.g., provider status, tool status) via a `type: 'pushUpdate'` message containing `topic` and `data`. Frontend (`main.tsx`) listens for these and updates Jotai atoms directly. The `listen` function in `communication.ts` handles sending `subscribe`/`unsubscribe` requests (via `requestData`) and managing the underlying `pushUpdate` listener for specific topics.
-- **Handler Architecture:** Unified all backend handlers (`src/webview/handlers/`) to implement the `RequestHandler` interface. Removed `MessageHandler` interface and map. `extension.ts` uses a single `_handlers` map and unified logic in `_handleWebviewMessage` to process all incoming requests.
-- **Stream Processing:** Refactored `StreamProcessor` to push chat history updates and streaming status via `pushUpdate` (`topic: 'chatUpdate'` and `topic: 'streamingStatusUpdate'`) instead of specific message types like `appendMessageChunk`. Frontend (`main.tsx`) updated to handle these new topics. (Note: `loadChatState` handling in `main.tsx` remains temporary).
-- **MCP Architecture:** Shifted from UI/VSCode settings to dedicated JSON files (Global: `.../settings/mcp_settings.json`, Project: `.zen/mcp_servers.json`). All MCP client lifecycle management (init, retry, close), config handling, and tool fetching/caching is now handled by `McpManager`. `AiService` delegates MCP tasks. Settings UI displays status from `McpManager` and allows triggering retries.
-- **Image Upload:** Implemented UI and basic frontend logic. Backend needs updating (`SendMessageHandler`, `HistoryManager`, `AiService`).
-- **Markdown & Syntax Highlighting:** Implemented using `react-markdown` and `react-syntax-highlighter` (`vscDarkPlus` theme) in the frontend. Fixed initial webview loading issues by correcting root `tsconfig.json` references.
-- **Suggested Actions Implementation:** New strategy: AI appends JSON block with `suggested_actions` to the end of its text response. `StreamProcessor` parses this post-stream, sends actions to UI, and removes the block from history. Schema (`structuredAiResponseSchema`) only defines `suggested_actions`. `experimental_output` is not used. Text streaming relies on standard `text-delta` parts.
-- **VS Code Tool Enhancements:** Added `goToDefinitionTool`, `findReferencesTool`, `renameSymbolTool`, `getConfigurationTool`, `startDebuggingTool`. Verified `replaceInActiveEditorTool` insertion. Remaining: Debugging tools (stop, step, breakpoints), enhance `runCommandTool` (exit code).
-- **UI Fixes:** (Previous fixes remain relevant)
+- **Refactoring Strategy (Hooks > Atoms for Logic):** Realized initial attempts to encapsulate complex logic (async fetch, external listeners like wouter) directly within Jotai atom definitions (mimicking Riverpod providers) were flawed due to React Hook rules (hooks cannot be called inside atom definitions). The correct pattern is to use custom hooks (`use...`) to manage side effects, lifecycle, and interaction with external hooks/systems. These custom hooks can then consume/update simple state atoms/stores (like Nanostores) if shared state is needed.
+- **State Management Library Shift (Jotai -> Nanostores):** Based on the above realization and user preference, decided to shift state management (where applicable, starting with communication/location) from Jotai towards Nanostores, combined with custom hooks for logic encapsulation.
+- **Location Management Refactor (Complete):** Successfully refactored location state management. Removed `locationAtom`. Created a `useLocationSync` custom hook (`webview-ui/src/hooks/useLocationSync.ts`) that uses `wouter`'s `useLocation` as the state source, manages the communication listener lifecycle (`initializeListener`/`cleanupListener`), handles initial location fetch from the backend, persists location changes to the backend, and manages an `isLoading` state. `app.tsx` now simply calls this hook once.
+- **Communication Module Style (FP):** Refactored `webview-ui/src/utils/communication.ts` from a class-based service to a Functional Programming style module exporting individual functions (`initializeListener`, `cleanupListener`, `requestData`, `listen`, `fetchInitialLocationFP`, `persistLocationFP`). Removed associated Jotai/Nanostore wrappers for the service itself.
+- **Model ID Handling:** (Previous decision still valid) Confirmed decision to use separate `providerId` and `modelId`.
+- **Communication Model (Request/Response):** (Previous decision still valid) Strict Request/Response via `requestData`.
+- **Pub/Sub Model:** (Previous decision still valid) Backend pushes via `pushUpdate`, frontend uses `listen` function.
+- **Handler Architecture:** (Previous decision still valid) Unified backend handlers.
+- **Stream Processing:** (Previous decision still valid) `StreamProcessor` uses `pushUpdate`.
+- **MCP Architecture:** (Previous decision still valid) File-based config, `McpManager`.
+- **Image Upload:** (Status unchanged) UI implemented, backend needs update.
+- **Markdown & Syntax Highlighting:** (Status unchanged) Implemented.
+- **Suggested Actions Implementation:** (Status unchanged) Via JSON block append + parsing.
+- **VS Code Tool Enhancements:** (Status unchanged) Some added, debugging/runCommand remain.
+- **UI Fixes:** (Previous fixes remain relevant, specific routing fixes superseded by `useLocationSync`)
     - Corrected `app.tsx` to use `providerId` from `AvailableModel` type.
     - Reverted invalid `sandbox allow-modals` CSP directive in `webviewContent.ts`.
     - Implemented custom confirmation dialog in `app.tsx` for Clear Chat.
