@@ -163,7 +163,30 @@ export type WebviewRequestType =
   | 'getAllToolsStatus'      // Keep for settings page init
   | 'getCustomInstructions' // Keep for settings page init
   | 'setToolAuthorization' // New handler type
-  | 'getChatState'; // Request for initial chat sessions and last active ID
+  | 'getChatState';
+// Define a union type for all possible action request types initiated by the frontend
+export type ActionRequestType =
+    | 'setApiKey'
+    | 'deleteApiKey'
+    | 'setProviderEnabled'
+    | 'setDefaultConfig'
+    | 'setGlobalCustomInstructions'
+    | 'setProjectCustomInstructions'
+    | 'openOrCreateProjectInstructionsFile'
+    | 'setToolAuthorization'
+    | 'retryMcpConnection'
+    | 'setActiveChat'
+    | 'createChat'
+    | 'deleteChat'
+    | 'updateChatConfig'
+    | 'clearChatHistory'
+    | 'deleteMessage'
+    | 'updateLastLocation'
+    | 'openGlobalMcpConfig' // Added
+    | 'openProjectMcpConfig'
+    | 'stopGeneration' // Added
+    // Add other action types here as needed
+    | 'executeToolAction'; // Although handled differently, include for completeness? Or keep separate? Let's include for now.
 
 export interface WebviewRequestMessage {
   type: 'requestData'; // Generic type for requests needing a response

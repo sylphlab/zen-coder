@@ -1,10 +1,12 @@
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
+import { ProviderInfoAndStatus } from '../../common/types'; // Import return type
 
-export class GetProviderStatusHandler implements MessageHandler {
-    public readonly messageType = 'getProviderStatus';
+export class GetProviderStatusHandler implements RequestHandler {
+    public readonly requestType = 'getProviderStatus'; // Change messageType to requestType
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
-        console.log(`[${this.messageType}] Handling request...`);
+    // Return the status list or throw an error
+    public async handle(payload: any, context: HandlerContext): Promise<ProviderInfoAndStatus[]> {
+        console.log(`[${this.requestType}] Handling request...`);
         try {
             // Use ProviderStatusManager
             const statusList = await context.providerStatusManager.getProviderStatus(
@@ -12,21 +14,13 @@ export class GetProviderStatusHandler implements MessageHandler {
                 context.aiService.providerMap
             );
 
-            // Respond with the status list
-            context.postMessage({
-                type: 'providerStatus', // Response type
-                payload: statusList,
-                requestId: message.requestId // Include requestId for correlation
-            });
-            console.log(`[${this.messageType}] Sent status for ${statusList.length} providers.`);
+            console.log(`[${this.requestType}] Returning status for ${statusList.length} providers.`);
+            // Return the payload directly for requestData
+            return statusList;
         } catch (error: any) {
-            console.error(`[${this.messageType}] Error fetching provider status:`, error);
-            // Send error response back to the webview
-            context.postMessage({
-                type: 'providerStatusError', // Specific error type
-                payload: { message: error.message || 'Failed to fetch provider status' },
-                requestId: message.requestId
-            });
+            console.error(`[${this.requestType}] Error fetching provider status:`, error);
+            // Throw error to reject the requestData promise
+            throw new Error(`Failed to fetch provider status: ${error.message}`);
         }
     }
 }

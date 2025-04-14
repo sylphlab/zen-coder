@@ -1,15 +1,12 @@
-import { useEffect, useRef, useCallback, useState } from 'preact/hooks'; // Keep useState for local UI state
+import { useEffect, useRef, useCallback, useState } from 'preact/hooks';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { Router, Route, useLocation, Switch, Redirect } from "wouter";
-// import { Suspense } from 'preact/compat'; // Remove Suspense import
-import { JSX } from 'preact/jsx-runtime'; // Import JSX namespace
+import { JSX } from 'preact/jsx-runtime';
 import './app.css';
 import { SettingPage } from './pages/SettingPage';
-import { ChatListPage } from './pages/ChatListPage'; // Import ChatListPage
-// Removed: import { useMessageHandler } from './hooks/useMessageHandler';
+import { ChatListPage } from './pages/ChatListPage';
 import { useImageUpload } from './hooks/useImageUpload';
-import { handleResponse as handleRequestManagerResponse } from './utils/requestManager'; // Import the response handler
-// Removed: import { useModelSelection } from './hooks/useModelSelection';
+import { requestData, postMessage, generateUniqueId } from './utils/communication'; // Import from communication.ts
 import { HeaderControls } from './components/HeaderControls';
 import { MessagesArea } from './components/MessagesArea';
 import { InputArea } from './components/InputArea';
@@ -18,13 +15,13 @@ import {
     AvailableModel,
     SuggestedAction as CommonSuggestedAction,
     ChatSession,
-    ChatConfig, // <-- Add missing import
+    ChatConfig,
     UiMessageContentPart,
     UiMessage,
     UiToolCallPart,
     UiTextMessagePart,
     UiImagePart
-} from '../../src/common/types'; // Corrected path: up from webview-ui/src to webview-ui, up to root, then down to src/common
+} from '../../src/common/types';
 import {
     chatSessionsAtom,
     activeChatIdAtom,
@@ -36,21 +33,19 @@ import {
     suggestedActionsMapAtom,
     activeChatAtom,
     activeChatMessagesAtom,
-    activeChatEffectiveConfigAtom, // Use the renamed atom
+    activeChatEffectiveConfigAtom,
     activeChatProviderIdAtom,
-    activeChatModelIdAtom, // Corrected import
+    activeChatModelIdAtom,
     activeChatCombinedModelIdAtom,
-    webviewLocationAtom, // Added for potential future sync
-    isChatListLoadingAtom // Import the new atom
-} from './store/atoms'; // Import Jotai atoms
+    webviewLocationAtom,
+    isChatListLoadingAtom
+} from './store/atoms';
 
 // --- Type Definitions ---
 export type SuggestedAction = CommonSuggestedAction;
-// Renamed internal Message type to InternalUiMessage to avoid conflict with imported UiMessage
 export interface InternalUiMessage extends UiMessage {
-    thinking?: string; // Keep UI-specific state if needed
+    thinking?: string;
 }
-// Keep Provider types for now, might move later
 export type ApiProviderKey = 'ANTHROPIC' | 'GOOGLE' | 'OPENROUTER' | 'DEEPSEEK';
 export type ProviderInfoAndStatus = {
      id: string;
@@ -61,7 +56,7 @@ export type ProviderInfoAndStatus = {
      apiKeySet: boolean;
  };
 export type AllProviderStatus = ProviderInfoAndStatus[];
-interface McpServerConfig { // Keep for now if needed by SettingsPage indirectly
+interface McpServerConfig {
     name: string;
     enabled: boolean;
     type: 'stdio' | 'sse';
@@ -73,34 +68,8 @@ interface McpServerConfig { // Keep for now if needed by SettingsPage indirectly
     _uiId?: string;
 }
 
-// --- VS Code API Helper ---
-// @ts-ignore
-const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
-export const postMessage = (message: any) => {
-    if (vscode) {
-        vscode.postMessage(message);
-    } else {
-        console.log("VS Code API not available, message not sent:", message);
-        // Mock responses for development
-        if (message.type === 'webviewReady') {
-             setTimeout(() => {
-                 window.dispatchEvent(new MessageEvent('message', { data: { type: 'availableModels', payload: [ { id: 'mock-claude', label: 'Mock Claude', providerId: 'ANTHROPIC' }, { id: 'mock-gemini', label: 'Mock Gemini', providerId: 'GOOGLE' } ] } }));
-                 window.dispatchEvent(new MessageEvent('message', { data: { type: 'providerStatus', payload: [ { id: 'ANTHROPIC', name: 'Anthropic', requiresApiKey: true, enabled: true, apiKeySet: true }, { id: 'GOOGLE', name: 'Google', requiresApiKey: true, enabled: false, apiKeySet: false } ] } }));
-                 // Mock loadChatState instead of loadUiHistory
-                 const mockChatId = generateUniqueId();
-                 window.dispatchEvent(new MessageEvent('message', { data: { type: 'loadChatState', payload: { chats: [{ id: mockChatId, name: 'Default Mock Chat', history: [], config: { useDefaults: true }, createdAt: Date.now(), lastModified: Date.now() }], lastActiveChatId: mockChatId } } }));
-                 window.dispatchEvent(new MessageEvent('message', { data: { type: 'updateMcpServers', payload: [] } }));
-             }, 300);
-        }
-    }
-};
-
-// --- Helper Functions ---
-export const generateUniqueId = () => `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-// Removed StateUpdateMessageHandler component and its useEffect hook.
-// State updates are now handled by MessageHandlerComponent rendered in main.tsx.
-
+// Removed VS Code API Helper and postMessage definition (now in communication.ts)
+// Removed generateUniqueId definition (now in communication.ts)
 
 // --- App Component ---
 export function App() {
@@ -110,42 +79,35 @@ export function App() {
     const [inputValue, setInputValue] = useAtom(inputValueAtom);
     const [isStreaming, setIsStreaming] = useAtom(isStreamingAtom);
     const [providerStatus, setProviderStatus] = useAtom(providerStatusAtom);
-    // Removed: const setSuggestedActionsMap = useSetAtom(suggestedActionsMapAtom); // Setter used only in MessageHandlerComponent
     const availableProviders = useAtomValue(availableProvidersAtom);
-    // Removed: const providerModelsMap = useAtomValue(providerModelsMapAtom); // Use atomFamily instead where needed
-    // Use derived atoms directly
     const activeChatMessages = useAtomValue(activeChatMessagesAtom);
     const activeChatProviderId = useAtomValue(activeChatProviderIdAtom);
-    const currentModelId = useAtomValue(activeChatModelIdAtom); // Corrected: Read model ID atom
+    const currentModelId = useAtomValue(activeChatModelIdAtom);
     const activeChatCombinedModelId = useAtomValue(activeChatCombinedModelIdAtom);
-    const suggestedActionsMap = useAtomValue(suggestedActionsMapAtom); // Read derived value
+    const suggestedActionsMap = useAtomValue(suggestedActionsMapAtom);
 
-    // --- Local UI State (Can remain useState or become atoms if needed elsewhere) ---
-    const [location, setLocation] = useLocation(); // Keep wouter for routing for now
+    // --- Local UI State ---
+    const [location, setLocation] = useLocation();
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
-    // const [isChatListLoading, setIsChatListLoading] = useState(false); // Replaced with atom
 
-    // --- Define ALL Jotai Setters at the Top ---
+    // --- Jotai Setters ---
     const setChatSessionsDirect = useSetAtom(chatSessionsAtom);
     const setActiveChatIdDirect = useSetAtom(activeChatIdAtom);
     const setInputValueDirect = useSetAtom(inputValueAtom);
-    // Removed setSelectedImagesDirect - will sync from hook state
     const setIsStreamingDirect = useSetAtom(isStreamingAtom);
-    // Removed setter for read-only async atom:
-    const setSelectedImagesAtomDirect = useSetAtom(selectedImagesAtom); // Setter for the atom
-    const setIsChatListLoading = useSetAtom(isChatListLoadingAtom); // Get setter for the new atom
+    const setSelectedImagesAtomDirect = useSetAtom(selectedImagesAtom);
+    const setIsChatListLoading = useSetAtom(isChatListLoadingAtom);
 
     // --- Custom Hooks ---
-    // Call useImageUpload and get state and functions
     const {
-        selectedImages, // State from the hook
-        setSelectedImages, // Setter from the hook
+        selectedImages,
+        setSelectedImages,
         fileInputRef,
         handleImageFileChange,
         triggerImageUpload,
         removeSelectedImage,
-        clearSelectedImages // Clear function from the hook
+        clearSelectedImages
     } = useImageUpload();
 
     // Sync hook state to Jotai atom
@@ -153,63 +115,41 @@ export function App() {
         setSelectedImagesAtomDirect(selectedImages);
     }, [selectedImages, setSelectedImagesAtomDirect]);
 
-    // Removed duplicate clearSelectedImages definition. Using the one from useImageUpload hook.
-
-    // Removed useModelSelection hook
-    // Removed useMessageHandler hook call
-
-    // Setters defined above
-
     // Read atom values needed in callbacks
     const currentInputValue = useAtomValue(inputValueAtom);
     const currentSelectedImages = useAtomValue(selectedImagesAtom);
     const currentIsStreaming = useAtomValue(isStreamingAtom);
     const currentActiveChatId = useAtomValue(activeChatIdAtom);
     const currentProviderId = useAtomValue(activeChatProviderIdAtom);
-    // const currentModelName = useAtomValue(activeChatModelNameAtom); // Removed, use currentModelId
     const currentChatSessions = useAtomValue(chatSessionsAtom);
-    const isChatListLoading = useAtomValue(isChatListLoadingAtom); // Read value from atom
+    const isChatListLoading = useAtomValue(isChatListLoadingAtom);
 
     // --- Effects ---
-    // Scroll to bottom when active chat messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [activeChatMessages]); // Dependency on atom value is fine
+    }, [activeChatMessages]);
 
-    // Removed useEffect for location updates (can be handled differently if needed, maybe via atom effect)
-    // Removed useEffect for initial setup messages (moved to MessageHandlerComponent)
-
-    // Add useEffect to log derived state changes for debugging
     useEffect(() => {
         console.log(`[App useEffect] Active Provider ID changed to: ${activeChatProviderId}`);
     }, [activeChatProviderId]);
 
     useEffect(() => {
-        // Assuming activeChatModelNameAtom holds the selected model ID for now based on atom definition
-        console.log(`[App useEffect] Active Model ID changed to: ${currentModelId}`); // Corrected to use currentModelId
-    }, [currentModelId]); // Corrected dependency
+        console.log(`[App useEffect] Active Model ID changed to: ${currentModelId}`);
+    }, [currentModelId]);
 
-
-    // --- Event Handlers (Remaining in App) ---
-    // --- Event Handlers (Refactored for Jotai) ---
+    // --- Event Handlers ---
     const handleSend = useCallback(() => {
-        // Use values read outside the callback
-
-        // Use setters defined above
-        if ((currentInputValue.trim() || currentSelectedImages.length > 0) && !currentIsStreaming && currentProviderId && currentModelId && currentActiveChatId) { // Check currentModelId
-            // Map SelectedImage[] to UiImagePart[] for the backend message
+        if ((currentInputValue.trim() || currentSelectedImages.length > 0) && !currentIsStreaming && currentProviderId && currentModelId && currentActiveChatId) {
             const contentParts: UiMessageContentPart[] = currentSelectedImages.map(img => ({
                 type: 'image',
                 mediaType: img.mediaType,
                 data: img.data
             } as UiImagePart));
 
-            // Removed redundant forEach loop
             if (currentInputValue.trim()) {
                 contentParts.push({ type: 'text', text: currentInputValue });
             }
-            // Add message optimistically to the correct chat session
-            const newUserMessage: UiMessage = { id: generateUniqueId(), role: 'user', content: contentParts, timestamp: Date.now() }; // Use role instead of sender
+            const newUserMessage: UiMessage = { id: generateUniqueId(), role: 'user', content: contentParts, timestamp: Date.now() };
             setChatSessionsDirect(prevSessions =>
                 prevSessions.map(session =>
                     session.id === currentActiveChatId
@@ -217,55 +157,47 @@ export function App() {
                         : session
                 )
             );
-            // Send message with chatId
-            // Combine provider and model name for the backend message
-            const combinedModelId = currentProviderId && currentModelId ? `${currentProviderId}:${currentModelId}` : null; // Use currentModelId
+            const combinedModelId = currentProviderId && currentModelId ? `${currentProviderId}:${currentModelId}` : null;
             if (combinedModelId) {
+                 // Keep sendMessage as postMessage for now due to streaming nature
                  postMessage({ type: 'sendMessage', chatId: currentActiveChatId, content: contentParts, providerId: currentProviderId, modelId: combinedModelId });
             } else {
-                 console.error("Cannot send message: Missing provider or model ID for active chat."); // Corrected log
-                 setIsStreamingDirect(false); // Stop streaming indicator if we can't send
-                 return; // Prevent sending
+                 console.error("Cannot send message: Missing provider or model ID for active chat.");
+                 setIsStreamingDirect(false);
+                 return;
             }
             setInputValueDirect('');
-            // clearSelectedImages(); // This needs to update the atom now
-            clearSelectedImages(); // Use the function from the hook, dependency added below
+            clearSelectedImages();
             setIsStreamingDirect(true);
         } else if (!currentActiveChatId) {
              console.warn("Cannot send message: No active chat selected.");
-        } else if (!currentProviderId || !currentModelId) { // Check currentModelId
-             console.warn("Cannot send message: Provider or Model ID not selected for the active chat."); // Corrected log
+        } else if (!currentProviderId || !currentModelId) {
+             console.warn("Cannot send message: Provider or Model ID not selected for the active chat.");
         }
-    }, [ // Add atom values read outside to dependency array
-         currentInputValue, currentSelectedImages, currentIsStreaming, currentActiveChatId, currentProviderId, currentModelId, // Use currentModelId in dependencies
+    }, [
+         currentInputValue, currentSelectedImages, currentIsStreaming, currentActiveChatId, currentProviderId, currentModelId,
          setChatSessionsDirect, setInputValueDirect, setIsStreamingDirect, clearSelectedImages
     ]);
 
-    // Read isStreaming value outside the callback
     const isStreamingValue = useAtomValue(isStreamingAtom);
 
-    // Define handleKeyDown separately
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
-        // Use the value read outside the callback
         if (e.key === 'Enter' && !e.shiftKey && !isStreamingValue) {
             e.preventDefault();
-            handleSend(); // Call the existing handleSend callback
+            handleSend();
         }
-    }, [handleSend, isStreamingValue]); // Add isStreamingValue to dependencies
+    }, [handleSend, isStreamingValue]);
 
-
-     // Use activeChatId read outside
      const handleClearChat = useCallback(() => {
          if (currentActiveChatId) {
              setShowClearConfirm(true);
          } else {
              console.warn("Cannot clear chat: No active chat selected.");
          }
-     }, [currentActiveChatId]); // Add dependency
+     }, [currentActiveChatId]);
 
-     // Use activeChatId read outside
      const confirmClearChat = useCallback(() => {
-         const currentActiveChatIdForClear = currentActiveChatId; // Use value from closure
+         const currentActiveChatIdForClear = currentActiveChatId;
          if (currentActiveChatIdForClear) {
              setChatSessionsDirect(prevSessions =>
                  prevSessions.map(session =>
@@ -274,25 +206,26 @@ export function App() {
                          : session
                  )
              );
-             postMessage({ type: 'clearChatHistory', payload: { chatId: currentActiveChatIdForClear } });
+             requestData('clearChatHistory', { chatId: currentActiveChatIdForClear })
+                 .catch(error => console.error(`Error clearing chat history for ${currentActiveChatIdForClear}:`, error));
              setShowClearConfirm(false);
          }
-     }, [currentActiveChatId, setChatSessionsDirect]); // Add dependency
+     }, [currentActiveChatId, setChatSessionsDirect]);
 
      const cancelClearChat = useCallback(() => {
          setShowClearConfirm(false);
      }, []);
 
-    // Use values read outside
     const handleSuggestedActionClick = useCallback((action: SuggestedAction) => {
         const currentActiveChatIdForSuggest = currentActiveChatId;
         const currentProviderIdForSuggest = currentProviderId;
-        const currentModelIdForSuggest = currentModelId; // Use currentModelId
-        const combinedModelIdForAction = currentProviderIdForSuggest && currentModelIdForSuggest ? `${currentProviderIdForSuggest}:${currentModelIdForSuggest}` : null; // Use currentModelIdForSuggest
-        if (currentActiveChatIdForSuggest && currentProviderIdForSuggest && currentModelIdForSuggest && combinedModelIdForAction) { // Check currentModelIdForSuggest
+        const currentModelIdForSuggest = currentModelId;
+        const combinedModelIdForAction = currentProviderIdForSuggest && currentModelIdForSuggest ? `${currentProviderIdForSuggest}:${currentModelIdForSuggest}` : null;
+        if (currentActiveChatIdForSuggest && currentProviderIdForSuggest && currentModelIdForSuggest && combinedModelIdForAction) {
             switch (action.action_type) {
                 case 'send_message':
                     if (typeof action.value === 'string') {
+                        // Keep sendMessage as postMessage
                         postMessage({ type: 'sendMessage', chatId: currentActiveChatIdForSuggest, content: [{ type: 'text', text: action.value }], providerId: currentProviderIdForSuggest, modelId: combinedModelIdForAction });
                         setIsStreamingDirect(true);
                     } else { console.warn("Invalid value/state for send_message action"); }
@@ -300,6 +233,7 @@ export function App() {
                 case 'run_tool':
                     if (typeof action.value === 'object' && action.value?.toolName) {
                         console.warn("run_tool action type not fully implemented yet.");
+                        // Keep logAction as postMessage for now
                         postMessage({ type: 'logAction', message: `User wants to run tool: ${action.value.toolName} in chat ${currentActiveChatIdForSuggest}` });
                     } else { console.warn("Invalid value for run_tool action"); }
                     break;
@@ -310,13 +244,14 @@ export function App() {
                 default: console.warn("Unknown suggested action type");
             }
         } else {
-             console.warn("Cannot handle suggested action: Missing activeChatId, provider, or model ID for the chat."); // Corrected log
+             console.warn("Cannot handle suggested action: Missing activeChatId, provider, or model ID for the chat.");
         }
-    }, [ currentActiveChatId, currentProviderId, currentModelId, setInputValueDirect, setIsStreamingDirect]); // Use currentModelId in dependencies
+    }, [ currentActiveChatId, currentProviderId, currentModelId, setInputValueDirect, setIsStreamingDirect]);
 
     const handleStopGeneration = useCallback(() => {
         console.log("[App Handler] Stop generation requested.");
-        postMessage({ type: 'stopGeneration' });
+        requestData('stopGeneration') // Use requestData
+            .catch(error => console.error('Error sending stopGeneration request:', error));
     }, []);
 
     // --- Event Handlers (Navigation) ---
@@ -329,39 +264,48 @@ export function App() {
     }, [setLocation]);
 
     // --- Chat List Handlers ---
-    // setActiveChatIdDirect defined above
     const handleSelectChat = useCallback((chatId: string) => {
         console.log(`[App Handler] Selecting chat: ${chatId}`);
         setActiveChatIdDirect(chatId);
-        postMessage({ type: 'setActiveChat', payload: { chatId } }); // Inform backend
-        setLocation('/index.html'); // Navigate back to chat view
-    }, [setLocation, setActiveChatIdDirect]); // Dependency is correct
+        requestData('setActiveChat', { chatId }) // Use requestData
+            .catch(error => console.error(`Error setting active chat to ${chatId}:`, error));
+        setLocation('/index.html');
+    }, [setLocation, setActiveChatIdDirect]);
 
     const handleCreateChat = useCallback(() => {
         console.log("[App Handler] Requesting new chat creation...");
-        setIsChatListLoading(true); // Start loading
-        postMessage({ type: 'createChat' });
-        // Loading will stop when 'loadChatState' is received and handled in MessageHandlerComponent
-    }, [setIsChatListLoading]); // Keep dependency on the setter
+        setIsChatListLoading(true);
+        requestData('createChat') // Use requestData
+            .then(response => {
+                console.log('New chat created response:', response);
+                // Backend now returns { newChatId: string }
+                // We might want to automatically select the new chat here
+                // if (response?.newChatId) {
+                //     handleSelectChat(response.newChatId);
+                // }
+            })
+            .catch(error => console.error('Error creating chat:', error))
+            .finally(() => setIsChatListLoading(false));
+    }, [setIsChatListLoading]); // Removed handleSelectChat dependency for now
 
     const handleDeleteChat = useCallback((chatId: string) => {
         console.log(`[App Handler] Requesting delete chat: ${chatId}`);
-        setIsChatListLoading(true); // Start loading
-        postMessage({ type: 'deleteChat', payload: { chatId } });
-        // Loading will stop when 'loadChatState' is received and handled in MessageHandlerComponent
-        // If the deleted chat was active, the backend/HistoryManager should handle resetting activeChatId.
-    }, [setIsChatListLoading]); // Keep dependency on the setter
+        setIsChatListLoading(true);
+        requestData('deleteChat', { chatId }) // Use requestData
+            .then(() => console.log(`Chat ${chatId} deleted successfully.`))
+            .catch(error => console.error(`Error deleting chat ${chatId}:`, error))
+            .finally(() => setIsChatListLoading(false));
+    }, [setIsChatListLoading]);
 
     // --- Handler for Chat-Specific Model Change ---
-    // Use activeChatId read outside
     const handleChatModelChange = useCallback((newProviderId: string | null, newModelId: string | null) => {
-        const currentActiveChatIdForModelChange = currentActiveChatId; // Use value from closure
+        const currentActiveChatIdForModelChange = currentActiveChatId;
         if (currentActiveChatIdForModelChange) {
             console.log(`[App Handler] Updating model for chat ${currentActiveChatIdForModelChange} to Provider: ${newProviderId}, Model: ${newModelId}`);
             const newConfig: Partial<ChatConfig> = {
-                providerId: newProviderId ?? undefined, // Store null as undefined
+                providerId: newProviderId ?? undefined,
                 modelId: newModelId ?? undefined,
-                useDefaults: false // Explicitly set model, so don't use defaults
+                useDefaults: false
             };
 
             setChatSessionsDirect(prevSessions =>
@@ -369,36 +313,27 @@ export function App() {
                     session.id === currentActiveChatIdForModelChange
                         ? {
                             ...session,
-                            config: { ...session.config, ...newConfig }, // Merge new config parts
+                            config: { ...session.config, ...newConfig },
                             lastModified: Date.now()
                           }
                         : session
                 )
             );
-            // Inform backend about the config change using separate fields
-            postMessage({ type: 'updateChatConfig', payload: { chatId: currentActiveChatIdForModelChange, config: newConfig } });
+            requestData('updateChatConfig', { chatId: currentActiveChatIdForModelChange, config: newConfig }) // Use requestData
+                .catch(error => console.error(`Error updating chat config for ${currentActiveChatIdForModelChange}:`, error));
 
         } else {
             console.warn("Cannot change chat model: No active chat selected.");
         }
-    }, [currentActiveChatId, setChatSessionsDirect]); // Add dependency
+    }, [currentActiveChatId, setChatSessionsDirect]);
 
     // --- App-level Provider Change Handler ---
-    // This now handles setting the provider *and* updating the chat's model
-    // This handler is now simplified as ModelSelector handles finding the default model
-    // It just needs to call handleChatModelChange with the new provider and model
-    // This handler now correctly accepts two arguments: providerId and modelId
     const handleModelSelectorChange = useCallback((newProviderId: string | null, newModelId: string | null) => {
-         console.log(`[App handleModelSelectorChange] Received Provider: ${newProviderId}, Model: ${newModelId}`); // Updated log
-
-         // Directly call the actual update function with the received IDs
-         // No need for parsing logic here anymore
+         console.log(`[App handleModelSelectorChange] Received Provider: ${newProviderId}, Model: ${newModelId}`);
          handleChatModelChange(newProviderId, newModelId);
-
     }, [handleChatModelChange]);
 
     // --- Message Action Handlers ---
-    // Use values read outside
     const handleCopyMessage = useCallback((messageId: string) => {
         const currentActiveChatIdForCopy = currentActiveChatId;
         const currentChatSessionsForCopy = currentChatSessions;
@@ -408,19 +343,17 @@ export function App() {
 
         if (messageToCopy && Array.isArray(messageToCopy.content)) {
             const textToCopy = messageToCopy.content
-                .filter((part): part is UiTextMessagePart => part.type === 'text') // Type guard
+                .filter((part): part is UiTextMessagePart => part.type === 'text')
                 .map(part => part.text)
-                .join('\n'); // Join text parts with newline
+                .join('\n');
 
             if (textToCopy) {
                 navigator.clipboard.writeText(textToCopy)
                     .then(() => {
                         console.log(`Copied message ${messageId} to clipboard.`);
-                        // Optional: Show a temporary "Copied!" feedback
                     })
                     .catch(err => {
                         console.error(`Failed to copy message ${messageId}:`, err);
-                        // Optional: Show error feedback
                     });
             } else {
                 console.warn(`No text content found to copy in message ${messageId}.`);
@@ -428,16 +361,14 @@ export function App() {
         } else {
             console.warn(`Could not find message ${messageId} to copy.`);
         }
-    }, [currentActiveChatId, currentChatSessions]); // Add dependencies
-// setChatSessionsDirect defined above
-const handleDeleteMessage = useCallback((messageId: string) => {
-    // Use value read outside
-    const currentActiveChatIdForDelete = currentActiveChatId;
-    if (!currentActiveChatIdForDelete) return;
+    }, [currentActiveChatId, currentChatSessions]);
 
-    console.log(`Requesting delete message ${messageId} from chat ${currentActiveChatIdForDelete}`);
+    const handleDeleteMessage = useCallback((messageId: string) => {
+        const currentActiveChatIdForDelete = currentActiveChatId;
+        if (!currentActiveChatIdForDelete) return;
 
-        // Optimistically update UI state
+        console.log(`Requesting delete message ${messageId} from chat ${currentActiveChatIdForDelete}`);
+
         setChatSessionsDirect(prevSessions =>
             prevSessions.map(session =>
                 session.id === currentActiveChatIdForDelete
@@ -450,52 +381,37 @@ const handleDeleteMessage = useCallback((messageId: string) => {
             )
         );
 
-        // Inform backend to delete the message from persistent storage
-        postMessage({ type: 'deleteMessage', payload: { chatId: currentActiveChatIdForDelete, messageId } });
+        requestData('deleteMessage', { chatId: currentActiveChatIdForDelete, messageId }) // Use requestData
+            .catch(error => console.error(`Error deleting message ${messageId}:`, error));
 
-    }, [currentActiveChatId, setChatSessionsDirect]); // Add dependency
+    }, [currentActiveChatId, setChatSessionsDirect]);
 
     // --- Main Render ---
     return (
         <Router>
-            {/* Removed StateUpdateMessageHandler rendering */}
-            {/* Removed Suspense wrapper */}
-            {/* Use a slightly different dark background for the main app */}
             <div class="app-layout h-screen flex flex-col bg-gray-100 dark:bg-gray-850 text-gray-900 dark:text-gray-100">
-                {/* Remove padding from main, apply to inner containers */}
-                <main class="content-area flex-1 flex flex-col overflow-hidden"> {/* Changed overflow-y-auto to overflow-hidden */}
+                <main class="content-area flex-1 flex flex-col overflow-hidden">
                     <Switch>
                         <Route path="/index.html">
-                            {/* Added padding here, removed from main */}
-                            <div class="chat-container flex flex-col flex-1 h-full p-4 overflow-hidden"> {/* Added overflow-hidden */}
-                                {/* TODO: Update HeaderControls to potentially show chat name/list button */}
+                            <div class="chat-container flex flex-col flex-1 h-full p-4 overflow-hidden">
                                 <HeaderControls
-                                    // Pass only the required callback props
                                     onModelChange={handleModelSelectorChange}
                                     onSettingsClick={handleSettingsClick}
                                     onChatsClick={handleChatsClick}
                                 />
-                                {/* MessagesArea will now handle its own scrolling */}
                                 <MessagesArea
-                                    // Removed props: messages, suggestedActionsMap, isStreaming
                                     handleSuggestedActionClick={handleSuggestedActionClick}
                                     messagesEndRef={messagesEndRef}
-                                    onCopyMessage={handleCopyMessage} // Pass copy handler
-                                    onDeleteMessage={handleDeleteMessage} // Pass delete handler
+                                    onCopyMessage={handleCopyMessage}
+                                    onDeleteMessage={handleDeleteMessage}
                                     className="flex-1 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
                                 />
-                                {/* Add some margin-top to InputArea */}
                                 <InputArea
                                     className="mt-auto"
-                                    // Pass only required props (callbacks, refs, image handlers)
-                                    // Pass refactored handleKeyDown
                                     handleKeyDown={handleKeyDown}
                                     handleSend={handleSend}
-                                    // Image related props from useImageUpload hook
-                                    // selectedImages prop removed as InputArea reads from atom
                                     setSelectedImages={setSelectedImages}
-                                    fileInputRef={fileInputRef} // Keep ref from useImageUpload for now
-                                    // Removed duplicate fileInputRef prop
+                                    fileInputRef={fileInputRef}
                                     triggerImageUpload={triggerImageUpload}
                                     removeSelectedImage={removeSelectedImage}
                                     handleImageFileChange={handleImageFileChange}
@@ -504,28 +420,22 @@ const handleDeleteMessage = useCallback((messageId: string) => {
                             </div>
                         </Route>
                         <Route path="/settings">
-                            <SettingPage /> {/* Remove props */}
+                            <SettingPage />
                         </Route>
-                        {/* Chat List Route */}
                         <Route path="/chats">
                             <ChatListPage
-                                // Removed props: chatSessions, activeChatId
                                 onSelectChat={handleSelectChat}
                                 onCreateChat={handleCreateChat}
                                 onDeleteChat={handleDeleteChat}
-                                isLoading={isChatListLoading} // Pass loading state from atom
+                                isLoading={isChatListLoading}
                             />
                         </Route>
-                        {/* Default route - Redirect to last active chat or chat list */}
                         <Route>
-                            {/* Default route component function */}
                             {() => {
-                                // Read atom value inside the render function for freshness
                                 const currentActiveChatId = useAtomValue(activeChatIdAtom);
                                 if (location === '/') {
                                     return <Redirect to={currentActiveChatId ? "/index.html" : "/chats"} />;
                                 }
-                                // Show 404 for any other unhandled path
                                 return <div class="p-6 text-center text-red-500">404: Page Not Found<br/>Path: {location}</div>;
                             }}
                         </Route>
@@ -534,13 +444,12 @@ const handleDeleteMessage = useCallback((messageId: string) => {
                 <ConfirmationDialog
                     show={showClearConfirm}
                     title="Confirm Clear History"
-                    message="Are you sure you want to clear the history for this chat? This cannot be undone." // Updated message
+                    message="Are you sure you want to clear the history for this chat? This cannot be undone."
                     onCancel={cancelClearChat}
                     onConfirm={confirmClearChat}
                     confirmText="Confirm Clear"
                 />
             </div>
-            {/* Removed Suspense closing tag */}
         </Router>
     );
 }

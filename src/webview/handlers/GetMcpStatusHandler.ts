@@ -1,29 +1,23 @@
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
+import { McpConfiguredStatusPayload } from '../../common/types'; // Import return type
 
-export class GetMcpStatusHandler implements MessageHandler {
-    public readonly messageType = 'getMcpStatus';
+export class GetMcpStatusHandler implements RequestHandler {
+    public readonly requestType = 'getMcpStatus'; // Change messageType to requestType
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
-        console.log(`[${this.messageType}] Handling request...`);
+    // Return the MCP status payload or throw an error
+    public async handle(payload: any, context: HandlerContext): Promise<McpConfiguredStatusPayload> {
+        console.log(`[${this.requestType}] Handling request...`);
         try {
             // Use McpManager to get the configured status
             const mcpStatus = context.mcpManager.getMcpServerConfiguredStatus();
 
-            // Respond with the MCP status
-            context.postMessage({
-                type: 'mcpStatus', // Response type
-                payload: mcpStatus,
-                requestId: message.requestId // Include requestId for correlation
-            });
-            console.log(`[${this.messageType}] Sent status for ${Object.keys(mcpStatus).length} MCP servers.`);
+            console.log(`[${this.requestType}] Returning status for ${Object.keys(mcpStatus).length} MCP servers.`);
+            // Return the payload directly for requestData
+            return mcpStatus;
         } catch (error: any) {
-            console.error(`[${this.messageType}] Error fetching MCP status:`, error);
-            // Send error response back to the webview
-            context.postMessage({
-                type: 'mcpStatusError', // Specific error type
-                payload: { message: error.message || 'Failed to fetch MCP status' },
-                requestId: message.requestId
-            });
+            console.error(`[${this.requestType}] Error fetching MCP status:`, error);
+            // Throw error to reject the requestData promise
+            throw new Error(`Failed to fetch MCP status: ${error.message}`);
         }
     }
 }

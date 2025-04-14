@@ -2,7 +2,8 @@ import { useCallback } from 'preact/hooks'; // Removed useEffect, useRef
 import { useAtomValue } from 'jotai';
 import { loadable } from 'jotai/utils';
 import { JSX } from 'preact/jsx-runtime';
-import { postMessage } from '../../app'; // Assuming postMessage is exported from app
+import { requestData } from '../../utils/communication'; // Import requestData
+// Removed unused postMessage import
 import { ModelSelector } from '../ModelSelector';
 import { defaultConfigAtom } from '../../store/atoms';
 
@@ -11,16 +12,15 @@ export function DefaultModelSettings(): JSX.Element {
     const defaultConfigLoadable = useAtomValue(loadable(defaultConfigAtom));
 
     const handleDefaultChatModelChange = useCallback((newProviderId: string | null, newModelId: string | null) => {
-        console.log(`[DefaultModelSettings] Setting default chat model: Provider=${newProviderId}, Model=${newModelId}`);
-        postMessage({
-            type: 'setDefaultConfig',
-            payload: {
-                config: {
-                    defaultProviderId: newProviderId ?? undefined,
-                    defaultModelId: newModelId ?? undefined
-                }
+        console.log(`[DefaultModelSettings] Setting default chat model via requestData: Provider=${newProviderId}, Model=${newModelId}`);
+        requestData('setDefaultConfig', { // Use requestData
+            config: {
+                defaultProviderId: newProviderId ?? undefined,
+                defaultModelId: newModelId ?? undefined
             }
-        });
+        })
+        .then(() => console.log(`Default chat model updated.`))
+        .catch(error => console.error(`Error setting default chat model:`, error));
     }, []);
     // Removed subscription useEffect
 

@@ -1,41 +1,35 @@
 import * as vscode from 'vscode';
 import { HistoryManager } from '../../historyManager'; // Adjust path as needed
-import { MessageHandler } from './MessageHandler'; // Corrected import
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
 
 interface DeleteMessagePayload {
     chatId: string;
     messageId: string;
 }
 
-export class DeleteMessageHandler implements MessageHandler { // Implement the interface
-    public readonly messageType = 'deleteMessage'; // Add required property
-    constructor(
-        private historyManager: HistoryManager,
-        private postMessage: (message: any) => void // Store postMessage locally if needed, no super() call
-    ) {
-        // No super() call needed for implementing an interface
-    }
+export class DeleteMessageHandler implements RequestHandler { // Implement RequestHandler
+    public readonly requestType = 'deleteMessage'; // Change messageType to requestType
+    // Constructor no longer needed if historyManager is accessed via context
 
-    public async handle(message: { type: string; payload: DeleteMessagePayload }): Promise<void> {
-        const { chatId, messageId } = message.payload;
+    // Return a simple success object or throw an error
+    public async handle(payload: DeleteMessagePayload, context: HandlerContext): Promise<{ success: boolean }> {
+        const { chatId, messageId } = payload;
 
         if (!chatId || !messageId) {
-            console.error('[DeleteMessageHandler] Missing chatId or messageId in payload:', message.payload);
-            vscode.window.showErrorMessage('無法刪除消息：缺少必要的資訊。');
-            return;
+            console.error('[DeleteMessageHandler] Missing chatId or messageId in payload:', payload);
+            throw new Error("Invalid payload for deleteMessage request."); // Throw error
         }
 
         console.log(`[DeleteMessageHandler] Handling delete request for message ${messageId} in chat ${chatId}`);
 
         try {
-            await this.historyManager.deleteMessageFromHistory(chatId, messageId);
+            await context.historyManager.deleteMessageFromHistory(chatId, messageId); // Use context
             console.log(`[DeleteMessageHandler] Successfully requested deletion of message ${messageId} from history manager.`);
-            // No need to send confirmation back to UI, optimistic update is sufficient
+            return { success: true }; // Return success
         } catch (error: any) {
             console.error(`[DeleteMessageHandler] Error deleting message ${messageId} from chat ${chatId}:`, error);
             vscode.window.showErrorMessage(`刪除消息時出錯: ${error.message}`);
-            // Optionally, send an error message back to UI to revert optimistic update
-            // this.postMessage({ type: 'errorDeletingMessage', payload: { chatId, messageId, error: error.message } });
+            throw new Error(`Failed to delete message: ${error.message}`); // Throw error
         }
     }
 }

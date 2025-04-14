@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback } from 'preact/hooks'; // Removed useEff
 import { useAtomValue } from 'jotai';
 import { loadable } from 'jotai/utils';
 import { JSX } from 'preact/jsx-runtime';
-import { postMessage } from '../../app';
+import { requestData } from '../../utils/communication'; // Import requestData
 import { ProviderInfoAndStatus } from '../../../../src/common/types';
 import { providerStatusAtom } from '../../store/atoms';
 
@@ -19,22 +19,35 @@ export function ProviderSettings(): JSX.Element {
     const handleSetApiKey = (providerId: string) => {
         const apiKey = apiKeysInput[providerId];
         if (apiKey && apiKey.trim() !== '') {
-            console.log(`Setting API Key for ${providerId}`);
-            postMessage({
-                type: 'setApiKey',
-                payload: { provider: providerId, apiKey: apiKey.trim() }
+            console.log(`Setting API Key for ${providerId} via requestData`);
+            requestData('setApiKey', { // Use requestData
+                provider: providerId, apiKey: apiKey.trim()
+            })
+            .then(() => {
+                console.log(`API Key set successfully for ${providerId}`);
+                setApiKeysInput(prev => ({ ...prev, [providerId]: '' })); // Clear input on success
+            })
+            .catch(error => {
+                console.error(`Error setting API Key for ${providerId}:`, error);
+                // Optionally show error to user
             });
-            setApiKeysInput(prev => ({ ...prev, [providerId]: '' }));
         } else {
             console.warn(`API Key input for ${providerId} is empty.`);
         }
     };
 
     const handleDeleteApiKey = (providerId: string) => {
-        console.log(`Deleting API Key for ${providerId}`);
-        postMessage({
-            type: 'deleteApiKey',
-            payload: { provider: providerId }
+        console.log(`Deleting API Key for ${providerId} via requestData`);
+        requestData('deleteApiKey', { // Use requestData
+            provider: providerId
+        })
+        .then(() => {
+            console.log(`API Key deleted successfully for ${providerId}`);
+            // UI state (apiKeySet) should update via providerStatusAtom subscription
+        })
+        .catch(error => {
+            console.error(`Error deleting API Key for ${providerId}:`, error);
+            // Optionally show error to user
         });
     };
 
@@ -43,8 +56,10 @@ export function ProviderSettings(): JSX.Element {
     };
 
     const onProviderToggle = useCallback((providerId: string, enabled: boolean) => {
-        console.log(`Requesting toggle provider ${providerId} to ${enabled}`);
-        postMessage({ type: 'setProviderEnabled', payload: { provider: providerId, enabled: enabled } });
+        console.log(`Requesting toggle provider ${providerId} to ${enabled} via requestData`);
+        requestData('setProviderEnabled', { provider: providerId, enabled: enabled }) // Use requestData
+            .then(() => console.log(`Provider ${providerId} enabled status set to ${enabled}`))
+            .catch(error => console.error(`Error setting provider ${providerId} enabled status:`, error));
     }, []);
 
     const filteredProviders = useMemo(() => {

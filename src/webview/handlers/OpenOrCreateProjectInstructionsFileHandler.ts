@@ -1,14 +1,16 @@
 import * as vscode from 'vscode';
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
 
-export class OpenOrCreateProjectInstructionsFileHandler implements MessageHandler {
-    public readonly messageType = 'openOrCreateProjectInstructionsFile';
+export class OpenOrCreateProjectInstructionsFileHandler implements RequestHandler {
+    public readonly requestType = 'openOrCreateProjectInstructionsFile'; // Change messageType to requestType
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
+    // Return a simple success object or throw an error
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
-            vscode.window.showWarningMessage("Please open a project folder to manage project-specific instructions.");
-            return;
+            const errorMsg = "Please open a project folder to manage project-specific instructions.";
+            vscode.window.showWarningMessage(errorMsg);
+            throw new Error(errorMsg); // Throw error
         }
 
         const projectRootUri = workspaceFolders[0].uri;
@@ -40,10 +42,12 @@ export class OpenOrCreateProjectInstructionsFileHandler implements MessageHandle
             const document = await vscode.workspace.openTextDocument(projectInstructionUri);
             await vscode.window.showTextDocument(document);
             console.log(`[OpenOrCreateProjectInstructionsFileHandler] Opened project instructions file: ${projectInstructionUri.fsPath}`);
+            return { success: true }; // Return success
 
         } catch (error: any) {
             console.error(`[OpenOrCreateProjectInstructionsFileHandler] Error opening or creating project instructions file ${projectInstructionUri.fsPath}:`, error);
             vscode.window.showErrorMessage(`Failed to open or create project custom instructions file: ${error.message}`);
+            throw new Error(`Failed to open or create project custom instructions file: ${error.message}`); // Throw error
         }
     }
 }

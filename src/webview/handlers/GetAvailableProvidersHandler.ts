@@ -1,29 +1,23 @@
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
+import { AvailableModel } from '../../common/types'; // Import return type
 
-export class GetAvailableProvidersHandler implements MessageHandler {
-    public readonly messageType = 'getAvailableProviders';
+export class GetAvailableProvidersHandler implements RequestHandler {
+    public readonly requestType = 'getAvailableProviders'; // Change messageType to requestType
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
-        console.log(`[${this.messageType}] Handling request...`);
+    // Return the list of providers or throw an error
+    public async handle(payload: any, context: HandlerContext): Promise<AvailableModel[]> {
+        console.log(`[${this.requestType}] Handling request...`);
         try {
             // Use ModelResolver to get available providers
             const providers = await context.modelResolver.getAvailableProviders();
 
-            // Respond with the providers list
-            context.postMessage({
-                type: 'availableProviders', // Response type
-                payload: providers,
-                requestId: message.requestId // Include requestId for correlation
-            });
-            console.log(`[${this.messageType}] Sent ${providers.length} available providers.`);
+            console.log(`[${this.requestType}] Returning ${providers.length} available providers.`);
+            // Return the payload directly for requestData
+            return providers;
         } catch (error: any) {
-            console.error(`[${this.messageType}] Error fetching available providers:`, error);
-            // Send error response back to the webview
-            context.postMessage({
-                type: 'availableProvidersError', // Specific error type
-                payload: { message: error.message || 'Failed to fetch available providers' },
-                requestId: message.requestId
-            });
+            console.error(`[${this.requestType}] Error fetching available providers:`, error);
+            // Throw error to reject the requestData promise
+            throw new Error(`Failed to fetch available providers: ${error.message}`);
         }
     }
 }

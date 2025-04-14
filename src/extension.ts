@@ -20,19 +20,17 @@ import { HistoryManager } from './historyManager';
 import { StreamProcessor } from './streamProcessor';
 import { ProviderStatusManager } from './ai/providerStatusManager';
 import { ModelResolver } from './ai/modelResolver';
-import { MessageHandler, HandlerContext } from './webview/handlers/MessageHandler';
+import { RequestHandler, HandlerContext } from './webview/handlers/RequestHandler';
+import { MessageHandler } from './webview/handlers/MessageHandler';
 import { McpManager } from './ai/mcpManager'; // Import McpManager
-// Import necessary handlers (excluding those replaced by requests)
-// Removed WebviewReadyHandler import
+// Import necessary handlers
 import { SendMessageHandler } from './webview/handlers/SendMessageHandler';
 import { SetProviderEnabledHandler } from './webview/handlers/SetProviderEnabledHandler';
 import { SetApiKeyHandler } from './webview/handlers/SetApiKeyHandler';
 import { DeleteApiKeyHandler } from './webview/handlers/DeleteApiKeyHandler';
 import { ClearChatHistoryHandler } from './webview/handlers/ClearChatHistoryHandler';
 import { ExecuteToolActionHandler } from './webview/handlers/ExecuteToolActionHandler';
-// Removed: import { SetToolEnabledHandler } from './webview/handlers/SetToolEnabledHandler';
-import { SetToolAuthorizationHandler } from './webview/handlers/SetToolAuthorizationHandler'; // Import new handler
-import { GetMcpConfiguredStatusHandler } from './webview/handlers/GetMcpConfiguredStatusHandler'; // Keep for settings push updates? Or make request? Keep for now.
+import { SetToolAuthorizationHandler } from './webview/handlers/SetToolAuthorizationHandler';
 import { RetryMcpConnectionHandler } from './webview/handlers/RetryMcpConnectionHandler';
 import { StopGenerationHandler } from './webview/handlers/StopGenerationHandler';
 import { openOrCreateMcpConfigFile } from './utils/configUtils';
@@ -52,16 +50,11 @@ import { GetAvailableProvidersHandler } from './webview/handlers/GetAvailablePro
 import { GetProviderStatusHandler } from './webview/handlers/GetProviderStatusHandler';
 import { GetAllToolsStatusHandler } from './webview/handlers/GetAllToolsStatusHandler';
 import { GetMcpStatusHandler } from './webview/handlers/GetMcpStatusHandler';
-import { SubscribeToMcpStatusHandler } from './webview/handlers/SubscribeToMcpStatusHandler';
-import { UnsubscribeFromMcpStatusHandler } from './webview/handlers/UnsubscribeFromMcpStatusHandler';
-import { SubscribeToProviderStatusHandler } from './webview/handlers/SubscribeToProviderStatusHandler';
-import { UnsubscribeFromProviderStatusHandler } from './webview/handlers/UnsubscribeFromProviderStatusHandler';
-import { SubscribeToToolStatusHandler } from './webview/handlers/SubscribeToToolStatusHandler';
-import { UnsubscribeFromToolStatusHandler } from './webview/handlers/UnsubscribeFromToolStatusHandler';
-import { SubscribeToDefaultConfigHandler } from './webview/handlers/SubscribeToDefaultConfigHandler';
-import { UnsubscribeFromDefaultConfigHandler } from './webview/handlers/UnsubscribeFromDefaultConfigHandler';
-import { SubscribeToCustomInstructionsHandler } from './webview/handlers/SubscribeToCustomInstructionsHandler';
-import { UnsubscribeFromCustomInstructionsHandler } from './webview/handlers/UnsubscribeFromCustomInstructionsHandler';
+import { GetCustomInstructionsHandler } from './webview/handlers/GetCustomInstructionsHandler';
+import { GetDefaultConfigHandler } from './webview/handlers/GetDefaultConfigHandler';
+import { GetModelsForProviderHandler } from './webview/handlers/GetModelsForProviderHandler';
+import { SubscribeHandler } from './webview/handlers/SubscribeHandler';
+import { UnsubscribeHandler } from './webview/handlers/UnsubscribeHandler';
 
 let aiServiceInstance: AiService | undefined = undefined;
 
@@ -71,9 +64,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     try {
         const historyManagerInstance = new HistoryManager(context);
-        // Instantiate ProviderStatusManager first
         const providerStatusManagerInstance = new ProviderStatusManager(context);
-        // Pass ProviderStatusManager to AiService constructor
         aiServiceInstance = new AiService(context, historyManagerInstance, providerStatusManagerInstance);
         await aiServiceInstance.initialize();
 
@@ -85,13 +76,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
         context.subscriptions.push(
             vscode.window.registerWebviewViewProvider(ZenCoderChatViewProvider.viewType, provider, {
-                webviewOptions: { retainContextWhenHidden: true } // Keep context alive
+                webviewOptions: { retainContextWhenHidden: true }
             })
         );
         console.log('Zen Coder Chat View Provider registered.');
 
-        // Set callback for AiService to post messages back to webview
-        // Ensure provider instance is available when setting callback
         aiServiceInstance.setPostMessageCallback((message: any) => {
             provider.postMessageToWebview(message);
         });
@@ -125,12 +114,11 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     private readonly _extensionMode: vscode.ExtensionMode;
     private readonly _aiService: AiService;
     private readonly _historyManager: HistoryManager;
-    // private readonly _providerStatusManager: ProviderStatusManager; // Removed, accessed via AiService
     private readonly _modelResolver: ModelResolver;
     private _streamProcessor?: StreamProcessor;
-    private readonly _mcpManager: McpManager; // Add McpManager instance
+    private readonly _mcpManager: McpManager;
     private readonly _messageHandlers: Map<string, MessageHandler>;
-    private readonly _requestHandlers: { [key in WebviewRequestType]?: (payload?: any, context?: HandlerContext) => Promise<any> };
+    private readonly _requestHandlers: Map<string, RequestHandler>;
 
     constructor(
         context: vscode.ExtensionContext,
@@ -142,113 +130,76 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._extensionMode = context.extensionMode;
         this._aiService = aiService;
         this._historyManager = historyManager;
-        // ProviderStatusManager is now created in activate() and passed to AiService
-        // We get it from AiService if needed, or pass it down if AiService doesn't hold it
-        // Let's assume AiService holds it for now. If not, adjust later.
-        // Remove direct instantiation here.
-        // this._providerStatusManager = new ProviderStatusManager(context, aiService);
-        this._modelResolver = new ModelResolver(context, aiService.providerStatusManager, aiService); // Get manager from AiService
+        this._modelResolver = new ModelResolver(context, aiService.providerStatusManager, aiService);
         this._messageHandlers = new Map();
-        this._requestHandlers = this._initializeRequestHandlers(); // Initialize request handlers map
-        // Instantiate McpManager, passing context and the postMessage callback
+        this._requestHandlers = new Map();
         this._mcpManager = new McpManager(context, this.postMessageToWebview.bind(this));
         console.log("ZenCoderChatViewProvider constructed.");
     }
 
-    // --- Initialize Request Handlers ---
-    private _initializeRequestHandlers(): { [key in WebviewRequestType]?: (payload?: any, context?: HandlerContext) => Promise<any> } {
-        // Context is created within _handleWebviewMessage when needed
-        return {
-            getProviderStatus: async () => this._aiService.providerStatusManager.getProviderStatus(this._aiService.allProviders, this._aiService.providerMap), // Pass args
-            getAvailableProviders: async () => this._modelResolver.getAvailableProviders(),
-            getModelsForProvider: async (payload) => this._modelResolver.fetchModelsForProvider(payload?.providerId),
-            getDefaultConfig: async () => {
-                const config = vscode.workspace.getConfiguration('zencoder');
-                return {
-                    defaultChatModelId: config.get<string>('defaults.chatModelId'),
-                    // Add other defaults later
-                };
-            },
-            // Correctly implement these handlers
-            getMcpConfiguredStatus: async () => {
-                // Use the McpManager instance
-                return this._mcpManager.getMcpServerConfiguredStatus();
-            },
-            getAllToolsStatus: async () => {
-                // Use the AiService instance
-                // Use the new method that returns categorized and resolved status
-                return this._aiService.getResolvedToolStatusInfo();
-            },
-            getCustomInstructions: async () => {
-                // Use the AiService instance to get combined instructions
-                return this._aiService.getCombinedCustomInstructions();
-            },
-            getChatState: async () => {
-                const allChats = this._historyManager.getAllChatSessions();
-                const lastActiveId = this._historyManager.getLastActiveChatId();
-                const lastLocation = this._historyManager.getLastLocation();
-                return {
-                    chats: allChats,
-                    lastActiveChatId: lastActiveId,
-                    lastLocation: lastLocation
-                };
-            },
-        };
-    }
-
-    // --- Register Standard Message Handlers ---
+    // --- Register Handlers ---
     private _registerHandlers(): void {
         if (!this._streamProcessor) {
             console.error("Cannot register handlers: StreamProcessor not initialized.");
             return;
         }
-        const handlers: MessageHandler[] = [
-            // Removed WebviewReadyHandler registration
-            new SendMessageHandler(this._streamProcessor),
-            new SetProviderEnabledHandler(this._aiService),
+        // Register Request Handlers
+        const requestHandlers: RequestHandler[] = [
+            // Data Fetching
+            new GetChatStateHandler(),
+            new GetAvailableProvidersHandler(),
+            new GetProviderStatusHandler(),
+            new GetAllToolsStatusHandler(),
+            new GetMcpStatusHandler(),
+            new GetCustomInstructionsHandler(),
+            new GetDefaultConfigHandler(),
+            new GetModelsForProviderHandler(),
+            // Actions
             new SetApiKeyHandler(this._aiService),
             new DeleteApiKeyHandler(this._aiService),
-            new ClearChatHistoryHandler(),
-            new ExecuteToolActionHandler(this._aiService),
-            // Removed: new SetToolEnabledHandler(),
-            new SetToolAuthorizationHandler(), // Register new handler
-            new GetMcpConfiguredStatusHandler(), // Keep for push updates?
-            new RetryMcpConnectionHandler(),
-            new StopGenerationHandler(this._aiService),
+            new SetProviderEnabledHandler(this._aiService),
+            new SetDefaultConfigHandler(),
             new SetGlobalCustomInstructionsHandler(),
             new SetProjectCustomInstructionsHandler(),
-            new OpenOrCreateProjectInstructionsFileHandler(),
+            new SetToolAuthorizationHandler(),
+            new RetryMcpConnectionHandler(),
             new SetActiveChatHandler(),
             new CreateChatHandler(),
             new DeleteChatHandler(),
-            new UpdateChatConfigHandler(this._historyManager),
+            new UpdateChatConfigHandler(),
+            new ClearChatHistoryHandler(),
+            new DeleteMessageHandler(),
+            // Pub/Sub Management
+            new SubscribeHandler(),
+            new UnsubscribeHandler(),
+            // Other Actions
+            new OpenOrCreateProjectInstructionsFileHandler(),
             new UpdateLastLocationHandler(),
-            new SetDefaultConfigHandler(),
-            new DeleteMessageHandler(this._historyManager, this.postMessageToWebview.bind(this)),
-            // MCP Pub/Sub Handlers
-            new SubscribeToMcpStatusHandler(),
-            new UnsubscribeFromMcpStatusHandler(),
-            // Provider Status Pub/Sub Handlers
-            new SubscribeToProviderStatusHandler(),
-            new UnsubscribeFromProviderStatusHandler(),
-            // Tool Status Pub/Sub Handlers
-            new SubscribeToToolStatusHandler(),
-            new UnsubscribeFromToolStatusHandler(),
-            // Default Config Pub/Sub Handlers
-            new SubscribeToDefaultConfigHandler(this._aiService),
-            new UnsubscribeFromDefaultConfigHandler(this._aiService),
-            // Custom Instructions Pub/Sub Handlers
-            new SubscribeToCustomInstructionsHandler(this._aiService),
-            new UnsubscribeFromCustomInstructionsHandler(this._aiService),
         ];
 
-        handlers.forEach(handler => {
+        requestHandlers.forEach(handler => {
+            if (this._requestHandlers.has(handler.requestType)) {
+                console.warn(`RequestHandler already registered for type: ${handler.requestType}. Overwriting.`);
+            }
+            this._requestHandlers.set(handler.requestType, handler);
+        });
+        console.log(`Registered ${this._requestHandlers.size} request handlers.`);
+
+        // Register Standard Message Handlers (Fire-and-forget)
+        const messageHandlers: MessageHandler[] = [
+            new SendMessageHandler(this._streamProcessor),
+            new StopGenerationHandler(this._aiService), // Needs AiService injected
+            new ExecuteToolActionHandler(),
+            // Add any other purely fire-and-forget handlers here
+        ];
+
+        messageHandlers.forEach(handler => {
             if (this._messageHandlers.has(handler.messageType)) {
-                console.warn(`Handler already registered for message type: ${handler.messageType}. Overwriting.`);
+                console.warn(`MessageHandler already registered for type: ${handler.messageType}. Overwriting.`);
             }
             this._messageHandlers.set(handler.messageType, handler);
         });
-        console.log(`Registered ${this._messageHandlers.size} message handlers.`);
+        console.log(`Registered ${this._messageHandlers.size} standard message handlers.`);
     }
 
     // --- Resolve Webview View ---
@@ -277,7 +228,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         console.log("Webview HTML set.");
 
         webviewView.webview.onDidReceiveMessage(
-            (message: any) => { // Use 'any' here for flexibility, handle specific types inside
+            (message: any) => {
                 console.log("[Extension] Received message from webview:", message?.type);
                 this._handleWebviewMessage(message);
             },
@@ -300,83 +251,87 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // --- Handle Request Messages ---
-        if (message.type === 'requestData') {
+        // --- Handle Request Messages (requestData, subscribe, unsubscribe) ---
+        if (message.type === 'requestData' || message.type === 'subscribe' || message.type === 'unsubscribe') {
             const requestMessage = message as WebviewRequestMessage;
-            const handler = this._requestHandlers[requestMessage.requestType];
+            const handlerType = message.type === 'requestData' ? requestMessage.requestType : message.type;
+            const handler = this._requestHandlers.get(handlerType);
             let responsePayload: any = null;
             let responseError: string | undefined = undefined;
 
-            // Create context lazily only if handler exists
-            const context: HandlerContext = {
-                 aiService: this._aiService,
-                 historyManager: this._historyManager,
-                 providerStatusManager: this._aiService.providerStatusManager, // Get from AiService
-                 modelResolver: this._modelResolver,
-                 mcpManager: this._mcpManager, // Add McpManager instance
-                 postMessage: this.postMessageToWebview.bind(this),
-                 extensionContext: this._context
-            };
-
-            if (handler) {
+            if (!this._view?.webview) { // Check webview availability first
+                console.error("[Extension] Cannot handle request: Webview is not available.");
+                responseError = "Webview is not available to handle the request.";
+            } else if (handler) {
+                const context: HandlerContext = {
+                    webview: this._view.webview, // Safe to access after check
+                    aiService: this._aiService,
+                    historyManager: this._historyManager,
+                    providerStatusManager: this._aiService.providerStatusManager,
+                    modelResolver: this._modelResolver,
+                    mcpManager: this._mcpManager,
+                    postMessage: this.postMessageToWebview.bind(this),
+                    extensionContext: this._context
+                };
                 try {
-                    console.log(`[Extension] Handling request: ${requestMessage.requestType}, ID: ${requestMessage.requestId}`);
-                    responsePayload = await handler(requestMessage.payload, context);
-                    console.log(`[Extension] Request successful: ${requestMessage.requestType}, ID: ${requestMessage.requestId}`);
+                    console.log(`[Extension] Handling request: ${handlerType}, ID: ${requestMessage.requestId}`);
+                    responsePayload = await handler.handle(requestMessage.payload, context);
+                    console.log(`[Extension] Request successful: ${handlerType}, ID: ${requestMessage.requestId}`);
                 } catch (error: any) {
-                    console.error(`[Extension] Error handling request ${requestMessage.requestType} (ID: ${requestMessage.requestId}):`, error);
+                    console.error(`[Extension] Error handling request ${handlerType} (ID: ${requestMessage.requestId}):`, error);
                     responseError = error.message || 'An unknown error occurred';
                 }
             } else {
-                console.error(`[Extension] No handler found for request type: ${requestMessage.requestType}`);
-                responseError = `No handler found for request type: ${requestMessage.requestType}`;
+                console.error(`[Extension] No handler found for request type: ${handlerType}`);
+                responseError = `No handler found for request type: ${handlerType}`;
             }
 
-            const responseMessage: WebviewResponseMessage = {
-                type: 'responseData',
-                requestId: requestMessage.requestId,
-                payload: responsePayload,
-                error: responseError,
-            };
-            this.postMessageToWebview(responseMessage);
+            // Send response back only if webview was available
+            if (this._view?.webview) {
+                 const responseMessage: WebviewResponseMessage = {
+                     type: 'responseData',
+                     requestId: requestMessage.requestId,
+                     payload: responsePayload,
+                     error: responseError,
+                 };
+                 this.postMessageToWebview(responseMessage);
+            }
             return; // Stop processing after handling request
         }
 
-        // --- Handle Standard Messages via Registered Handlers ---
-        const handler = this._messageHandlers.get(message.type);
-        if (handler) {
-            const context: HandlerContext = {
-                aiService: this._aiService,
-                historyManager: this._historyManager,
-                providerStatusManager: this._aiService.providerStatusManager, // Get from AiService
-                modelResolver: this._modelResolver,
-                mcpManager: this._mcpManager, // Add McpManager instance
-                postMessage: this.postMessageToWebview.bind(this),
-                extensionContext: this._context
-            };
-            try {
-                await handler.handle(message, context);
-            } catch (error: any) {
-                console.error(`Error executing handler for message type ${message.type}:`, error);
-                vscode.window.showErrorMessage(`An internal error occurred while processing the request: ${error.message}`);
-            }
-        } else {
-            // Handle simple cases directly or log unknown types
-             if (message.type === 'openGlobalMcpConfig') {
-                 vscode.commands.executeCommand('zen-coder.openGlobalMcpConfig');
-             } else if (message.type === 'openProjectMcpConfig') {
-                 vscode.commands.executeCommand('zen-coder.openProjectMcpConfig');
-             } else {
-                 console.warn(`[Extension] No handler registered or direct handling for message type: ${message.type}`);
+        // --- Handle Standard Messages (Fire-and-forget) ---
+        const messageHandler = this._messageHandlers.get(message.type);
+        if (messageHandler) {
+             if (!this._view?.webview) { // Check webview availability
+                 console.error("[Extension] Cannot handle message: Webview is not available.");
+                 return;
              }
+             const context: HandlerContext = {
+                 webview: this._view.webview, // Safe to access after check
+                 aiService: this._aiService,
+                 historyManager: this._historyManager,
+                 providerStatusManager: this._aiService.providerStatusManager,
+                 modelResolver: this._modelResolver,
+                 mcpManager: this._mcpManager,
+                 postMessage: this.postMessageToWebview.bind(this),
+                 extensionContext: this._context
+             };
+             try {
+                 await messageHandler.handle(message, context);
+             } catch (error: any) {
+                 console.error(`Error executing message handler for type ${message.type}:`, error);
+                 vscode.window.showErrorMessage(`An internal error occurred: ${error.message}`);
+             }
+        } else {
+             console.warn(`[Extension] No handler registered for message type: ${message.type}`);
         }
     }
 
     // --- Post Message Helper ---
     public postMessageToWebview(message: ExtensionMessageType) {
-        console.log(`[Extension] Attempting to post message: ${message.type}. View exists: ${!!this._view}`); // DEBUG LOG
+        console.log(`[Extension] Attempting to post message: ${message.type}. View exists: ${!!this._view}`);
         if (this._view) {
-            console.log(`[Extension] Posting message: ${message.type}`, message); // DEBUG LOG
+            console.log(`[Extension] Posting message: ${message.type}`, message);
             this._view.webview.postMessage(message);
         } else {
             console.warn(`[Extension] Failed to post message: Webview view is not resolved. Message type: ${message.type}`);
@@ -388,17 +343,17 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._aiService.eventEmitter.on('providerStatusChanged', (status: ProviderInfoAndStatus[]) => {
             console.log('[Extension] Received providerStatusChanged event from AiService.');
             this.postMessageToWebview({
-                type: 'pushUpdateProviderStatus', // New message type for push update
+                type: 'pushUpdateProviderStatus',
                 payload: status
             });
         });
 
         // Subscribe to Tool Status Changes from AiService
-        this._aiService.eventEmitter.on('toolsStatusChanged', (statusInfo: AllToolsStatusInfo) => { // Use correct type
+        this._aiService.eventEmitter.on('toolsStatusChanged', (statusInfo: AllToolsStatusInfo) => {
             console.log('[Extension] Received toolsStatusChanged event from AiService.');
             this.postMessageToWebview({
-                type: 'updateAllToolsStatus', // Use the correct push type
-                payload: statusInfo // Send the AllToolsStatusInfo payload
+                type: 'updateAllToolsStatus',
+                payload: statusInfo
             });
         });
 

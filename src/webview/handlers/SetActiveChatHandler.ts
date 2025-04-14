@@ -1,17 +1,18 @@
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
 
-export class SetActiveChatHandler implements MessageHandler {
-    public readonly messageType = 'setActiveChat';
+export class SetActiveChatHandler implements RequestHandler {
+    public readonly requestType = 'setActiveChat'; // Change messageType to requestType
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
-        const chatId = message.payload?.chatId;
+    // Return a simple success object or throw an error
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> {
+        const chatId = payload?.chatId;
         if (chatId && typeof chatId === 'string') {
             console.log(`[SetActiveChatHandler] Setting active chat ID to: ${chatId}`);
-            // HistoryManager now persists the last active ID when set
             await context.historyManager.setLastActiveChatId(chatId);
-            // No confirmation needed back to UI as it likely updated state already
+            return { success: true }; // Return success
         } else {
-            console.error("[SetActiveChatHandler] Invalid or missing chatId in payload:", message.payload);
+            console.error("[SetActiveChatHandler] Invalid or missing chatId in payload:", payload);
+            throw new Error("Invalid payload for setActiveChat request."); // Throw error
         }
     }
 }

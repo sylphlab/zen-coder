@@ -1,25 +1,26 @@
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
 
-export class CreateChatHandler implements MessageHandler {
-    public readonly messageType = 'createChat';
+export class CreateChatHandler implements RequestHandler {
+    public readonly requestType = 'createChat'; // Change messageType to requestType
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
+    // Return the new chat session ID or throw an error
+    public async handle(payload: any, context: HandlerContext): Promise<{ newChatId: string }> {
         console.log("[CreateChatHandler] Handling createChat message...");
         try {
             // Create the new chat session (HistoryManager handles saving and setting it active)
             const newChat = await context.historyManager.createChatSession(); // Name is optional
 
-            // Send the updated chat state back to the UI
-            const allChats = context.historyManager.getAllChatSessions();
-            const lastActiveId = context.historyManager.getLastActiveChatId(); // Should be the new chat ID
-            context.postMessage({ type: 'loadChatState', payload: { chats: allChats, lastActiveChatId: lastActiveId } });
+            // No need to manually push 'loadChatState'.
+            // The frontend will refetch or update based on other events if necessary,
+            // or we can implement a dedicated 'chatListUpdated' Pub/Sub topic later.
 
-            console.log(`[CreateChatHandler] New chat created (ID: ${newChat.id}). Sent updated state to UI.`);
+            console.log(`[CreateChatHandler] New chat created (ID: ${newChat.id}).`);
+            return { newChatId: newChat.id }; // Return the ID of the newly created chat
 
         } catch (error: any) {
             console.error("[CreateChatHandler] Error creating chat session:", error);
-            // Optionally inform the UI about the error
-            context.postMessage({ type: 'showError', payload: { message: `Failed to create new chat: ${error.message}` } });
+            // Throw error to reject the requestData promise
+            throw new Error(`Failed to create new chat: ${error.message}`);
         }
     }
 }

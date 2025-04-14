@@ -1,17 +1,16 @@
 import * as vscode from 'vscode';
-import { MessageHandler } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
 import { DefaultChatConfig } from '../../common/types'; // Import the type
 import { AiService } from '../../ai/aiService'; // Import AiService
 
-export class SetDefaultConfigHandler implements MessageHandler {
-    public readonly messageType = 'setDefaultConfig';
+export class SetDefaultConfigHandler implements RequestHandler {
+    public readonly requestType = 'setDefaultConfig'; // Change messageType to requestType
 
-    // Add context parameter to access AiService
-    public async handle(payload: any, context: { aiService: AiService }): Promise<void> {
+    // Return a simple success object or throw an error
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> {
         if (!payload || typeof payload.config !== 'object' || payload.config === null) {
             console.warn('[SetDefaultConfigHandler] Received invalid payload:', payload);
-            vscode.window.showErrorMessage('Failed to set default config: Invalid data received.');
-            return;
+            throw new Error('Invalid payload for setDefaultConfig request.'); // Throw error
         }
 
         const newConfig = payload.config as Partial<DefaultChatConfig>; // Use Partial for flexibility
@@ -39,14 +38,12 @@ export class SetDefaultConfigHandler implements MessageHandler {
 
             await Promise.all(updates);
             console.log('[SetDefaultConfigHandler] Successfully updated default config settings.');
-            // Optionally send a confirmation back to the webview, though the UI updates optimistically
-            // Notify subscribed webviews about the change
-            await context.aiService._notifyDefaultConfigChange();
-            // Optionally send a confirmation back to the webview, though the UI updates optimistically
-            // postMessage({ type: 'updateDefaultConfig', payload: newConfig }); // Example if needed
+            // Pub/Sub handles notifying webview via AiService event emitter
+            return { success: true }; // Return success
         } catch (error: any) {
             console.error('[SetDefaultConfigHandler] Error updating default config settings:', error);
             vscode.window.showErrorMessage(`Failed to update default config settings: ${error.message}`);
+            throw new Error(`Failed to update default config settings: ${error.message}`); // Throw error
         }
     }
 }

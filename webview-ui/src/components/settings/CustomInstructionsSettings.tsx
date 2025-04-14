@@ -2,7 +2,7 @@ import { useState, useEffect } from 'preact/hooks';
 import { useAtomValue } from 'jotai';
 import { loadable } from 'jotai/utils';
 import { JSX } from 'preact/jsx-runtime';
-import { postMessage } from '../../app';
+import { requestData } from '../../utils/communication'; // Import requestData
 import { customInstructionsAtom } from '../../store/atoms';
 
 export function CustomInstructionsSettings(): JSX.Element {
@@ -37,18 +37,23 @@ export function CustomInstructionsSettings(): JSX.Element {
     };
 
     const handleSaveGlobalInstructions = () => {
-        console.log('Saving global custom instructions...');
-        postMessage({ type: 'setGlobalCustomInstructions', payload: { instructions: globalInstructions } });
+        console.log('Saving global custom instructions via requestData...');
+        requestData('setGlobalCustomInstructions', { instructions: globalInstructions }) // Use requestData
+            .then(() => console.log('Global instructions saved.'))
+            .catch(error => console.error('Error saving global instructions:', error));
     };
 
     const handleSaveProjectInstructions = () => {
-        console.log('Saving project custom instructions...');
-        postMessage({ type: 'setProjectCustomInstructions', payload: { instructions: projectInstructions } });
+        console.log('Saving project custom instructions via requestData...');
+        requestData('setProjectCustomInstructions', { instructions: projectInstructions }) // Use requestData
+            .then(() => console.log('Project instructions saved.'))
+            .catch(error => console.error('Error saving project instructions:', error));
     };
 
     const handleOpenProjectInstructionsFile = () => {
-        console.log('Requesting to open project custom instructions file...');
-        postMessage({ type: 'openOrCreateProjectInstructionsFile' });
+        console.log('Requesting to open project custom instructions file via requestData...');
+        requestData('openOrCreateProjectInstructionsFile') // Use requestData
+            .catch(error => console.error('Error opening project instructions file:', error));
     };
 
     return (

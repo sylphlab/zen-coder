@@ -2,7 +2,7 @@ import { useCallback } from 'preact/hooks'; // Removed useEffect, useRef
 import { useAtomValue } from 'jotai';
 import { loadable } from 'jotai/utils';
 import { JSX } from 'preact/jsx-runtime';
-import { postMessage } from '../../app';
+import { requestData } from '../../utils/communication'; // Import requestData
 import {
     AllToolsStatusInfo,
     ToolInfo,
@@ -28,16 +28,15 @@ export function ToolSettings(): JSX.Element {
         const newStatus = statusCycle[nextIndex];
 
         console.log(`Setting tool ${toolIdentifier} override status to ${newStatus}`);
-        postMessage({
-            type: 'setToolAuthorization',
-            payload: {
-                config: {
-                    overrides: {
-                        [toolIdentifier]: newStatus
-                    }
+        requestData('setToolAuthorization', { // Use requestData
+            config: {
+                overrides: {
+                    [toolIdentifier]: newStatus
                 }
             }
-        });
+        })
+        .then(() => console.log(`Tool ${toolIdentifier} status updated.`))
+        .catch(error => console.error(`Error setting tool ${toolIdentifier} status:`, error));
     }, []);
 
     const handleCategoryStatusToggle = useCallback((categoryId: string, currentStatus: CategoryStatus) => {
@@ -56,16 +55,15 @@ export function ToolSettings(): JSX.Element {
         const configKey = isMcp ? 'mcpServers' : 'categories';
         const keyName = isMcp ? categoryId.substring(4) : categoryId;
 
-        postMessage({
-            type: 'setToolAuthorization',
-            payload: {
-                config: {
-                    [configKey]: {
-                        [keyName]: newStatus
-                    }
+        requestData('setToolAuthorization', { // Use requestData
+            config: {
+                [configKey]: {
+                    [keyName]: newStatus
                 }
             }
-        });
+        })
+        .then(() => console.log(`Category ${categoryId} status updated.`))
+        .catch(error => console.error(`Error setting category ${categoryId} status:`, error));
     }, []);
 
     const renderToolItem = (toolInfo: ToolInfo, categoryStatus: CategoryStatus) => {

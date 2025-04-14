@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { MessageHandler, HandlerContext } from './MessageHandler'; // Import HandlerContext
+import { MessageHandler } from './MessageHandler';
+import { HandlerContext } from './RequestHandler'; // Import HandlerContext from RequestHandler
 import { AiService } from '../../ai/aiService'; // Need AiService to access tools eventually
 import { allTools, ToolName } from '../../tools'; // Import available tools
 
@@ -9,11 +10,7 @@ import { allTools, ToolName } from '../../tools'; // Import available tools
 
 export class ExecuteToolActionHandler implements MessageHandler {
     readonly messageType = 'executeToolAction'; // Add messageType property
-    private _aiService: AiService; // Keep reference if needed later
-
-    constructor(aiService: AiService) {
-        this._aiService = aiService; // Store reference, might not be used initially
-    }
+    // Removed constructor and _aiService property. Access via context if needed.
 
     async handle(message: any, context: HandlerContext): Promise<void> { // Change parameter type
         const { toolName, args } = message.payload;

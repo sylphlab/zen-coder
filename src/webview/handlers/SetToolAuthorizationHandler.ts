@@ -1,82 +1,52 @@
 import * as vscode from 'vscode';
-import { MessageHandler, HandlerContext } from './MessageHandler';
-import { ToolAuthorizationConfig, SetToolAuthorizationRequest } from '../../common/types';
+import { RequestHandler, HandlerContext } from './RequestHandler';
+import { ToolAuthorizationConfig } from '../../common/types'; // Assuming this type exists
 
-export class SetToolAuthorizationHandler implements MessageHandler {
-    public readonly messageType = 'setToolAuthorization';
+export class SetToolAuthorizationHandler implements RequestHandler {
+    public readonly requestType = 'setToolAuthorization';
 
-    public async handle(message: SetToolAuthorizationRequest, context: HandlerContext): Promise<void> {
-        console.log(`[${this.messageType}] Handling request...`);
-        const newConfigPart = message.payload.config;
-
-        if (!newConfigPart) {
-            console.warn(`[${this.messageType}] Received empty config payload. Ignoring.`);
-            // Optionally send an error response back
-            context.postMessage({
-                type: 'responseData',
-                requestId: message.requestId,
-                error: 'Received empty configuration payload.',
-            });
-            return;
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> {
+        if (!payload || typeof payload.config !== 'object' || payload.config === null) {
+            console.warn('[SetToolAuthorizationHandler] Received invalid payload:', payload);
+            throw new Error('Invalid payload for setToolAuthorization request.');
         }
+
+        const newAuthConfig = payload.config as Partial<ToolAuthorizationConfig>; // Use Partial for flexibility
+        console.log('[SetToolAuthorizationHandler] Received request to update tool authorization:', newAuthConfig);
 
         try {
             const config = vscode.workspace.getConfiguration('zencoder');
-            const currentAuthConfig = config.get<ToolAuthorizationConfig>('toolAuthorization') ?? {};
+            const currentAuthConfig = config.get<ToolAuthorizationConfig>('toolAuthorization') || {};
 
-            // Deep merge the new partial config into the current config
+            // Merge the partial update with the current configuration
+            // This needs careful merging logic depending on how categories/overrides are structured
+            // Assuming a simple top-level merge for now, might need refinement
             const mergedConfig: ToolAuthorizationConfig = {
-                categories: { ...(currentAuthConfig.categories ?? {}), ...(newConfigPart.categories ?? {}) },
-                mcpServers: { ...(currentAuthConfig.mcpServers ?? {}), ...(newConfigPart.mcpServers ?? {}) },
-                overrides: { ...(currentAuthConfig.overrides ?? {}), ...(newConfigPart.overrides ?? {}) },
+                categories: {
+                    ...(currentAuthConfig.categories || {}),
+                    ...(newAuthConfig.categories || {})
+                },
+                mcpServers: {
+                     ...(currentAuthConfig.mcpServers || {}),
+                     ...(newAuthConfig.mcpServers || {})
+                },
+                overrides: {
+                    ...(currentAuthConfig.overrides || {}),
+                    ...(newAuthConfig.overrides || {})
+                }
             };
 
-            // Clean up overrides: remove any set to 'inherited' as that's the default
-            if (mergedConfig.overrides) {
-                for (const toolId in mergedConfig.overrides) {
-                    if (mergedConfig.overrides[toolId] === 'inherited') {
-                        delete mergedConfig.overrides[toolId];
-                    }
-                }
-                // If overrides object becomes empty, remove it entirely
-                if (Object.keys(mergedConfig.overrides).length === 0) {
-                    delete mergedConfig.overrides;
-                }
-            }
-             // Clean up empty categories/mcpServers objects
-            if (mergedConfig.categories && Object.keys(mergedConfig.categories).length === 0) {
-                delete mergedConfig.categories;
-            }
-            if (mergedConfig.mcpServers && Object.keys(mergedConfig.mcpServers).length === 0) {
-                delete mergedConfig.mcpServers;
-            }
+            await config.update('toolAuthorization', mergedConfig, vscode.ConfigurationTarget.Global);
+            console.log('[SetToolAuthorizationHandler] Successfully updated tool authorization settings.');
 
-
-            // Update the configuration setting
-            await config.update('toolAuthorization', mergedConfig, vscode.ConfigurationTarget.Global); // Use Global scope for now
-
-            console.log(`[${this.messageType}] Updated toolAuthorization config.`);
-
-            // Respond success
-            context.postMessage({
-                type: 'responseData',
-                requestId: message.requestId,
-                payload: { success: true },
-            });
-
-            // Trigger notification to update UI (if subscribed)
-            // The config change itself should trigger the AiService listener if set up correctly,
-            // but we can explicitly notify here too.
+            // Notify subscribed webviews about the change via AiService event emitter
             await context.aiService._notifyToolStatusChange();
 
+            return { success: true };
         } catch (error: any) {
-            console.error(`[${this.messageType}] Error updating tool authorization config:`, error);
-            // Send error response back to the webview
-            context.postMessage({
-                type: 'responseData',
-                requestId: message.requestId,
-                error: error.message || 'Failed to update tool authorization config',
-            });
+            console.error('[SetToolAuthorizationHandler] Error updating tool authorization settings:', error);
+            vscode.window.showErrorMessage(`Failed to update tool authorization settings: ${error.message}`);
+            throw new Error(`Failed to update tool authorization settings: ${error.message}`);
         }
     }
 }

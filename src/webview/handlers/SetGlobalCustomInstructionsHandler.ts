@@ -1,27 +1,29 @@
 import * as vscode from 'vscode';
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
 
-export class SetGlobalCustomInstructionsHandler implements MessageHandler {
-    public readonly messageType = 'setGlobalCustomInstructions';
+export class SetGlobalCustomInstructionsHandler implements RequestHandler {
+    public readonly requestType = 'setGlobalCustomInstructions'; // Change messageType to requestType
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
-        const instructions = message.payload?.instructions;
+    // Return a simple success object or throw an error
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> {
+        const instructions = payload?.instructions;
         if (typeof instructions !== 'string') {
             console.error('[SetGlobalCustomInstructionsHandler] Invalid payload. Expected instructions string.');
-            vscode.window.showErrorMessage('Failed to save global instructions: Invalid data received.');
-            return;
+            throw new Error('Invalid payload for setGlobalCustomInstructions request.'); // Throw error
         }
 
         try {
             // Update the VS Code setting
             await vscode.workspace.getConfiguration('zencoder.customInstructions').update('global', instructions, vscode.ConfigurationTarget.Global);
             console.log('[SetGlobalCustomInstructionsHandler] Global custom instructions updated successfully.');
-            vscode.window.showInformationMessage('Global custom instructions saved.'); // Provide feedback
-            // Notify subscribed webviews about the change
-            await context.aiService._notifyCustomInstructionsChange();
+            vscode.window.showInformationMessage('Global custom instructions saved.');
+            // Pub/Sub handles notifying webview via AiService event emitter
+            await context.aiService._notifyCustomInstructionsChange(); // Still notify for Pub/Sub
+            return { success: true }; // Return success
         } catch (error: any) {
             console.error('[SetGlobalCustomInstructionsHandler] Error updating global custom instructions setting:', error);
             vscode.window.showErrorMessage(`Failed to save global custom instructions: ${error.message}`);
+            throw new Error(`Failed to save global custom instructions: ${error.message}`); // Throw error
         }
     }
 }

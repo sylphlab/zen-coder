@@ -1,7 +1,7 @@
 // webview-ui/src/store/atoms.ts
 import { atom } from 'jotai';
 import { atomWithDefault, atomFamily, loadable } from 'jotai/utils'; // Consolidated imports
-import { postMessage } from '../app';
+import { postMessage } from '../utils/communication'; // Import from communication.ts
 import {
     ChatSession,
     ProviderInfoAndStatus,
@@ -25,7 +25,7 @@ type SelectedImage = {
     data: string; // base64 data
 };
 // Removed: import { postMessage } from '../app';
-import { requestData } from '../utils/requestManager'; // Import the request function
+import { requestData, listen } from '../utils/communication'; // Import from new communication file
 
 // --- Core State Atoms ---
 export const chatSessionsAtom = atom<ChatSession[]>([]);
@@ -38,8 +38,9 @@ const providerStatusRefreshAtom = atom(0);
 // Atom to hold the status of all providers with subscription management
 export const providerStatusAtom = atomWithDefault<ProviderInfoAndStatus[] | null>(() => null);
 providerStatusAtom.onMount = (set) => {
-    console.log('[providerStatusAtom] Mounted. Subscribing...');
-    postMessage({ type: 'subscribeToProviderStatus' });
+    console.log('[providerStatusAtom] onMount: Subscribing and fetching initial data...');
+    // Subscribe using the abstraction
+    const subscription = listen('providerStatus');
     // Initial fetch
     requestData<{ payload: ProviderInfoAndStatus[] }>('getProviderStatus')
         .then(response => set(response.payload))
@@ -48,9 +49,10 @@ providerStatusAtom.onMount = (set) => {
             set(null); // Set to null or empty array on error
         });
 
+    // Return the dispose function for onUnmount
     return () => {
-        console.log('[providerStatusAtom] Unmounted. Unsubscribing...');
-        postMessage({ type: 'unsubscribeFromProviderStatus' });
+        console.log('[providerStatusAtom] onUnmount: Disposing subscription.');
+        subscription.dispose();
     };
 };
 
@@ -117,8 +119,8 @@ const defaultConfigRefreshAtom = atom(0);
 // Atom to hold the default configuration with subscription management
 export const defaultConfigAtom = atomWithDefault<DefaultChatConfig | null>(() => null);
 defaultConfigAtom.onMount = (set) => {
-    console.log('[defaultConfigAtom] Mounted. Subscribing...');
-    postMessage({ type: 'subscribeToDefaultConfig' });
+    console.log('[defaultConfigAtom] onMount: Subscribing and fetching initial data...');
+    const subscription = listen('defaultConfig');
     // Initial fetch
     requestData<{ payload: DefaultChatConfig }>('getDefaultConfig')
         .then(response => set(response.payload))
@@ -128,8 +130,8 @@ defaultConfigAtom.onMount = (set) => {
         });
 
     return () => {
-        console.log('[defaultConfigAtom] Unmounted. Unsubscribing...');
-        postMessage({ type: 'unsubscribeFromDefaultConfig' });
+        console.log('[defaultConfigAtom] onUnmount: Disposing subscription.');
+        subscription.dispose();
     };
 };
 export const refreshDefaultConfigAtom = atom(null, (get, set) => {
@@ -141,8 +143,8 @@ const allToolsStatusRefreshAtom = atom(0);
 // Atom to hold the status of all tools (standard and MCP) with subscription management
 export const allToolsStatusAtom = atomWithDefault<AllToolsStatusInfo | null>(() => null);
 allToolsStatusAtom.onMount = (set) => {
-    console.log('[allToolsStatusAtom] Mounted. Subscribing...');
-    postMessage({ type: 'subscribeToToolStatus' });
+    console.log('[allToolsStatusAtom] onMount: Subscribing and fetching initial data...');
+    const subscription = listen('toolStatus');
     // Initial fetch
     requestData<{ payload: AllToolsStatusInfo }>('getAllToolsStatus')
         .then(response => set(response.payload))
@@ -152,8 +154,8 @@ allToolsStatusAtom.onMount = (set) => {
         });
 
     return () => {
-        console.log('[allToolsStatusAtom] Unmounted. Unsubscribing...');
-        postMessage({ type: 'unsubscribeFromToolStatus' });
+        console.log('[allToolsStatusAtom] onUnmount: Disposing subscription.');
+        subscription.dispose();
     };
 };
 export const refreshAllToolsStatusAtom = atom(null, (get, set) => {
@@ -165,8 +167,8 @@ const mcpServerStatusRefreshAtom = atom(0);
 // Atom to hold the configured status of MCP servers with subscription management
 export const mcpServerStatusAtom = atomWithDefault<McpConfiguredStatusPayload | null>(() => null);
 mcpServerStatusAtom.onMount = (set) => {
-    console.log('[mcpServerStatusAtom] Mounted. Subscribing...');
-    postMessage({ type: 'subscribeToMcpStatus' });
+    console.log('[mcpServerStatusAtom] onMount: Subscribing and fetching initial data...');
+    const subscription = listen('mcpStatus');
     // Initial fetch
     requestData<{ payload: McpConfiguredStatusPayload }>('getMcpConfiguredStatus')
         .then(response => set(response.payload))
@@ -176,8 +178,8 @@ mcpServerStatusAtom.onMount = (set) => {
         });
 
     return () => {
-        console.log('[mcpServerStatusAtom] Unmounted. Unsubscribing...');
-        postMessage({ type: 'unsubscribeFromMcpStatus' });
+        console.log('[mcpServerStatusAtom] onUnmount: Disposing subscription.');
+        subscription.dispose();
     };
 };
 export const refreshMcpServerStatusAtom = atom(null, (get, set) => {
@@ -191,8 +193,8 @@ const customInstructionsRefreshAtom = atom(0);
 // Atom to hold custom instructions (global and project) with subscription management
 export const customInstructionsAtom = atomWithDefault<{ global: string; project: string | null; projectPath: string | null } | null>(() => null);
 customInstructionsAtom.onMount = (set) => {
-    console.log('[customInstructionsAtom] Mounted. Subscribing...');
-    postMessage({ type: 'subscribeToCustomInstructions' });
+    console.log('[customInstructionsAtom] onMount: Subscribing and fetching initial data...');
+    const subscription = listen('customInstructions');
     // Initial fetch
     requestData<{ payload: { global: string; project: string | null; projectPath: string | null } }>('getCustomInstructions')
         .then(response => set(response.payload))
@@ -202,8 +204,8 @@ customInstructionsAtom.onMount = (set) => {
         });
 
     return () => {
-        console.log('[customInstructionsAtom] Unmounted. Unsubscribing...');
-        postMessage({ type: 'unsubscribeFromCustomInstructions' });
+        console.log('[customInstructionsAtom] onUnmount: Disposing subscription.');
+        subscription.dispose();
     };
 };
 export const refreshCustomInstructionsAtom = atom(null, (get, set) => {

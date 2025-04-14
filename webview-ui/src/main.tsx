@@ -1,7 +1,7 @@
 import { render } from 'preact';
 import { Suspense } from 'preact/compat';
 import { Provider, getDefaultStore } from 'jotai'; // Import getDefaultStore
-import { handleResponse as handleRequestManagerResponse } from './utils/requestManager'; // Import response handler
+import { handleResponse as handleCommunicationResponse } from './utils/communication'; // Import from communication.ts
 import {
     // Import ALL atoms that might be updated by messages
     chatSessionsAtom,
@@ -57,7 +57,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     try {
         if (message.type === 'responseData') {
             // Handle responses for requests initiated by requestData
-            handleRequestManagerResponse(message);
+            handleCommunicationResponse(message); // Use the handler from communication.ts
         } else {
             // Handle all other push messages directly here by updating atoms
             switch (message.type) {

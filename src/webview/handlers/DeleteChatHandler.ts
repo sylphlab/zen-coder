@@ -1,33 +1,31 @@
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
 
-export class DeleteChatHandler implements MessageHandler {
-    public readonly messageType = 'deleteChat';
+export class DeleteChatHandler implements RequestHandler {
+    public readonly requestType = 'deleteChat'; // Change messageType to requestType
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
-        const chatIdToDelete = message.payload?.chatId;
+    // Return a simple success object or throw an error
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> {
+        const chatIdToDelete = payload?.chatId;
         if (!chatIdToDelete || typeof chatIdToDelete !== 'string') {
-            console.error("[DeleteChatHandler] Invalid or missing chatId in payload:", message.payload);
-            // Optionally send an error back to the UI
-            return;
+            console.error("[DeleteChatHandler] Invalid or missing chatId in payload:", payload);
+            throw new Error("Invalid payload for deleteChat request."); // Throw error
         }
 
-        console.log(`[DeleteChatHandler] Handling deleteChat message for chat ID: ${chatIdToDelete}...`);
+        console.log(`[DeleteChatHandler] Handling ${this.requestType} for chat ID: ${chatIdToDelete}...`);
 
         try {
             await context.historyManager.deleteChatSession(chatIdToDelete);
 
-            // Send the updated chat state back to the UI
-            const allChats = context.historyManager.getAllChatSessions();
-            // HistoryManager handles resetting lastActiveChatId if the deleted one was active
-            const lastActiveId = context.historyManager.getLastActiveChatId();
-            context.postMessage({ type: 'loadChatState', payload: { chats: allChats, lastActiveChatId: lastActiveId } });
+            // No need to manually push 'loadChatState'.
+            // Frontend will refetch or update based on other events.
 
-            console.log(`[DeleteChatHandler] Chat deleted (ID: ${chatIdToDelete}). Sent updated state to UI.`);
+            console.log(`[DeleteChatHandler] Chat deleted (ID: ${chatIdToDelete}).`);
+            return { success: true }; // Return success
 
         } catch (error: any) {
             console.error(`[DeleteChatHandler] Error deleting chat session (ID: ${chatIdToDelete}):`, error);
-            // Optionally inform the UI about the error
-            context.postMessage({ type: 'showError', payload: { message: `Failed to delete chat: ${error.message}` } });
+            // Throw error to reject the requestData promise
+            throw new Error(`Failed to delete chat: ${error.message}`);
         }
     }
 }

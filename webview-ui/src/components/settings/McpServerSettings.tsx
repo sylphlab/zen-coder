@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'preact/hooks';
 import { useAtomValue } from 'jotai';
 import { loadable } from 'jotai/utils';
 import { JSX } from 'preact/jsx-runtime';
-import { postMessage } from '../../app';
+import { requestData } from '../../utils/communication';
 import { McpServerStatus } from '../../../../src/ai/mcpManager';
 import { mcpServerStatusAtom } from '../../store/atoms';
 
@@ -11,35 +11,25 @@ export function McpServerSettings(): JSX.Element {
     const mcpServersLoadable = useAtomValue(loadable(mcpServerStatusAtom));
 
     const handleOpenGlobalMcpConfig = useCallback(() => {
-        console.log('Requesting to open global MCP config');
-        postMessage({ type: 'openGlobalMcpConfig' });
+        console.log('Requesting to open global MCP config via requestData');
+        requestData('openGlobalMcpConfig') // Use requestData
+            .catch(error => console.error(`Error opening global MCP config:`, error)); // Basic error handling
     }, []);
 
     const handleOpenProjectMcpConfig = useCallback(() => {
-        console.log('Requesting to open project MCP config');
-        postMessage({ type: 'openProjectMcpConfig' });
+        console.log('Requesting to open project MCP config via requestData');
+        requestData('openProjectMcpConfig') // Use requestData
+            .catch(error => console.error(`Error opening project MCP config:`, error)); // Basic error handling
     }, []);
 
     const handleRetryConnection = useCallback((serverName: string) => {
-        console.log(`Requesting retry for MCP server: ${serverName}`);
-        postMessage({ type: 'retryMcpConnection', payload: { serverName } });
+        console.log(`Requesting retry for MCP server: ${serverName} via requestData`);
+        requestData('retryMcpConnection', { serverName }) // Use requestData
+            .then(() => console.log(`Retry request sent for ${serverName}.`))
+            .catch(error => console.error(`Error requesting retry for ${serverName}:`, error));
     }, []);
 
-    // Effect to subscribe/unsubscribe to MCP Status updates
-    useEffect(() => {
-        if (!isSubscribedRef.current) {
-            console.log('[McpServerSettings] Subscribing to MCP Status updates...');
-            postMessage({ type: 'subscribeToMcpStatus' });
-            isSubscribedRef.current = true;
-        }
-        return () => {
-            if (isSubscribedRef.current) {
-                console.log('[McpServerSettings] Unsubscribing from MCP Status updates...');
-                postMessage({ type: 'unsubscribeFromMcpStatus' });
-                isSubscribedRef.current = false;
-            }
-        };
-    }, []); // Removed duplicate closing brace and dependency array
+    // Removed subscription useEffect
 
     return (
         <section class="mt-8">

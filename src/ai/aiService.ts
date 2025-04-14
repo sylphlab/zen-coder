@@ -91,6 +91,9 @@ export class AiService {
     private _isToolStatusSubscribed: boolean = false; // Track tool status subscription
     private _isDefaultConfigSubscribed: boolean = false; // Track default config subscription
     private _isCustomInstructionsSubscribed: boolean = false; // Track custom instructions subscription
+    // Subscription Management
+    private _subscriptions: Map<string, Set<string>> = new Map(); // topic -> Set<subscriptionId>
+    private _subscriptionIdToTopic: Map<string, string> = new Map(); // subscriptionId -> topic
 
     // Public getter for ProviderStatusManager
     public get providerStatusManager(): ProviderStatusManager {
@@ -694,68 +697,164 @@ export class AiService {
         }
     }
 
-    // Notify tool status change (called by SetToolEnabledHandler)
-    public async _notifyToolStatusChange(): Promise<void> {
-        if (this._isToolStatusSubscribed) {
+    // Removed duplicate notification helper methods. The ones below are the correct ones.
+    // --- Subscription Management Methods ---
+
+    /**
+     * Adds a subscription for a given topic and ID.
+     * Starts necessary background processes if it's the first subscription for the topic.
+     */
+    public async addSubscription(topic: string, subscriptionId: string): Promise<void> {
+        if (!this._subscriptions.has(topic)) {
+            this._subscriptions.set(topic, new Set());
+            // TODO: Start background processes based on topic (e.g., file watching)
+            console.log(`[AiService] First subscription for topic '${topic}', starting related processes...`);
+        }
+        const topicSubscriptions = this._subscriptions.get(topic)!;
+        if (topicSubscriptions.has(subscriptionId)) {
+             console.warn(`[AiService] Subscription ID ${subscriptionId} already exists for topic ${topic}.`);
+             return; // Avoid duplicates
+        }
+        topicSubscriptions.add(subscriptionId);
+        this._subscriptionIdToTopic.set(subscriptionId, topic); // Map ID back to topic
+        console.log(`[AiService] Added subscription ${subscriptionId} for topic ${topic}. Count: ${topicSubscriptions.size}`);
+
+        // Immediately push current state for the subscribed topic
+        await this._pushInitialStateForTopic(topic);
+    }
+
+    /**
+     * Removes a subscription by its ID.
+     * Stops background processes if it's the last subscription for the topic.
+     */
+    public async removeSubscription(subscriptionId: string): Promise<void> {
+        const topic = this._subscriptionIdToTopic.get(subscriptionId);
+        if (!topic) {
+            console.warn(`[AiService] Cannot remove subscription: ID ${subscriptionId} not found.`);
+            return;
+        }
+
+        const topicSubscriptions = this._subscriptions.get(topic);
+        if (!topicSubscriptions || !topicSubscriptions.has(subscriptionId)) {
+            console.warn(`[AiService] Cannot remove subscription: ID ${subscriptionId} not found in topic ${topic}.`);
+            this._subscriptionIdToTopic.delete(subscriptionId); // Clean up mapping anyway
+            return;
+        }
+
+        topicSubscriptions.delete(subscriptionId);
+        this._subscriptionIdToTopic.delete(subscriptionId);
+        console.log(`[AiService] Removed subscription ${subscriptionId} for topic ${topic}. Remaining: ${topicSubscriptions.size}`);
+
+        if (topicSubscriptions.size === 0) {
+            this._subscriptions.delete(topic);
+            // TODO: Stop background processes based on topic
+            console.log(`[AiService] Last subscription removed for topic '${topic}', stopping related processes...`);
+        }
+    }
+
+    /**
+     * Checks if there are any active subscriptions for a given topic.
+     */
+    private _hasSubscription(topic: string): boolean {
+        return this._subscriptions.has(topic) && this._subscriptions.get(topic)!.size > 0;
+    }
+
+    /**
+     * Sends the current state for a specific topic to the webview upon initial subscription.
+     */
+    private async _pushInitialStateForTopic(topic: string): Promise<void> {
+        if (!this.postMessageCallback) return;
+
+        try {
+            let data: any;
+            switch (topic) {
+                case 'providerStatus':
+                    data = await this._providerStatusManager.getProviderStatus(this.allProviders, this.providerMap);
+                    break;
+                case 'toolStatus':
+                    data = await this.getResolvedToolStatusInfo();
+                    break;
+                case 'defaultConfig':
+                    data = await this.getDefaultConfig();
+                    break;
+                case 'customInstructions':
+                    data = await this.getCombinedCustomInstructions();
+                    break;
+                case 'mcpStatus':
+                    data = this.getMcpStatuses();
+                    break;
+                // Add other topics as needed
+                default:
+                    console.warn(`[AiService] Unknown topic for initial state push: ${topic}`);
+                    return;
+            }
+            console.log(`[AiService] Pushing initial state for topic ${topic}`);
+            this.postMessageCallback({ type: 'pushUpdate', payload: { topic, data } });
+        } catch (error) {
+            console.error(`[AiService] Error pushing initial state for topic ${topic}:`, error);
+        }
+    }
+
+    // --- Modified Notification Helpers ---
+
+    // Notify provider status change
+    public async _notifyProviderStatusChange(): Promise<void> {
+        const topic = 'providerStatus';
+        if (this._hasSubscription(topic)) {
             try {
-                // Call the new method to get categorized and resolved status
+                const latestStatus = await this._providerStatusManager.getProviderStatus(this.allProviders, this.providerMap);
+                console.log('[AiService] Pushing providerStatus update.');
+                this.postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: latestStatus } });
+            } catch (error) {
+                console.error('[AiService] Error fetching provider status for notification:', error);
+            }
+        }
+    }
+
+    // Notify tool status change
+    public async _notifyToolStatusChange(): Promise<void> {
+        const topic = 'toolStatus';
+        if (this._hasSubscription(topic)) {
+            try {
                 const latestStatusInfo = await this.getResolvedToolStatusInfo();
-                console.log('[AiService] Emitting toolsStatusChanged event.');
-                // Use a specific event name for tool status push
-                this.eventEmitter.emit('toolsStatusChanged', latestStatusInfo); // Send new structure
+                console.log('[AiService] Pushing toolStatus update.');
+                this.postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: latestStatusInfo } });
             } catch (error) {
                 console.error('[AiService] Error fetching tool status for notification:', error);
             }
-        } else {
-             console.log('[AiService] Webview not subscribed to tool status, skipping event emission.');
         }
     }
 
-    // --- Internal Notification Helper ---
-    private async _notifyProviderStatusChange(): Promise<void> {
-        try {
-            // Use the injected ProviderStatusManager to get the latest status, passing necessary args
-            const latestStatus = await this._providerStatusManager.getProviderStatus(this.allProviders, this.providerMap);
-            if (this._isProviderStatusSubscribed) {
-                console.log('[AiService] Emitting providerStatusChanged event to subscribed webview.');
-                this.eventEmitter.emit('providerStatusChanged', latestStatus);
-            } else {
-                console.log('[AiService] Webview not subscribed to provider status, skipping event emission.');
-            }
-        } catch (error) {
-            console.error('[AiService] Error fetching provider status for notification:', error);
-        }
-    }
-
-    // Notify default config change (called by SetDefaultConfigHandler)
+    // Notify default config change
     public async _notifyDefaultConfigChange(): Promise<void> {
-        if (this._isDefaultConfigSubscribed) {
+        const topic = 'defaultConfig';
+        if (this._hasSubscription(topic)) {
             try {
                 const latestConfig = await this.getDefaultConfig();
-                console.log('[AiService] Emitting defaultConfigChanged event.');
-                // Use a specific event name for default config push
-                this.eventEmitter.emit('defaultConfigChanged', latestConfig);
+                console.log('[AiService] Pushing defaultConfig update.');
+                this.postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: latestConfig } });
             } catch (error) {
                 console.error('[AiService] Error fetching default config for notification:', error);
             }
-        } else {
-             console.log('[AiService] Webview not subscribed to default config, skipping event emission.');
         }
     }
 
-    // Notify custom instructions change (called by SetGlobal/ProjectCustomInstructionsHandler)
+    // Notify custom instructions change
     public async _notifyCustomInstructionsChange(): Promise<void> {
-        if (this._isCustomInstructionsSubscribed) {
+        const topic = 'customInstructions';
+        if (this._hasSubscription(topic)) {
             try {
                 const latestInstructions = await this.getCombinedCustomInstructions();
-                console.log('[AiService] Emitting customInstructionsChanged event.');
-                // Use a specific event name for custom instructions push
-                this.eventEmitter.emit('customInstructionsChanged', latestInstructions);
+                console.log('[AiService] Pushing customInstructions update.');
+                this.postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: latestInstructions } });
             } catch (error) {
                 console.error('[AiService] Error fetching custom instructions for notification:', error);
             }
-        } else {
-             console.log('[AiService] Webview not subscribed to custom instructions, skipping event emission.');
         }
     }
+
+    // McpManager already handles its own status push via the callback passed to its constructor.
+    // We might need a way for McpManager to check _hasSubscription('mcpStatus') before pushing.
+    // For now, McpManager pushes unconditionally if the callback exists.
+
 } // End of AiService class

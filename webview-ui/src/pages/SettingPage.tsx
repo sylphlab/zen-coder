@@ -3,7 +3,7 @@ import { useAtomValue } from 'jotai'; // Removed unused useAtom, useSetAtom, ato
 // Removed unused loadable import
 import { useLocation } from "wouter";
 import { JSX } from 'preact/jsx-runtime';
-import { postMessage } from '../app';
+import { postMessage } from '../utils/communication'; // Import from communication.ts
 // Removed unused type imports
 // Import only necessary components
 import { DefaultModelSettings } from '../components/settings/DefaultModelSettings';
