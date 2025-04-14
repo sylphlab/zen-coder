@@ -20,7 +20,7 @@ Refactoring initial data loading mechanism to use Request/Response instead of `W
 4.  **UI Refinements:** Further improve UI styling and potentially add animations.
 5.  **Error Handling:** Review and improve error handling across the application.
 
-## Recent Changes (Fix Settings Loop, App Load, MCP Pub/Sub, Initial Data Load Refactor, UI Debugging, TS Fixes, Tools)
+## Recent Changes (Unified Request/Response, Pub/Sub, Handler Architecture, Bug Fixes)
 + - **Refactored Settings Page & Subscription Logic:** Broke down `webview-ui/src/pages/SettingPage.tsx` into smaller components (`DefaultModelSettings`, `CustomInstructionsSettings`, `ProviderSettings`, `McpServerSettings`, `ToolSettings`). Moved subscription logic (subscribe/unsubscribe messages) from component `useEffect` hooks to the `onMount`/`onUnmount` lifecycle methods of the corresponding Jotai atoms (`providerStatusAtom`, `defaultConfigAtom`, `allToolsStatusAtom`, `mcpServerStatusAtom`, `customInstructionsAtom`) in `webview-ui/src/store/atoms.ts`. This aligns with Jotai best practices and aims to definitively fix the infinite loop. Corrected `atomWithDefault` usage and added null checks in components.
 + - **Refactored Initial Data Loading:**
 +     - Removed `WebviewReadyHandler` and its push-based logic.
@@ -354,7 +354,10 @@ Refactoring initial data loading mechanism to use Request/Response instead of `W
 
 ## Active Decisions
 - **Model ID Handling:** Confirmed decision to use separate `providerId` and `modelId` for now, abandoning the problematic combined ID format. Planned future refactor to a more robust data structure (`{ internal_id, provider_id, display_name, reference_id }`).
-- **Communication Model:** Replaced initial data push via `WebviewReady` with a Request/Response model. Implemented explicit Pub/Sub (subscribe/unsubscribe) for MCP status, Provider status, Tool status, Default Config, and Custom Instructions updates. Chat message streaming remains a context-specific push. Review remaining push updates (e.g., `mcpConfigReloaded`) for potential conversion.
+- **Communication Model:** Refactored to a strict Request/Response model. All FE -> BE messages MUST be sent via `requestData` (in `communication.ts`) which always generates a `requestId` and sends a `type: 'requestData'` message with the actual operation in `requestType`. The backend (`extension.ts`) MUST always reply with a `responseData` message containing the same `requestId`. Fire-and-forget is no longer used from FE to BE.
+- **Pub/Sub Model:** Backend pushes state updates (e.g., provider status, tool status) via a `type: 'pushUpdate'` message containing `topic` and `data`. Frontend (`main.tsx`) listens for these and updates Jotai atoms directly. The `listen` function in `communication.ts` handles sending `subscribe`/`unsubscribe` requests (via `requestData`) and managing the underlying `pushUpdate` listener for specific topics.
+- **Handler Architecture:** Unified all backend handlers (`src/webview/handlers/`) to implement the `RequestHandler` interface. Removed `MessageHandler` interface and map. `extension.ts` uses a single `_handlers` map and unified logic in `_handleWebviewMessage` to process all incoming requests.
+- **Stream Processing:** Refactored `StreamProcessor` to push chat history updates and streaming status via `pushUpdate` (`topic: 'chatUpdate'` and `topic: 'streamingStatusUpdate'`) instead of specific message types like `appendMessageChunk`. Frontend (`main.tsx`) updated to handle these new topics. (Note: `loadChatState` handling in `main.tsx` remains temporary).
 - **MCP Architecture:** Shifted from UI/VSCode settings to dedicated JSON files (Global: `.../settings/mcp_settings.json`, Project: `.zen/mcp_servers.json`). All MCP client lifecycle management (init, retry, close), config handling, and tool fetching/caching is now handled by `McpManager`. `AiService` delegates MCP tasks. Settings UI displays status from `McpManager` and allows triggering retries.
 - **Image Upload:** Implemented UI and basic frontend logic. Backend needs updating (`SendMessageHandler`, `HistoryManager`, `AiService`).
 - **Markdown & Syntax Highlighting:** Implemented using `react-markdown` and `react-syntax-highlighter` (`vscDarkPlus` theme) in the frontend. Fixed initial webview loading issues by correcting root `tsconfig.json` references.
@@ -367,8 +370,8 @@ Refactoring initial data loading mechanism to use Request/Response instead of `W
     - Ensured `app.tsx` adds assistant message frame on `startAssistantMessage`.
     - Refactored `appendMessageChunk` handler in `app.tsx` using `.map()` for potentially more robust state updates.
     - **Resolved UI Rendering/Layout Issues:** Fixed conflicts between `wouter` routing and Flexbox by using `<Switch>`, correcting route paths (`/index.html`), and ensuring proper flex properties (`flex-1`, `h-full`) on routed components.
-- **Architecture:** Adopted handler registration pattern, modularized backend services.
-- **State/History:** Persist UI state (`UiMessage[]`), translate to `CoreMessage[]` on demand.
+- **Architecture:** Unified handler registration pattern, modularized backend services. Strict Request/Response for FE->BE, Pub/Sub (`pushUpdate`) for BE->FE state updates.
+- **State/History:** Persist UI state (`UiMessage[]`), translate to `CoreMessage[]` on demand. Streaming updates now pushed via `chatUpdate` topic.
 - **Model Handling:** Pass `modelId` correctly; delegate provider logic.
 - **Tooling (Filesystem - Background):**
    - Filesystem tools refactored for consistency (Glob paths, unified `lineRange`, clear separation of `replaceContent`/`editFile`).

@@ -154,16 +154,8 @@ export type AllToolsStatusInfo = ToolCategoryInfo[];
 
 // --- Request/Response Types for Webview <-> Extension Communication ---
 
-export type WebviewRequestType =
-  | 'getProviderStatus'
-  | 'getAvailableProviders' // For initial provider list
-  | 'getModelsForProvider'
-  | 'getDefaultConfig'
-  | 'getMcpStatus'           // Renamed from getMcpConfiguredStatus
-  | 'getAllToolsStatus'      // Keep for settings page init
-  | 'getCustomInstructions' // Keep for settings page init
-  | 'setToolAuthorization' // New handler type
-  | 'getChatState';
+// Removed WebviewRequestType as all requests use requestType: string now
+// export type WebviewRequestType = ... (removed)
 // Define a union type for all possible action request types initiated by the frontend
 export type ActionRequestType =
     | 'setApiKey'
@@ -191,7 +183,7 @@ export type ActionRequestType =
 export interface WebviewRequestMessage {
   type: 'requestData'; // Generic type for requests needing a response
   requestId: string;
-  requestType: WebviewRequestType;
+  requestType: string; // Use string to allow any handler type
   payload?: any; // Optional payload for the request (e.g., providerId for getModelsForProvider)
 }
 

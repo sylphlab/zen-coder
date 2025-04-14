@@ -36,8 +36,11 @@ const providerStatusRefreshAtom = atom(0);
 export const providerStatusAtom = atomWithDefault<ProviderInfoAndStatus[] | null>(() => null);
 providerStatusAtom.onMount = (set) => {
     console.log('[providerStatusAtom] onMount: Subscribing and fetching initial data...');
-    // Subscribe using the abstraction
-    const subscription = listen('providerStatus');
+    // Subscribe using the abstraction, providing a callback to update the atom
+    const subscription = listen('providerStatus', (data: ProviderInfoAndStatus[] | null) => {
+        console.log('[providerStatusAtom] Received update via listen callback.');
+        set(data);
+    });
     // Initial fetch
     requestData<{ payload: ProviderInfoAndStatus[] }>('getProviderStatus')
         .then(response => set(response.payload))
@@ -117,7 +120,10 @@ const defaultConfigRefreshAtom = atom(0);
 export const defaultConfigAtom = atomWithDefault<DefaultChatConfig | null>(() => null);
 defaultConfigAtom.onMount = (set) => {
     console.log('[defaultConfigAtom] onMount: Subscribing and fetching initial data...');
-    const subscription = listen('defaultConfig');
+    const subscription = listen('defaultConfig', (data: DefaultChatConfig | null) => {
+        console.log('[defaultConfigAtom] Received update via listen callback.');
+        set(data);
+    });
     // Initial fetch
     requestData<{ payload: DefaultChatConfig }>('getDefaultConfig')
         .then(response => set(response.payload))
@@ -141,7 +147,11 @@ const allToolsStatusRefreshAtom = atom(0);
 export const allToolsStatusAtom = atomWithDefault<AllToolsStatusInfo | null>(() => null);
 allToolsStatusAtom.onMount = (set) => {
     console.log('[allToolsStatusAtom] onMount: Subscribing and fetching initial data...');
-    const subscription = listen('toolStatus');
+    // Note: Topic name is 'allToolsStatus' in pushUpdate, but 'toolStatus' in listen? Let's assume 'allToolsStatus' is correct.
+    const subscription = listen('allToolsStatus', (data: AllToolsStatusInfo | null) => {
+        console.log('[allToolsStatusAtom] Received update via listen callback.');
+        set(data);
+    });
     // Initial fetch
     requestData<{ payload: AllToolsStatusInfo }>('getAllToolsStatus')
         .then(response => set(response.payload))
@@ -165,7 +175,10 @@ const mcpServerStatusRefreshAtom = atom(0);
 export const mcpServerStatusAtom = atomWithDefault<McpConfiguredStatusPayload | null>(() => null);
 mcpServerStatusAtom.onMount = (set) => {
     console.log('[mcpServerStatusAtom] onMount: Subscribing and fetching initial data...');
-    const subscription = listen('mcpStatus');
+    const subscription = listen('mcpStatus', (data: McpConfiguredStatusPayload | null) => {
+        console.log('[mcpServerStatusAtom] Received update via listen callback.');
+        set(data);
+    });
     // Initial fetch
     requestData<{ payload: McpConfiguredStatusPayload }>('getMcpStatus')
         .then(response => set(response.payload))
@@ -191,7 +204,10 @@ const customInstructionsRefreshAtom = atom(0);
 export const customInstructionsAtom = atomWithDefault<{ global: string; project: string | null; projectPath: string | null } | null>(() => null);
 customInstructionsAtom.onMount = (set) => {
     console.log('[customInstructionsAtom] onMount: Subscribing and fetching initial data...');
-    const subscription = listen('customInstructions');
+    const subscription = listen('customInstructions', (data: { global: string; project: string | null; projectPath: string | null } | null) => {
+        console.log('[customInstructionsAtom] Received update via listen callback.');
+        set(data);
+    });
     // Initial fetch
     requestData<{ payload: { global: string; project: string | null; projectPath: string | null } }>('getCustomInstructions')
         .then(response => set(response.payload))

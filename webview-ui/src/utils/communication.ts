@@ -1,18 +1,11 @@
 // Removed imports from ../app
-import { WebviewRequestType, WebviewResponseMessage, ActionRequestType } from '../../../src/common/types';
+import { WebviewResponseMessage, ActionRequestType, WebviewRequestMessage } from '../../../src/common/types'; // Removed WebviewRequestType
 
 // --- VS Code API Helper ---
 // @ts-ignore
 const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
-export const postMessage = (message: any) => {
-    if (vscode) {
-        vscode.postMessage(message);
-    } else {
-        console.log("VS Code API not available, message not sent:", message);
-        // Mock responses for development (Keep mocks if useful for standalone testing)
-        // if (message.type === 'webviewReady') { ... }
-    }
-};
+// Removed old postMessage function. All FE -> BE communication MUST use requestData.
+// const postMessage = ... (removed)
 
 // --- Helper Functions ---
 export const generateUniqueId = () => `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -35,7 +28,7 @@ const ACTION_REQUEST_TYPES: string[] = [
     'setGlobalCustomInstructions', 'setProjectCustomInstructions', 'openOrCreateProjectInstructionsFile',
     'setToolAuthorization', 'retryMcpConnection', 'setActiveChat', 'createChat',
     'deleteChat', 'updateChatConfig', 'clearChatHistory', 'deleteMessage',
-    'updateLastLocation', 'executeToolAction', 'stopGeneration' // Added stopGeneration
+    'updateLastLocation', 'executeToolAction', 'stopGeneration', 'sendMessage' // Added sendMessage
 ];
 
 /**
@@ -46,14 +39,14 @@ const ACTION_REQUEST_TYPES: string[] = [
  * @returns A promise that resolves with the response payload or rejects with an error.
  */
 // Define a union type for all possible request types including actions, subscribe/unsubscribe
-type RequestTypeParam = WebviewRequestType | ActionRequestType | 'subscribe' | 'unsubscribe';
+// Define a union type for all possible request types (data fetching, actions, pub/sub management)
+// Define a union type for all possible request types (actions, pub/sub management)
+// Data fetching types are now just strings passed as requestType in WebviewRequestMessage
+type RequestTypeParam = ActionRequestType | 'subscribe' | 'unsubscribe' | string; // Use string for data fetching types
+
 export function requestData<T = any>(requestType: RequestTypeParam, payload?: any): Promise<T> {
-    // Determine the message type based on the requestType
-    // Determine the message type based on the requestType
-    const isAction = ACTION_REQUEST_TYPES.includes(requestType);
-    const messageType = (requestType === 'subscribe' || requestType === 'unsubscribe' || isAction)
-        ? requestType // Use the specific type for actions and sub/unsub
-        : 'requestData'; // Use 'requestData' for data fetching requests
+    // ALL messages sent to backend are now of type 'requestData'
+    const messageType = 'requestData';
 
     return new Promise((resolve, reject) => {
         const requestId = generateUniqueId();
@@ -66,14 +59,24 @@ export function requestData<T = any>(requestType: RequestTypeParam, payload?: an
 
         pendingRequests.set(requestId, { resolve, reject, timeoutId });
 
-        console.log(`[Communication] Sending ${messageType}: ${requestType}, ID: ${requestId}`, payload);
-        postMessage({
-            type: messageType, // Use 'subscribe', 'unsubscribe', or 'requestData'
-            requestId, // Always include requestId for tracking response
-            // Include requestType only for 'requestData' messages, otherwise it's inferred from 'type'
-            requestType: messageType === 'requestData' ? requestType : undefined,
+        const messageToSend: WebviewRequestMessage = {
+            type: messageType, // Always 'requestData'
+            requestId,
+            requestType: requestType, // The actual operation type
             payload
-        });
+        };
+
+        console.log(`[Communication] Sending requestData: ${requestType}, ID: ${requestId}`, payload);
+        if (vscode) {
+            vscode.postMessage(messageToSend);
+        } else {
+            console.log("VS Code API not available, message not sent:", messageToSend);
+            // Mock responses or reject promise for development outside VS Code
+            // For now, let it timeout or reject immediately
+            pendingRequests.delete(requestId);
+            clearTimeout(timeoutId);
+            reject(new Error("VS Code API not available"));
+        }
     });
 }
 
@@ -114,30 +117,48 @@ interface Subscription {
 }
 
 /**
- * Creates a subscription to a specific topic.
+ * Creates a subscription to a specific topic and sets up a listener for 'pushUpdate' messages.
  * @param topic The topic to subscribe to (e.g., 'providerStatus').
+ * @param callback The function to call when a 'pushUpdate' for this topic is received.
  * @returns A Subscription object with a dispose method.
  */
-export function listen(topic: string): Subscription {
+export function listen(topic: string, callback: (data: any) => void): Subscription {
     const subscriptionId = generateUniqueId();
     let isDisposed = false;
+
+    // Internal listener for 'pushUpdate' messages
+    const messageListener = (event: MessageEvent) => {
+        const message = event.data;
+        if (message?.type === 'pushUpdate' && message.payload?.topic === topic && !isDisposed) {
+            console.log(`[Listen - ${topic}] Received pushUpdate:`, message.payload.data);
+            try {
+                callback(message.payload.data);
+            } catch (error) {
+                console.error(`[Listen - ${topic}] Error in callback:`, error);
+            }
+        }
+    };
+
+    window.addEventListener('message', messageListener);
+    console.log(`[Communication] Added listener for topic: ${topic}`);
 
     console.log(`[Communication] Attempting to subscribe to topic: ${topic} (ID: ${subscriptionId})`);
     // Use requestData for subscribe, handle potential errors
     requestData('subscribe', { topic, subscriptionId })
         .then(() => {
-            if (!isDisposed) { // Check if disposed before logging success
+            if (!isDisposed) {
                  console.log(`[Communication] Successfully subscribed to topic: ${topic} (ID: ${subscriptionId})`);
             } else {
                  console.log(`[Communication] Subscription ${subscriptionId} was disposed before acknowledgement.`);
                  // If disposed before ack, immediately try to unsubscribe
                  requestData('unsubscribe', { subscriptionId }).catch(err => console.error(`[Communication] Error during immediate unsubscribe for ${subscriptionId}:`, err));
+                 window.removeEventListener('message', messageListener); // Clean up listener if disposed early
             }
         })
         .catch(error => {
             console.error(`[Communication] Failed to subscribe to topic: ${topic} (ID: ${subscriptionId})`, error);
-            // Optionally, handle subscription errors (e.g., notify UI, retry?)
             isDisposed = true; // Mark as disposed on subscription failure
+            window.removeEventListener('message', messageListener); // Clean up listener on failure
         });
 
     const dispose = async (): Promise<void> => {
@@ -146,13 +167,13 @@ export function listen(topic: string): Subscription {
             return;
         }
         isDisposed = true;
-        console.log(`[Communication] Disposing subscription to topic: ${topic} (ID: ${subscriptionId})`);
+        console.log(`[Communication] Disposing subscription and listener for topic: ${topic} (ID: ${subscriptionId})`);
+        window.removeEventListener('message', messageListener); // Remove the specific listener
         try {
             await requestData('unsubscribe', { subscriptionId });
             console.log(`[Communication] Successfully unsubscribed from topic: ${topic} (ID: ${subscriptionId})`);
         } catch (error) {
             console.error(`[Communication] Failed to unsubscribe from topic: ${topic} (ID: ${subscriptionId})`, error);
-            // Optionally handle unsubscription errors
         }
     };
 

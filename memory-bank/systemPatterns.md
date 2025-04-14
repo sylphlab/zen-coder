@@ -10,7 +10,7 @@
     - `HistoryManager` (`src/historyManager.ts`): Manages chat history persistence (`globalState`) and translation between UI/Core formats.
     - `StreamProcessor` (`src/streamProcessor.ts`): Handles parsing the AI response stream (`fullStream` via `text-delta`), and performs post-stream parsing of appended JSON blocks (e.g., for `suggested_actions`) before updating history/UI.
     - `McpManager` (`src/ai/mcpManager.ts`): Manages lifecycle, configuration, and tool fetching for MCP servers.
-- **Webview Message Handling:** Uses a registration pattern (`src/webview/handlers/`). `ZenCoderChatViewProvider` delegates incoming messages to specific `MessageHandler` implementations.
+- **Webview Message Handling:** Uses a unified Request Handler pattern (`src/webview/handlers/RequestHandler.ts`). All FE -> BE messages are treated as requests (must include `requestId`). `ZenCoderChatViewProvider` uses a single `_handlers` map to route requests based on `message.requestType` (for `type: 'requestData'`) or `message.type` (for other actions like `subscribe`, `unsubscribe`, `sendMessage`). Backend ALWAYS sends a `responseData` message back.
 - **State Management:** Chat history (`UiMessage[]`) persisted in `context.workspaceState` (per workspace). API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`).
 - **Tool Authorization:** Managed via VS Code setting `zencoder.toolAuthorization`. This object defines status (`disabled`, `requiresAuthorization`, `alwaysAllow`) for standard tool categories (e.g., `filesystem`, `vscode`) and MCP servers. It also allows specific overrides (`disabled`, `requiresAuthorization`, `alwaysAllow`, `inherit`) for individual tools (standard or MCP). `AiService` reads this config to determine the final availability of each tool based on inheritance rules. (Replaces previous `zencoder.tools.*.enabled` settings and `globalState` `toolEnabledStatus` key).
 - **Configuration Files:**
@@ -42,6 +42,6 @@
 
 ## Design Patterns
 - **Service Layer:** Core functionalities (AI interaction, status, models, history) are encapsulated in dedicated services/managers.
-- **Message Passing:** Standard mechanism for extension host <-> webview communication.
-- **Handler/Registry Pattern:** Used within the extension host (`ZenCoderChatViewProvider`) to route incoming webview messages to dedicated handler classes.
+- **Message Passing:** Strict Request/Response pattern for FE -> BE communication (all messages require `requestId` and receive `responseData`). Pub/Sub pattern for BE -> FE state updates (using `pushUpdate` messages with `topic` and `data`).
+- **Handler/Registry Pattern:** Unified pattern using `RequestHandler` interface and a single handler map in `ZenCoderChatViewProvider` for all incoming requests.
 - **Dependency Injection (Manual):** Dependencies like `AiService`, `HistoryManager`, etc., are passed down through constructors or context objects.

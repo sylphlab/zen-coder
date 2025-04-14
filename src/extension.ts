@@ -11,7 +11,7 @@ import {
     DefaultChatConfig,
     WebviewRequestMessage,
     WebviewResponseMessage,
-    WebviewRequestType,
+    // WebviewRequestType, // Removed import
     ProviderInfoAndStatus,
     AllToolsStatusInfo
 } from './common/types';

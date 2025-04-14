@@ -5,7 +5,7 @@ import './app.css';
 import { SettingPage } from './pages/SettingPage';
 import { ChatListPage } from './pages/ChatListPage';
 import { useImageUpload } from './hooks/useImageUpload';
-import { requestData, postMessage, generateUniqueId } from './utils/communication'; // Import from communication.ts
+import { requestData, generateUniqueId } from './utils/communication'; // Removed postMessage import
 import { HeaderControls } from './components/HeaderControls';
 import { MessagesArea } from './components/MessagesArea';
 import { InputArea } from './components/InputArea';
@@ -152,8 +152,9 @@ export function App() {
             );
             const combinedModelId = currentProviderId && currentModelId ? `${currentProviderId}:${currentModelId}` : null;
             if (combinedModelId) {
-                 // Keep sendMessage as postMessage for now due to streaming nature
-                 postMessage({ type: 'sendMessage', chatId: currentActiveChatId, content: contentParts, providerId: currentProviderId, modelId: combinedModelId });
+                 // Use requestData for sendMessage
+                 requestData('sendMessage', { chatId: currentActiveChatId, content: contentParts, providerId: currentProviderId, modelId: combinedModelId })
+                    .catch(error => console.error(`Error sending message for chat ${currentActiveChatId}:`, error)); // Add error handling
             } else {
                  console.error("Cannot send message: Missing provider or model ID for active chat.");
                  setIsStreamingDirect(false);
@@ -218,16 +219,19 @@ export function App() {
             switch (action.action_type) {
                 case 'send_message':
                     if (typeof action.value === 'string') {
-                        // Keep sendMessage as postMessage
-                        postMessage({ type: 'sendMessage', chatId: currentActiveChatIdForSuggest, content: [{ type: 'text', text: action.value }], providerId: currentProviderIdForSuggest, modelId: combinedModelIdForAction });
+                        // Use requestData for sendMessage
+                        requestData('sendMessage', { chatId: currentActiveChatIdForSuggest, content: [{ type: 'text', text: action.value }], providerId: currentProviderIdForSuggest, modelId: combinedModelIdForAction })
+                           .catch(error => console.error(`Error sending suggested message for chat ${currentActiveChatIdForSuggest}:`, error)); // Add error handling
                         setIsStreamingDirect(true);
                     } else { console.warn("Invalid value/state for send_message action"); }
                     break;
                 case 'run_tool':
                     if (typeof action.value === 'object' && action.value?.toolName) {
                         console.warn("run_tool action type not fully implemented yet.");
-                        // Keep logAction as postMessage for now
-                        postMessage({ type: 'logAction', message: `User wants to run tool: ${action.value.toolName} in chat ${currentActiveChatIdForSuggest}` });
+                        // Use requestData for executeToolAction (even if not fully implemented yet)
+                        requestData('executeToolAction', { toolName: action.value.toolName, args: action.value.args ?? {} }) // Assuming args might exist
+                           .then(result => console.log(`Tool action ${action.value.toolName} requested, result:`, result)) // Log result/ack
+                           .catch(error => console.error(`Error requesting tool action ${action.value.toolName}:`, error));
                     } else { console.warn("Invalid value for run_tool action"); }
                     break;
                 case 'fill_input':

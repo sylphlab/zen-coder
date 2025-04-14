@@ -26,11 +26,12 @@
     - Backend (`AiService`) tracks subscription status (`_isCustomInstructionsSubscribed`) and only pushes status updates (`_notifyCustomInstructionsChange`) when subscribed.
     - Created `SubscribeToCustomInstructionsHandler` and `UnsubscribeFromCustomInstructionsHandler`.
     - Updated `SetGlobalCustomInstructionsHandler` and `SetProjectCustomInstructionsHandler` to call `_notifyCustomInstructionsChange`.
-- **App Loading & Message Handling:**
-    - Fixed `unknown or timed out request ID` error by centralizing all message handling (requests and pushes) into a single global listener in `main.tsx`.
-    - Removed `MessageHandlerComponent`.
-    - `main.tsx` listener now directly updates Jotai atoms using `store.set`.
-    - `requestManager.ts` simplified to only handle Promise resolution/rejection.
+- **App Loading & Message Handling (Refactored):**
+    - **Strict Request/Response:** All FE -> BE communication now uses `requestData` (in `communication.ts`), sending `type: 'requestData'` with `requestId` and `requestType`. Backend (`extension.ts`) enforces `requestId` and always sends `responseData`. Removed old `postMessage` usage.
+    - **Pub/Sub:** Backend pushes state updates via `pushUpdate` messages with `topic` and `data`. Frontend (`main.tsx`) listener handles `pushUpdate` and updates Jotai atoms. `listen` function in `communication.ts` manages subscriptions and internal `pushUpdate` listener.
+    - **Unified Backend Handlers:** All backend handlers implement `RequestHandler`. Removed `MessageHandler` interface and separate map. `extension.ts` uses a single `_handlers` map.
+    - **Stream Processing Updates:** `StreamProcessor` now pushes chat history and streaming status updates via `pushUpdate` (`chatUpdate`, `streamingStatusUpdate`) instead of specific message types.
+    - Removed redundant global listener logic from `main.tsx`.
 - **MCP Status Pub/Sub:**
     - Implemented explicit subscribe/unsubscribe mechanism for real-time MCP server status updates.
     - Frontend (`SettingPage`) now subscribes on mount and unsubscribes on unmount.
@@ -172,7 +173,7 @@
 ## Known Issues / TODOs
 - **Model Input Field (Fixed):** Resolved issue where users couldn't type into the model input field in `ModelSelector.tsx` by correcting the `useEffect` hook's dependencies.
 - **Model ID Strategy (Future):** Plan to refactor `AvailableModel` structure to `{ internal_id, provider_id, display_name, reference_id }` for clarity and robustness. (Recorded in activeContext)
-- **Communication Model:** Initial data load uses Request/Response. MCP status, Provider status, Tool status, Default Config, and Custom Instructions use Pub/Sub. Chat streaming uses context-specific push. All message handling centralized in `main.tsx`. Remaining push updates (e.g., `mcpConfigReloaded`) need review.
+- **Communication Model:** Strict Request/Response (FE->BE) and Pub/Sub (BE->FE via `pushUpdate`) implemented. All FE->BE messages require `requestId`. Backend always sends `responseData`. Streaming updates refactored to use `pushUpdate`.
 - **Testing:** Multi-chat functionality is largely untested.
 - **(Previous Known Issues Still Apply where relevant)**
 - **MCP Tool Schema Error:** Believed to be resolved by unifying tool ID format to `mcp_serverName_toolName`. Requires testing.
