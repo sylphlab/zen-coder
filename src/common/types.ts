@@ -24,9 +24,10 @@ export type UiMessageContentPart = UiTextMessagePart | UiToolCallPart | UiImageP
  */
 export interface UiMessage {
     id: string; // Unique identifier for the message
-    sender: 'user' | 'assistant'; // Who sent the message
+    role: 'user' | 'assistant' | 'tool' | 'system'; // Add role property
     content: UiMessageContentPart[]; // Array of content parts (text, tool calls, images)
     timestamp: number; // When the message was created/received
+    // sender property is deprecated, use role instead
 }
 
 /**
@@ -120,6 +121,33 @@ export interface WebviewRequestMessage {
   payload?: any; // Optional payload for the request (e.g., providerId for getModelsForProvider)
 }
 
+// --- Payload Types for Message Passing ---
+
+export interface LoadChatStatePayload {
+    chats: ChatSession[];
+    lastActiveChatId: string | null;
+    lastLocation?: string; // Optional last known UI location
+}
+
+export interface StartAssistantMessagePayload {
+    chatId: string;
+    messageId: string;
+}
+
+export interface AppendMessageChunkPayload {
+    chatId: string;
+    messageId: string;
+    textChunk: string;
+}
+
+export interface UpdateSuggestedActionsPayload {
+    chatId: string;
+    messageId: string;
+    actions: SuggestedAction[];
+}
+
+// Add other payload types as needed...
+
 export interface WebviewResponseMessage {
   type: 'responseData'; // Generic type for responses
   requestId: string;
@@ -177,6 +205,7 @@ export type ExtensionMessageType =
   | { type: 'updateAllToolsStatus'; payload: AllToolsStatusPayload } // Keep for settings push updates
   | { type: 'updateCustomInstructions'; payload: { global?: string; project?: string; projectPath?: string | null } } // Keep for settings push updates
   | { type: 'updateDefaultConfig'; payload: DefaultChatConfig } // Keep for settings push updates
+  | { type: 'pushUpdateProviderStatus'; payload: ProviderInfoAndStatus[] } // Add push update type for provider status
   | WebviewResponseMessage; // Add response type
 
 
@@ -241,9 +270,4 @@ export interface DefaultChatConfig {
 }
 
 
-// Structure for default chat configuration (global scope)
-export interface DefaultChatConfig {
-    defaultChatModelId?: string;
-    defaultImageModelId?: string;
-    defaultOptimizeModelId?: string;
-}
+// Duplicate DefaultChatConfig removed

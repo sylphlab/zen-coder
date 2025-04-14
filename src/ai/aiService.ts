@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { EventEmitter } from 'events'; // Import EventEmitter
 import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel, Output, TextStreamPart, ToolSet, generateObject, wrapLanguageModel, extractReasoningMiddleware } from 'ai';
 import { structuredAiResponseSchema, StructuredAiResponse, ToolAuthorizationConfig, ParentStatus, ToolStatus, DefaultChatConfig } from '../common/types'; // Added DefaultChatConfig
 import { allTools as standardToolsMap, ToolName as StandardToolName } from '../tools'; // Use correct import name
@@ -14,6 +15,7 @@ import { McpManager, McpServerStatus } from './mcpManager'; // McpTool type migh
 import { ProviderInfoAndStatus } from '../common/types'; // Import missing type
 import * as path from 'path';
 import { HistoryManager } from '../historyManager';
+import { ProviderStatusManager } from './providerStatusManager'; // Import ProviderStatusManager
 
 // Define standard tool categories using the correct exported tool names
 const STANDARD_TOOL_CATEGORIES: { [key in StandardToolName]?: string } = {
@@ -38,6 +40,17 @@ const STANDARD_TOOL_CATEGORIES: { [key in StandardToolName]?: string } = {
     saveActiveFileTool: 'vscode',
     closeActiveFileTool: 'vscode',
     openFileTool: 'vscode',
+    goToDefinitionTool: 'vscode',
+    findReferencesTool: 'vscode',
+    renameSymbolTool: 'vscode',
+    getConfigurationTool: 'vscode',
+    startDebuggingTool: 'vscode',
+    stopDebuggingTool: 'vscode',
+    debugStepOverTool: 'vscode',
+    debugStepIntoTool: 'vscode',
+    debugStepOutTool: 'vscode',
+    addBreakpointsTool: 'vscode',
+    removeBreakpointsTool: 'vscode',
     // Utils
     fetchUrlTool: 'utils',
     base64EncodeTool: 'utils',
@@ -72,13 +85,23 @@ export class AiService {
     private readonly _mcpManager: McpManager; // Keep private
     private readonly historyManager: HistoryManager;
     private readonly context: vscode.ExtensionContext;
+    private readonly _providerStatusManager: ProviderStatusManager; // Rename to follow convention
+    public readonly eventEmitter: EventEmitter; // Add EventEmitter instance
+
+    // Public getter for ProviderStatusManager
+    public get providerStatusManager(): ProviderStatusManager {
+        return this._providerStatusManager;
+    }
 
     constructor(
         context: vscode.ExtensionContext,
-        historyManager: HistoryManager
+        historyManager: HistoryManager,
+        providerStatusManager: ProviderStatusManager // Inject ProviderStatusManager
     ) {
         this.context = context;
         this.historyManager = historyManager;
+        this._providerStatusManager = providerStatusManager; // Store injected instance
+        this.eventEmitter = new EventEmitter(); // Initialize EventEmitter
 
         const providerClasses = [
             AnthropicProvider, GoogleProvider, OpenRouterProvider,
@@ -279,7 +302,7 @@ export class AiService {
                     const newToolCall = result.toolCalls.find(tc => tc.toolName === toolCall.toolName);
                     if (newToolCall) {
                         console.log(`[AiService] Tool call ${toolCall.toolName} repaired for chat ${chatId}.`);
-                        return { toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: newToolCall.args };
+                        return { toolCallType: 'function', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: newToolCall.args };
                     }
                     console.error(`[AiService] Failed to repair tool call ${toolCall.toolName} for chat ${chatId}.`);
                     return null;
@@ -419,7 +442,7 @@ export class AiService {
             await provider.setApiKey(this.context.secrets, apiKey);
             console.log(`[AiService] API Key for ${provider.name} updated successfully.`);
             vscode.window.showInformationMessage(`API Key for ${provider.name} updated.`);
-            // TODO: Trigger provider status update/refetch?
+            await this._notifyProviderStatusChange(); // Notify change
         } catch (error: any) {
             console.error(`[AiService] Error setting API Key for ${provider.name}:`, error);
             vscode.window.showErrorMessage(`Failed to store API key for ${provider.name}: ${error.message}`);
@@ -437,7 +460,7 @@ export class AiService {
              await provider.deleteApiKey(this.context.secrets);
              console.log(`[AiService] API Key for ${provider.name} deleted successfully.`);
              vscode.window.showInformationMessage(`API Key for ${provider.name} deleted.`);
-             // TODO: Trigger provider status update/refetch?
+             await this._notifyProviderStatusChange(); // Notify change
          } catch (error: any) {
              console.error(`[AiService] Error deleting API Key for ${provider.name}:`, error);
              vscode.window.showErrorMessage(`Failed to delete API key for ${provider.name}: ${error.message}`);
@@ -466,4 +489,37 @@ export class AiService {
        this._mcpManager.dispose();
        console.log("[AiService] AiService disposed.");
    }
-}
+    // --- Provider Enable/Disable ---
+    public async setProviderEnabled(providerId: string, enabled: boolean): Promise<void> {
+        const provider = this.providerMap.get(providerId);
+        if (!provider) {
+            throw new Error(`Unknown provider ID '${providerId}'.`);
+        }
+        try {
+            // Update the VS Code configuration setting
+            // Note: We need to ensure the provider's internal isEnabled() reflects this change too.
+            // This might require the provider instance to read from config or be updated.
+            // For now, we assume the config change is the source of truth for the next status check.
+            const config = vscode.workspace.getConfiguration('zencoder.providers');
+            await config.update(providerId, enabled, vscode.ConfigurationTarget.Global); // Or appropriate target
+            console.log(`[AiService] Provider ${provider.name} enabled status set to ${enabled} in configuration.`);
+            vscode.window.showInformationMessage(`Provider ${provider.name} ${enabled ? 'enabled' : 'disabled'}.`);
+            await this._notifyProviderStatusChange(); // Notify change
+        } catch (error: any) {
+            console.error(`[AiService] Error setting enabled status for ${provider.name}:`, error);
+            vscode.window.showErrorMessage(`Failed to update enabled status for ${provider.name}: ${error.message}`);
+        }
+    }
+
+    // --- Internal Notification Helper ---
+    private async _notifyProviderStatusChange(): Promise<void> {
+        try {
+            // Use the injected ProviderStatusManager to get the latest status, passing necessary args
+            const latestStatus = await this._providerStatusManager.getProviderStatus(this.allProviders, this.providerMap);
+            console.log('[AiService] Emitting providerStatusChanged event.');
+            this.eventEmitter.emit('providerStatusChanged', latestStatus);
+        } catch (error) {
+            console.error('[AiService] Error fetching provider status for notification:', error);
+        }
+    }
+} // End of AiService class

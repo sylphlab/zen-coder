@@ -29,14 +29,18 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     // Local state for the input field's value (model ID/name part)
     const [inputValue, setInputValue] = useState('');
 
-    // Update local input state when the external selectedModelId changes
+    // Update local input state ONLY when the external selection changes
     useEffect(() => {
-        // Find the model object corresponding to selectedModelId to display its name or ID
-        const models = modelsForSelectedProviderLoadable.state === 'hasData' ? modelsForSelectedProviderLoadable.data ?? [] : [];
-        const selectedModelObject = models.find(m => m.id === selectedModelId);
-        // Display the model's name if available, otherwise the ID, or empty if nothing selected
-        setInputValue(selectedModelObject?.name ?? selectedModelId ?? '');
-    }, [selectedModelId, modelsForSelectedProviderLoadable.state]); // Re-run if model ID or loaded models change
+    	console.log(`[ModelSelector useEffect] Running due to prop change. selectedProviderId: ${selectedProviderId}, selectedModelId: ${selectedModelId}`);
+    	// Fetch models for the *newly selected* provider if needed (or rely on existing loadable)
+    	const models = modelsForSelectedProviderLoadable.state === 'hasData' ? modelsForSelectedProviderLoadable.data ?? [] : [];
+    	// Find model based on both provider and model ID from props
+    	const selectedModelObject = models.find(m => m.providerId === selectedProviderId && m.id === selectedModelId);
+    	const newValue = selectedModelObject?.name ?? selectedModelId ?? '';
+    	console.log(`[ModelSelector useEffect] Setting inputValue based on props: "${newValue}"`);
+    	setInputValue(newValue);
+    	// Dependency array only includes the props that should trigger a reset
+    }, [selectedProviderId, selectedModelId]); // Re-run ONLY if external selection changes
 
     // --- Async Atom for All Models (for filtering suggestions) ---
     const allModelsAtom = useMemo(() => atom(async (get) => {
@@ -72,59 +76,90 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     // Filter models based on the input value for suggestions datalist
     const filteredModelsForDatalist = useMemo(() => {
         const lowerInput = inputValue.toLowerCase();
-        if (!lowerInput) return modelsForSelectedProvider; // Show current provider's models if input empty
+        // Always filter within the models for the currently selected provider
+        if (!modelsForSelectedProvider || modelsForSelectedProvider.length === 0) {
+             return []; // No models available for the selected provider
+        }
 
-        // Filter across all loaded models by ID, name, or provider name
-        return allLoadedModels.filter((model: AvailableModel) =>
+        if (!lowerInput) {
+            return modelsForSelectedProvider; // If input is empty, show all models for the selected provider
+        }
+
+        // If input is not empty, filter within the selected provider's models
+        return modelsForSelectedProvider.filter((model: AvailableModel) =>
             model.id.toLowerCase().includes(lowerInput) ||
-            model.name.toLowerCase().includes(lowerInput) ||
-            model.providerName.toLowerCase().includes(lowerInput)
+            model.name.toLowerCase().includes(lowerInput)
+            // Removed providerName check as we are already filtering by provider
         );
-    }, [inputValue, modelsForSelectedProvider, allLoadedModels]);
+    }, [inputValue, modelsForSelectedProvider]); // Dependency only on input and the selected provider's models
 
     // --- Event Handlers ---
     const handleProviderSelect = useCallback((e: JSX.TargetedEvent<HTMLSelectElement>) => {
         const newProviderId = e.currentTarget.value || null;
+        console.log(`[ModelSelector handleProviderSelect] Selected Provider: ${newProviderId}`);
         setInputValue(''); // Clear model input
+        console.log(`[ModelSelector handleProviderSelect] Calling onModelChange(${newProviderId}, null)`);
         onModelChange(newProviderId, null); // Update state with new provider, clear model
     }, [onModelChange]);
 
-    const handleModelInput = useCallback((e: JSX.TargetedEvent<HTMLInputElement>) => {
-        setInputValue(e.currentTarget.value);
-        // Don't call onModelChange on input, wait for blur or selection from datalist
-    }, []);
+    // Update input value as user types (NEW HANDLER)
+    const handleModelInputChange = useCallback((e: JSX.TargetedEvent<HTMLInputElement>) => {
+        const typedValue = e.currentTarget.value;
+        console.log(`[ModelSelector handleModelInputChange] User typed: "${typedValue}". Setting inputValue.`);
+        setInputValue(typedValue);
+        // Don't trigger onModelChange here, wait for blur or explicit selection
+    }, [setInputValue]);
 
-    // Handle selection from datalist or blur
-    const handleModelFinalize = useCallback(() => {
-         const lowerInput = inputValue.toLowerCase();
-         let finalModel: AvailableModel | null = null;
+    // Renamed handleModelInput to handleModelInputChange above
 
-         // Try finding exact match by ID or Name from the filtered list first
-         finalModel = filteredModelsForDatalist.find((m: AvailableModel) =>
-             m.id.toLowerCase() === lowerInput || m.name.toLowerCase() === lowerInput
-         ) ?? null;
+    // Handle finalization on blur (NEW HANDLER)
+    const handleModelBlur = useCallback(() => {
+        const lowerInput = inputValue.toLowerCase().trim();
+        let matchedModel: AvailableModel | null = null;
 
-         // If no exact match in filtered list, check all loaded models (covers cases where user types full ID not shown in filtered list)
-         if (!finalModel) {
-             finalModel = allLoadedModels.find((m: AvailableModel) => m.id.toLowerCase() === lowerInput) ?? null;
-         }
-         if (!finalModel) {
-             finalModel = allLoadedModels.find((m: AvailableModel) => m.name.toLowerCase() === lowerInput) ?? null;
-         }
+        console.log(`[ModelSelector handleModelBlur] Input blurred with value: "${inputValue}"`);
 
-         // Determine the final IDs
-         const finalProviderId = finalModel ? finalModel.providerId : selectedProviderId; // Keep current provider if model invalid
-         const finalModelId = finalModel ? finalModel.id : null;
+        // Try to find an exact match (ID or Name) within the currently selected provider's models first
+        matchedModel = modelsForSelectedProvider.find((m: AvailableModel) =>
+            m.id.toLowerCase() === lowerInput || m.name.toLowerCase() === lowerInput
+        ) ?? null;
 
-         // Update input display to reflect the actual selected model name/ID or clear
-         setInputValue(finalModel?.name ?? finalModel?.id ?? '');
+        if (matchedModel) {
+            // Found match within current provider
+            const finalProviderId = matchedModel.providerId; // Should match selectedProviderId
+            const finalModelId = matchedModel.id;
+            const displayValue = matchedModel.name ?? matchedModel.id;
+            console.log(`[ModelSelector handleModelBlur] Found match in current provider: ${displayValue}. Provider: ${finalProviderId}, Model: ${finalModelId}`);
+            setInputValue(displayValue); // Update input to reflect match
+            if (finalProviderId !== selectedProviderId || finalModelId !== selectedModelId) {
+                console.log(`[ModelSelector handleModelBlur] Selection changed. Calling onModelChange(${finalProviderId}, ${finalModelId})`);
+                onModelChange(finalProviderId, finalModelId);
+            } else {
+                 console.log(`[ModelSelector handleModelBlur] Selection hasn't changed.`);
+            }
+        } else {
+            // No match found within the current provider
+            console.log(`[ModelSelector handleModelBlur] No exact match found for "${inputValue}" within provider ${selectedProviderId}.`);
+            // Revert input to the currently selected model's display value (or empty if none selected)
+            const currentSelectedModel = modelsForSelectedProvider.find(m => m.id === selectedModelId);
+            const revertValue = currentSelectedModel?.name ?? selectedModelId ?? '';
+            console.log(`[ModelSelector handleModelBlur] Reverting input value to: "${revertValue}"`);
+            setInputValue(revertValue);
 
-         // Call the callback only if the selection changed
-         if (finalProviderId !== selectedProviderId || finalModelId !== selectedModelId) {
-             console.log(`Finalizing model selection: Provider=${finalProviderId}, Model=${finalModelId}`);
-             onModelChange(finalProviderId, finalModelId);
-         }
-     }, [inputValue, selectedProviderId, selectedModelId, allLoadedModels, filteredModelsForDatalist, onModelChange]); // Added filteredModelsForDatalist
+            // If the input was non-empty but didn't match, and a model *was* selected,
+            // it means the user typed something invalid and we reverted. No need to call onModelChange.
+            // If the input was empty, and a model *was* selected, we should clear the selection.
+            if (!lowerInput && selectedModelId !== null) {
+                 console.log(`[ModelSelector handleModelBlur] Input was empty, clearing model selection. Calling onModelChange(${selectedProviderId}, null)`);
+                 onModelChange(selectedProviderId, null);
+            }
+            // If input was non-empty and didn't match, OR input was empty and nothing was selected, do nothing further.
+        }
+    }, [inputValue, selectedProviderId, selectedModelId, modelsForSelectedProvider, onModelChange, setInputValue]);
+
+    // Handle selection directly from datalist via onInput event (more reliable than onChange for datalist)
+    // This is combined with the input change handler now.
+    // const handleDataListSelect = useCallback((e: JSX.TargetedEvent<HTMLInputElement>) => { ... }); // Removed
 
     // --- Render ---
     const providerLabel = `${labelPrefix ? labelPrefix + ' ' : ''}Provider:`;
@@ -135,8 +170,9 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
 
     const providersLoading = allAvailableProvidersLoadable.state === 'loading';
     const providersError = allAvailableProvidersLoadable.state === 'hasError';
-    const modelsLoading = modelsForSelectedProviderLoadable.state === 'loading' || allModelsLoadable.state === 'loading';
-    const modelsError = modelsForSelectedProviderLoadable.state === 'hasError' || allModelsLoadable.state === 'hasError';
+    // Input disable/loading state should only depend on the selected provider's models
+    const modelsLoading = modelsForSelectedProviderLoadable.state === 'loading';
+    const modelsError = modelsForSelectedProviderLoadable.state === 'hasError';
 
     return (
         <div class="model-selector flex items-center space-x-2">
@@ -162,9 +198,9 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                 id={modelInputId}
                 name={modelInputId}
                 value={inputValue} // Bind to local input state
-                onInput={handleModelInput}
-                onBlur={handleModelFinalize} // Use combined finalize handler
-                onChange={handleModelFinalize} // Also finalize if user selects from datalist via keyboard/click
+                onInput={handleModelInputChange} // Update local state on input
+                onBlur={handleModelBlur} // Finalize on blur
+                // onChange is less reliable for datalist, handle selection via onInput + blur logic
                 placeholder={!selectedProviderId ? "Select provider" : (modelsLoading ? "Loading models..." : "Select or type model")}
                 disabled={!selectedProviderId || modelsLoading || modelsError}
                 class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm flex-1 min-w-40"

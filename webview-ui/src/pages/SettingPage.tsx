@@ -21,6 +21,8 @@ import {
     providerStatusAtom,
     defaultConfigAtom,
     availableProvidersAtom,
+    allToolsStatusAtom, // Import new atom
+    mcpServerStatusAtom, // Import new atom
 } from '../store/atoms';
 
 // Define props for the SettingPage
@@ -82,7 +84,7 @@ const categorizeTools = (tools: AllToolsStatusPayload): Record<string, AllToolsS
 
 
 // Removed local defaultConfigAtom declaration
-export function SettingPage() { // Remove props
+export function SettingPage(): JSX.Element { // Add return type
    // Read state from atoms
    // Use loadable to handle async atom states
    const providerStatusLoadable = useAtomValue(loadable(providerStatusAtom));
@@ -93,10 +95,13 @@ export function SettingPage() { // Remove props
    const [apiKeysInput, setApiKeysInput] = useState<{ [providerId: string]: string }>({});
    // State for the search query
    const [searchQuery, setSearchQuery] = useState('');
-   // Combined state for MCP servers (still needed for server-level status)
-   const [mcpServers, setMcpServers] = useState<McpCombinedState>({});
-   // State for ALL tools (standard + MCP) with their status
-   const [allToolsStatus, setAllToolsStatus] = useState<AllToolsStatusPayload>({});
+   // Removed local state for mcpServers - use atom
+   // const [mcpServers, setMcpServers] = useState<McpCombinedState>({});
+   // Removed local state for allToolsStatus - use atom
+   // const [allToolsStatus, setAllToolsStatus] = useState<AllToolsStatusPayload>({});
+   // Use loadable atoms for tools and MCP status
+   const allToolsStatusLoadable = useAtomValue(loadable(allToolsStatusAtom));
+   const mcpServersLoadable = useAtomValue(loadable(mcpServerStatusAtom));
    // State for custom instructions
    const [globalInstructions, setGlobalInstructions] = useState<string>('');
    const [projectInstructions, setProjectInstructions] = useState<string>('');
@@ -155,43 +160,30 @@ export function SettingPage() { // Remove props
   }, [searchQuery, providerStatusLoadable]);
 
    // Effect to fetch initial status and listen for updates
+   // Effect to fetch initial custom instructions and listen for updates
+   // Tool/MCP status is now handled by Jotai async atoms triggered by requestManager
    useEffect(() => {
-       // Request initial state
-       postMessage({ type: 'settingsPageReady' });
-       postMessage({ type: 'getMcpConfiguredStatus' });
-       // Don't request all models here anymore. Request providers via settingsPageReady.
-       // postMessage({ type: 'getAvailableModels' }); // Removed
-       postMessage({ type: 'getDefaultConfig' }); // Request current default config
-       console.log('SettingsPage mounted, requested initial data');
+       // Request initial custom instructions state
+       postMessage({ type: 'getCustomInstructions' }); // Assuming a handler exists for this
+       console.log('SettingsPage mounted, requested initial custom instructions');
 
-       // Add message listener for updates
+       // Add message listener ONLY for custom instructions updates
        const handleMessage = (event: MessageEvent) => {
            const message = event.data;
-
            switch (message.type) {
-               case 'updateMcpConfiguredStatus': // Keep this for server-level info like connection errors
-                   console.log('[SettingsPage] Received updateMcpConfiguredStatus:', message.payload);
-                   setMcpServers(message.payload as McpConfiguredStatusPayload);
-                   break;
-
-               case 'updateAllToolsStatus': // Handle the unified tools status message
-                   console.log('[SettingsPage] Received updateAllToolsStatus:', message.payload);
-                   setAllToolsStatus(message.payload as AllToolsStatusPayload);
-                   break;
-
-               case 'mcpConfigReloaded': // Listen for backend reload signal
-                   console.log('[SettingsPage] Received mcpConfigReloaded, requesting new status...');
-                   postMessage({ type: 'settingsPageReady' }); // Re-request all tools status
-                   postMessage({ type: 'getMcpConfiguredStatus' }); // Re-fetch MCP server status
-                   break;
                case 'updateCustomInstructions':
                    console.log('[SettingsPage] Received updateCustomInstructions:', message.payload);
                    setGlobalInstructions(message.payload.global || '');
                    setProjectInstructions(message.payload.project || '');
                    setProjectInstructionsPath(message.payload.projectPath || null);
                    break;
-               // Removed handling for availableProviders, providerModelsLoaded, updateDefaultConfig
-               // These should be handled by the MessageHandlerComponent updating atoms
+               // No need to listen for tool/MCP status here anymore
+               case 'mcpConfigReloaded': // Keep listening for backend reload signal
+                   console.log('[SettingsPage] Received mcpConfigReloaded, Jotai atoms should refetch automatically.');
+                   // Optionally force refetch if needed, but requestManager should handle it
+                   // get(loadable(allToolsStatusAtom)); // Example, might not be needed
+                   // get(loadable(mcpServerStatusAtom)); // Example
+                   break;
            }
        };
 
@@ -218,14 +210,8 @@ export function SettingPage() { // Remove props
     const handleRetryConnection = (serverName: string) => {
         console.log(`Requesting retry for MCP server: ${serverName}`);
         postMessage({ type: 'retryMcpConnection', payload: { serverName } });
-        // Optimistic UI update for server status
-        setMcpServers(prev => ({
-            ...prev,
-            [serverName]: {
-                ...(prev[serverName] || { config: {}, enabled: false, isConnected: false }),
-                lastError: 'Retrying...',
-            }
-        }));
+        // Remove optimistic UI update - Jotai atom will update on refetch/push
+        // setMcpServers(prev => ({ ... }));
     };
 
     // Handler for toggling ANY tool (standard or MCP)
@@ -235,11 +221,11 @@ export function SettingPage() { // Remove props
             type: 'setToolEnabled', // Use the unified handler type
             payload: { toolIdentifier, enabled }
         });
-        // Optimistically update UI state for the specific tool
-        setAllToolsStatus(prev => ({
-            ...prev,
-            [toolIdentifier]: { ...(prev[toolIdentifier] || { description: '', enabled: !enabled, type: 'standard' }), enabled }
-        }));
+        // Remove optimistic UI update - Jotai atom will update on refetch/push
+        // setAllToolsStatus(prev => ({ ... })); // Keep comment
+        // The following lines were remnants of the optimistic update, remove them:
+        // [toolIdentifier]: { ...(prev[toolIdentifier] || { description: '', enabled: !enabled, type: 'standard' }), enabled }
+        // }));
     };
 
     // Handler for toggling all tools within a category
@@ -268,14 +254,8 @@ export function SettingPage() { // Remove props
                 });
             });
 
-            // Optimistically update UI state for the entire category
-            setAllToolsStatus(prev => {
-                const newState = { ...prev };
-                for (const [toolId, updatedInfo] of Object.entries(optimisticUpdates)) {
-                    newState[toolId] = updatedInfo;
-                }
-                return newState;
-            });
+            // Remove optimistic UI update - Jotai atom will update on refetch/push
+            // setAllToolsStatus(prev => { ... });
         }
     };
 
@@ -404,7 +384,9 @@ export function SettingPage() { // Remove props
       const displayName = toolInfo.type === 'mcp' ? `${toolIdentifier.split('/')[1]}` : toolIdentifier; // Simpler display name
       const isMcpTool = toolInfo.type === 'mcp';
       const serverName = toolInfo.serverName;
-      const serverConnected = serverName ? mcpServers[serverName]?.isConnected : false;
+      // Use mcpServersLoadable to get server status
+      const mcpServersData = mcpServersLoadable.state === 'hasData' ? mcpServersLoadable.data : {};
+      const serverConnected = serverName ? mcpServersData?.[serverName]?.isConnected : false;
       // MCP tool is only truly usable if its server is connected AND it's enabled via override
       const effectivelyEnabled = toolInfo.enabled && (!isMcpTool || serverConnected);
       const canToggle = true; // All tools can be toggled now
@@ -435,8 +417,14 @@ export function SettingPage() { // Remove props
       );
   };
 
-  // Categorize tools for rendering
-  const categorizedTools = useMemo(() => categorizeTools(allToolsStatus), [allToolsStatus]);
+  // Categorize tools for rendering - use data from loadable atom
+  const categorizedTools = useMemo(() => {
+      if (allToolsStatusLoadable.state === 'hasData' && allToolsStatusLoadable.data) {
+          return categorizeTools(allToolsStatusLoadable.data);
+      }
+      return {}; // Return empty object while loading or on error
+  }, [allToolsStatusLoadable]);
+
   const categoryOrder = useMemo(() => [
       'Standard: Filesystem',
       'Standard: VS Code',
@@ -448,8 +436,8 @@ export function SettingPage() { // Remove props
 
   // Ensure the function explicitly returns JSX
   return (
-    // Add relative positioning for the absolute back button
-    <div class="p-6 relative">
+    // Add relative positioning, height, and overflow for scrolling
+    <div class="p-6 relative h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
         {/* Back Button */}
         <button
             onClick={handleBackClick}
@@ -564,45 +552,50 @@ export function SettingPage() { // Remove props
           <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
               Toggle individual tools or entire categories on/off for the AI to use. MCP tools require their server to be connected.
           </p>
-          {Object.keys(categorizedTools).length > 0 ? (
-              <div class="space-y-6">
-                  {categoryOrder.map(categoryName => {
-                      const toolsInCategory = categorizedTools[categoryName];
-                      if (!toolsInCategory || Object.keys(toolsInCategory).length === 0) {
-                          return null; // Skip empty categories
-                      }
+          {/* Handle loading/error state for allToolsStatus */}
+          {allToolsStatusLoadable.state === 'loading' && <p class="text-gray-500 dark:text-gray-400 italic">Loading available tools...</p>}
+          {allToolsStatusLoadable.state === 'hasError' && <p class="text-red-500 dark:text-red-400 italic">Error loading tools status.</p>}
+          {allToolsStatusLoadable.state === 'hasData' && (
+              Object.keys(categorizedTools).length > 0 ? (
+                  <div class="space-y-6">
+                      {categoryOrder.map(categoryName => {
+                          const toolsInCategory = categorizedTools[categoryName];
+                          if (!toolsInCategory || Object.keys(toolsInCategory).length === 0) {
+                              return null; // Skip empty categories
+                          }
 
-                      // Add type assertion for Object.values result
-                      const allEnabled = Object.values(toolsInCategory as AllToolsStatusPayload).every((t: ToolInfo) => t.enabled);
-                      const noneEnabled = Object.values(toolsInCategory as AllToolsStatusPayload).every((t: ToolInfo) => !t.enabled);
-                      const isIndeterminate = !allEnabled && !noneEnabled;
+                          // Add type assertion for Object.values result
+                          const allEnabled = Object.values(toolsInCategory as AllToolsStatusPayload).every((t: ToolInfo) => t.enabled);
+                          const noneEnabled = Object.values(toolsInCategory as AllToolsStatusPayload).every((t: ToolInfo) => !t.enabled);
+                          const isIndeterminate = !allEnabled && !noneEnabled;
 
-                      return (
-                          <div key={categoryName}>
-                              <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-300 dark:border-gray-600">
-                                  <h4 class="text-lg font-medium text-gray-700 dark:text-gray-300">{categoryName}</h4>
-                                  <label class="flex items-center cursor-pointer" title={allEnabled ? "Disable all in category" : "Enable all in category"}>
-                                      <input
-                                          type="checkbox"
-                                          class="sr-only peer"
-                                          checked={allEnabled}
-                                          // Use ref for indeterminate state if needed, or rely on visual cue
-                                          // ref={el => el && (el.indeterminate = isIndeterminate)}
-                                          onChange={(e) => handleCategoryToggle(toolsInCategory, (e.target as HTMLInputElement).checked)}
-                                      />
-                                      <div class={`relative w-11 h-6 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 ${isIndeterminate ? 'bg-yellow-400' : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 peer-checked:bg-blue-600'}`}></div>
-                                      <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">Toggle All</span>
-                                  </label>
+                          return (
+                              <div key={categoryName}>
+                                  <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-300 dark:border-gray-600">
+                                      <h4 class="text-lg font-medium text-gray-700 dark:text-gray-300">{categoryName}</h4>
+                                      <label class="flex items-center cursor-pointer" title={allEnabled ? "Disable all in category" : "Enable all in category"}>
+                                          <input
+                                              type="checkbox"
+                                              class="sr-only peer"
+                                              checked={allEnabled}
+                                              // Use ref for indeterminate state if needed, or rely on visual cue
+                                              // ref={el => el && (el.indeterminate = isIndeterminate)}
+                                              onChange={(e) => handleCategoryToggle(toolsInCategory, (e.target as HTMLInputElement).checked)}
+                                          />
+                                          <div class={`relative w-11 h-6 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 ${isIndeterminate ? 'bg-yellow-400' : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 peer-checked:bg-blue-600'}`}></div>
+                                          <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">Toggle All</span>
+                                      </label>
+                                  </div>
+                                  <ul class="space-y-2">
+                                      {Object.entries(toolsInCategory).map(([toolId, toolInfo]) => renderToolItem(toolId, toolInfo as ToolInfo))} // Keep assertion here
+                                  </ul>
                               </div>
-                              <ul class="space-y-2">
-                                  {Object.entries(toolsInCategory).map(([toolId, toolInfo]) => renderToolItem(toolId, toolInfo as ToolInfo))} // Keep assertion here
-                              </ul>
-                          </div>
-                        );
-                     })}
-              </div>
-          ) : (
-              <p class="text-gray-500 dark:text-gray-400 italic">Loading available tools...</p>
+                            );
+                         })}
+                  </div>
+              ) : (
+                  <p class="text-gray-500 dark:text-gray-400 italic">No tools found.</p> // Message when data is loaded but empty
+              )
           )}
       </section>
 
@@ -661,67 +654,72 @@ export function SettingPage() { // Remove props
               </button>
           </div>
 
-           {/* MCP Server List and Status */}
-           {Object.keys(mcpServers).length > 0 ? (
-               <ul class="space-y-3">
-                   {Object.entries(mcpServers).map(([serverName, serverState]) => {
-                       const { config, enabled, isConnected, tools, lastError } = serverState; // Use full status
-                       const configType = config.command ? 'Stdio' : (config.url ? 'SSE' : 'Unknown');
-                       let statusText = '';
-                       let statusColor = '';
-                       let showRetryButton = false;
-                       const toolCount = tools ? Object.keys(tools).length : 0; // Still useful info
+           {/* MCP Server List and Status - Use loadable atom */}
+           {mcpServersLoadable.state === 'loading' && <p class="text-gray-500 dark:text-gray-400 italic">Loading MCP server configurations...</p>}
+           {mcpServersLoadable.state === 'hasError' && <p class="text-red-500 dark:text-red-400 italic">Error loading MCP server configurations.</p>}
+           {mcpServersLoadable.state === 'hasData' && (() => {
+               const mcpServersData = mcpServersLoadable.data ?? {};
+               return Object.keys(mcpServersData).length > 0 ? (
+                   <ul class="space-y-3">
+                       {Object.entries(mcpServersData).map(([serverName, serverState]) => {
+                           const { config, enabled, isConnected, tools, lastError } = serverState; // Use full status
+                           const configType = config.command ? 'Stdio' : (config.url ? 'SSE' : 'Unknown');
+                           let statusText = '';
+                           let statusColor = '';
+                           let showRetryButton = false;
+                           const toolCount = tools ? Object.keys(tools).length : 0; // Still useful info
 
-                       if (!enabled) {
-                           statusText = 'Disabled (in config)';
-                           statusColor = 'text-gray-500 dark:text-gray-400';
-                       } else if (isConnected) {
-                           statusText = `Connected (${toolCount} tools available)`; // Clarify available vs enabled
-                           statusColor = 'text-green-600 dark:text-green-400';
-                           if (lastError && lastError !== 'Retrying...') { // Show tool fetch error if present
-                               statusText += ' - Tool fetch failed';
-                               statusColor = 'text-yellow-600 dark:text-yellow-400';
+                           if (!enabled) {
+                               statusText = 'Disabled (in config)';
+                               statusColor = 'text-gray-500 dark:text-gray-400';
+                           } else if (isConnected) {
+                               statusText = `Connected (${toolCount} tools available)`; // Clarify available vs enabled
+                               statusColor = 'text-green-600 dark:text-green-400';
+                               if (lastError && lastError !== 'Retrying...') { // Show tool fetch error if present
+                                   statusText += ' - Tool fetch failed';
+                                   statusColor = 'text-yellow-600 dark:text-yellow-400';
+                                   showRetryButton = true;
+                               }
+                           } else {
+                               statusText = 'Connection Failed';
+                               statusColor = 'text-red-600 dark:text-red-400';
                                showRetryButton = true;
                            }
-                       } else {
-                           statusText = 'Connection Failed';
-                           statusColor = 'text-red-600 dark:text-red-400';
-                           showRetryButton = true;
-                       }
 
-                       // Handle the temporary "Retrying..." state
-                       if (lastError === 'Retrying...') {
-                           statusText = 'Retrying...';
-                           statusColor = 'text-yellow-600 dark:text-yellow-400';
-                           showRetryButton = false;
-                       }
+                           // Handle the temporary "Retrying..." state
+                           if (lastError === 'Retrying...') {
+                               statusText = 'Retrying...';
+                               statusColor = 'text-yellow-600 dark:text-yellow-400';
+                               showRetryButton = false;
+                           }
 
-                       return (
-                           <li key={serverName} class="p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm flex items-center justify-between space-x-4">
-                               <div class="flex-grow overflow-hidden">
-                                   <span class="font-semibold">{serverName}</span>
-                                   <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">({configType})</span>
-                                   <p class={`text-sm ${statusColor} font-medium truncate`} title={lastError && lastError !== 'Retrying...' ? lastError : statusText}>{statusText}</p>
-                                   {lastError && !isConnected && lastError !== 'Retrying...' && (
-                                       <p class="text-xs text-red-600 dark:text-red-400 mt-1 truncate" title={lastError}>Error: {lastError}</p>
-                                   )}
-                               </div>
-                               {showRetryButton && (
-                                   <button
-                                       onClick={() => handleRetryConnection(serverName)}
-                                       class="flex-shrink-0 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                       aria-label={`Retry connection for ${serverName}`}
-                                   >
-                                       Retry
-                                   </button>
-                                )}
-                           </li>
-                       );
-                   })}
-               </ul>
-           ) : (
-               <p class="text-gray-500 dark:text-gray-400 italic">Loading MCP server configurations or none found...</p>
-           )}
+                           return (
+                               <li key={serverName} class="p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm flex items-center justify-between space-x-4">
+                                   <div class="flex-grow overflow-hidden">
+                                       <span class="font-semibold">{serverName}</span>
+                                       <span class="text-xs text-gray-500 dark:text-gray-400 ml-2">({configType})</span>
+                                       <p class={`text-sm ${statusColor} font-medium truncate`} title={lastError && lastError !== 'Retrying...' ? lastError : statusText}>{statusText}</p>
+                                       {lastError && !isConnected && lastError !== 'Retrying...' && (
+                                           <p class="text-xs text-red-600 dark:text-red-400 mt-1 truncate" title={lastError}>Error: {lastError}</p>
+                                       )}
+                                   </div>
+                                   {showRetryButton && (
+                                       <button
+                                           onClick={() => handleRetryConnection(serverName)}
+                                           class="flex-shrink-0 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                           aria-label={`Retry connection for ${serverName}`}
+                                       >
+                                           Retry
+                                       </button>
+                                    )}
+                               </li>
+                           );
+                       })}
+                   </ul>
+               ) : (
+                   <p class="text-gray-500 dark:text-gray-400 italic">No MCP server configurations found.</p> // Message when data is loaded but empty
+               );
+           })()}
        </section>
     </div>
   ); // Closing parenthesis for the main return

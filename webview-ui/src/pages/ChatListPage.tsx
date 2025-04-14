@@ -50,34 +50,34 @@ export const ChatListPage: FunctionalComponent<ChatListPageProps> = ({
         setChatToDeleteId(null);
     }, []);
     return (
-        <div class="p-4 flex flex-col h-full bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100"> {/* Match app background */}
+        <div class="p-4 flex flex-col h-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"> {/* Slightly darker dark background */}
             <h1 class="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-200">Chat Sessions</h1> {/* Larger title, centered */}
             <button
                 onClick={onCreateChat}
                 disabled={isLoading} // Disable button when loading
-                class={`mb-6 w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-150 ease-in-out ${isLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                class={`mb-6 w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-150 ease-in-out ${isLoading ? 'opacity-60 cursor-not-allowed animate-pulse' : ''}`}
             >
                 {isLoading ? 'Processing...' : 'Start New Chat'} {/* Slightly more descriptive */}
             </button>
-            <div class="flex-1 overflow-y-auto space-y-3 pr-2"> {/* Add padding-right for scrollbar */}
+            <div class="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"> {/* Added scrollbar styling */}
                 {sortedSessions.length === 0 && !isLoading && ( // Show only if not loading
                     <p class="text-center text-gray-500 dark:text-gray-400 mt-10">No chat sessions yet. Start one!</p>
                 )}
                 {sortedSessions.map((session) => (
                     <div
                         key={session.id}
-                        class={`flex items-center justify-between p-3 rounded-lg shadow-sm cursor-pointer transition-all duration-150 ease-in-out ${
+                        class={`flex items-center justify-between p-3 rounded-lg shadow-sm cursor-pointer transition-all duration-150 ease-in-out border border-transparent ${ // Added border
                             session.id === activeChatId
-                                ? 'bg-blue-200 dark:bg-blue-800 ring-2 ring-blue-500 scale-105' // More prominent active state
-                                : 'bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 hover:shadow-md'
+                                ? 'bg-blue-100 dark:bg-blue-900 border-blue-500 dark:border-blue-700 shadow-lg' // Adjusted active state colors and shadow
+                                : 'bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 hover:shadow-md'
                         }`}
                         onClick={() => onSelectChat(session.id)}
                     >
                         <div class="flex-1 overflow-hidden mr-2">
-                            <p class="font-semibold text-gray-800 dark:text-gray-100 truncate" title={session.name}> {/* Bolder title */}
+                            <p class="font-medium text-gray-800 dark:text-gray-100 truncate" title={session.name}> {/* Changed font-semibold to font-medium */}
                                 {session.name || `Chat ${session.id.substring(0, 6)}`}
                             </p>
-                            <p class="text-xs text-gray-600 dark:text-gray-400 mt-0.5"> {/* Slightly darker text */}
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5"> {/* Adjusted text color */}
                                 {new Date(session.lastModified).toLocaleString()}
                             </p>
                         </div>
@@ -87,7 +87,7 @@ export const ChatListPage: FunctionalComponent<ChatListPageProps> = ({
                                 handleDeleteClick(session.id); // Trigger confirmation dialog
                             }}
                             disabled={isLoading} // Disable button when loading
-                            class={`p-1.5 text-red-500 hover:text-red-700 dark:hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 rounded-full transition-colors ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`} // Slightly larger padding, better focus
+                            class={`p-1.5 text-red-500 hover:text-red-700 dark:hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 rounded-full transition-colors ${isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-100 dark:hover:bg-red-900/50'}`} // Added hover background
                             aria-label={`Delete chat ${session.name}`}
                             title={`Delete chat ${session.name}`}
                         >

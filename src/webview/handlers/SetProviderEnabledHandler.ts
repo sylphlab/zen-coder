@@ -21,18 +21,18 @@ export class SetProviderEnabledHandler implements MessageHandler {
             if (this._aiService.providerMap.has(providerKeyInput)) {
                 const providerKey = providerKeyInput as ApiProviderKey;
                 try {
-                    // Update VS Code configuration setting
-                    const config = vscode.workspace.getConfiguration('zencoder.provider');
-                    await config.update(`${providerKey}.enabled`, enabled, vscode.ConfigurationTarget.Global);
-                    console.log(`[SetProviderEnabledHandler] Provider ${String(providerKey)} enabled status updated to: ${enabled}`);
+                    // Call the AiService method which handles config update and event emission
+                    await context.aiService.setProviderEnabled(providerKey, enabled);
+                    console.log(`[SetProviderEnabledHandler] Called AiService.setProviderEnabled for ${providerKey} to ${enabled}`);
 
-                    // Refresh and send updated provider status list back to webview using ProviderStatusManager
-                    const updatedStatusList = await context.providerStatusManager.getProviderStatus();
-                    context.postMessage({ type: 'providerStatus', payload: updatedStatusList });
+                    // No need to manually get/send status here anymore.
+                    // AiService.setProviderEnabled triggers the event emitter.
+                    // const updatedStatusList = await context.providerStatusManager.getProviderStatus(context.aiService.allProviders, context.aiService.providerMap);
+                    // context.postMessage({ type: 'providerStatus', payload: updatedStatusList }); // REMOVED
 
                 } catch (error: any) {
-                    console.error(`[SetProviderEnabledHandler] Failed to update provider setting for ${String(providerKey)}:`, error);
-                    vscode.window.showErrorMessage(`Failed to update setting for ${String(providerKey)}: ${error.message}`);
+                    // Error message is likely shown by AiService, just log here
+                    console.error(`[SetProviderEnabledHandler] Error calling AiService.setProviderEnabled for ${providerKey}:`, error);
                 }
             } else {
                 console.error(`[SetProviderEnabledHandler] Invalid provider key received: ${providerKeyInput}`);

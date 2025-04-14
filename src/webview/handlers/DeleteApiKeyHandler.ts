@@ -22,9 +22,10 @@ export class DeleteApiKeyHandler implements MessageHandler {
                     await context.aiService.deleteApiKey(providerId);
                     console.log(`[DeleteApiKeyHandler] API Key delete request processed for ${providerId}`);
 
-                    // Refresh and send updated provider status list using ProviderStatusManager
-                    const updatedStatusList = await context.providerStatusManager.getProviderStatus();
-                    context.postMessage({ type: 'providerStatus', payload: updatedStatusList });
+                    // No need to manually get/send status here anymore.
+                    // AiService.deleteApiKey triggers the event emitter, which updates the webview atom.
+                    // const updatedStatusList = await context.providerStatusManager.getProviderStatus(context.aiService.allProviders, context.aiService.providerMap);
+                    // context.postMessage({ type: 'providerStatus', payload: updatedStatusList }); // REMOVED
 
                     // Refresh available *providers* as one might become unavailable
                     const currentProviders = await context.modelResolver.getAvailableProviders();

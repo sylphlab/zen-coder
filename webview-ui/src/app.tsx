@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'preact/hooks'; // Keep useState for local UI state
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { Router, Route, useLocation, Switch, Redirect } from "wouter";
+import { Suspense } from 'preact/compat'; // Import Suspense
 import { JSX } from 'preact/jsx-runtime'; // Import JSX namespace
 import './app.css';
 import { SettingPage } from './pages/SettingPage';
@@ -37,9 +38,10 @@ import {
     activeChatMessagesAtom,
     activeChatEffectiveConfigAtom, // Use the renamed atom
     activeChatProviderIdAtom,
-    activeChatModelNameAtom,
+    activeChatModelIdAtom, // Corrected import
     activeChatCombinedModelIdAtom,
-    webviewLocationAtom // Added for potential future sync
+    webviewLocationAtom, // Added for potential future sync
+    isChatListLoadingAtom // Import the new atom
 } from './store/atoms'; // Import Jotai atoms
 
 // --- Type Definitions ---
@@ -96,146 +98,8 @@ export const postMessage = (message: any) => {
 // --- Helper Functions ---
 export const generateUniqueId = () => `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-// --- Message Handler Component (Handles messages from Extension Host) ---
-const MessageHandlerComponent = () => {
-    const setChatSessions = useSetAtom(chatSessionsAtom);
-    const setActiveChatId = useSetAtom(activeChatIdAtom);
-    // Removed setters for read-only async atoms:
-    // const setProviderStatus = useSetAtom(providerStatusAtom);
-    // const setAvailableProviders = useSetAtom(availableProvidersAtom);
-    // const setProviderModelsMap = useSetAtom(providerModelsMapAtom);
-    const setIsStreaming = useSetAtom(isStreamingAtom);
-    const setSuggestedActionsMap = useSetAtom(suggestedActionsMapAtom);
-    const setLocation = useSetAtom(webviewLocationAtom); // Use Jotai atom setter for location
-    // Removed: const triggerFetchModels = useSetAtom(triggerFetchModelsForProviderAtom);
-    // Removed: const triggerReady = useSetAtom(triggerWebviewReadyAtom);
-
-    useEffect(() => {
-        const handleMessagesFromExtension = (event: MessageEvent) => {
-            const message = event.data;
-            console.log("[MessageHandler] Received message:", message.type, message.payload); // Log all messages
-
-            // First, check if it's a response to a pending request
-            if (message.type === 'responseData') {
-                handleRequestManagerResponse(message);
-                return; // Stop further processing for this message
-            }
-
-            // Handle other non-response messages (state pushes, stream updates, etc.)
-            switch (message.type) {
-                // --- State Loading & Updates (Keep initial load) ---
-                case 'loadChatState':
-                    if (message.payload && Array.isArray(message.payload.chats)) {
-                        const loadedChats = message.payload.chats;
-                        const loadedActiveId = message.payload.lastActiveChatId;
-                        const loadedLocation = message.payload.lastLocation;
-
-                        setChatSessions(loadedChats);
-                        setActiveChatId(loadedActiveId);
-                        // Update location atom if needed (consider if wouter should drive this)
-                        // if (loadedLocation && loadedLocation !== '/') {
-                        //     setLocation(loadedLocation);
-                        // }
-                        console.log(`[MessageHandler] Loaded ${loadedChats.length} chats. Active: ${loadedActiveId}. Location: ${loadedLocation}`);
-                    } else {
-                         console.warn("[MessageHandler] Invalid loadChatState payload:", message.payload);
-                    }
-                    break;
-                // Remove cases handled by request/response via async atoms
-                // case 'providerStatus': ... removed ...
-                // case 'availableProviders': ... removed ...
-                // case 'providerModelsLoaded': ... removed ...
-                // --- Streaming & Message Updates ---
-                 case 'startAssistantMessage':
-                     if (message.payload?.chatId && message.payload?.messageId) {
-                         const { chatId, messageId } = message.payload;
-                         setChatSessions(prev => prev.map(chat =>
-                             chat.id === chatId
-                                 ? { ...chat, history: [...chat.history, { id: messageId, sender: 'assistant', content: [], timestamp: Date.now() }] }
-                                 : chat
-                         ));
-                         setIsStreaming(true);
-                         setSuggestedActionsMap(prev => ({ ...prev, [messageId]: [] })); // Clear suggestions for new message
-                     } else {
-                          console.warn("[MessageHandler] Invalid startAssistantMessage payload:", message.payload);
-                     }
-                     break;
-                 case 'appendMessageChunk':
-                     if (message.payload?.chatId && message.payload?.messageId && message.payload?.contentChunk) {
-                         const { chatId, messageId, contentChunk } = message.payload;
-                         setChatSessions(prev => prev.map(chat => {
-                             if (chat.id !== chatId) return chat;
-                             const history = chat.history.map(msg => {
-                                 if (msg.id !== messageId) return msg;
-                                 // Ensure content is always an array
-                                 const currentContent = Array.isArray(msg.content) ? msg.content : (msg.content ? [{ type: 'text', text: String(msg.content) } as UiTextMessagePart] : []); // Assert type
-                                 let lastPart = currentContent[currentContent.length - 1];
-
-                                 // Append to last text part or add new text part
-                                 if (lastPart?.type === 'text' && contentChunk.type === 'text-delta') {
-                                     // Create a new text part object
-                                     const updatedTextPart: UiTextMessagePart = { ...lastPart, text: lastPart.text + contentChunk.textDelta };
-                                     return { ...msg, content: [...currentContent.slice(0, -1), updatedTextPart] };
-                                 } else if (contentChunk.type === 'text-delta') {
-                                     // Create a new text part object
-                                     const newTextPart: UiTextMessagePart = { type: 'text', text: contentChunk.textDelta };
-                                     return { ...msg, content: [...currentContent, newTextPart] };
-                                 }
-                                 // Handle other chunk types if necessary (e.g., tool calls)
-                                 // For now, just log unexpected chunk types
-                                 console.warn("[MessageHandler] Received unhandled content chunk type:", contentChunk.type);
-                                 return msg; // Return unmodified message if chunk type is not handled
-                             });
-                             return { ...chat, history };
-                         }));
-                     } else {
-                          console.warn("[MessageHandler] Invalid appendMessageChunk payload:", message.payload);
-                     }
-                     break;
-                 case 'updateToolCall':
-                     // TODO: Implement logic to update tool call status within the message content
-                     console.warn("[MessageHandler] updateToolCall not fully implemented yet.");
-                     break;
-                 case 'addSuggestedActions':
-                      if (message.payload?.chatId && message.payload?.messageId && Array.isArray(message.payload?.actions)) {
-                          const { messageId, actions } = message.payload;
-                          setSuggestedActionsMap(prev => ({ ...prev, [messageId]: actions }));
-                      } else {
-                           console.warn("[MessageHandler] Invalid addSuggestedActions payload:", message.payload);
-                      }
-                     break;
-                 case 'streamFinished':
-                     setIsStreaming(false);
-                     break;
-
-                // --- Other Actions ---
-                case 'showSettings': // May be deprecated if routing handles this
-                    // setLocation('/settings'); // Example: Update location atom
-                    console.log("[MessageHandler] Received showSettings message (potentially deprecated).");
-                    break;
-                case 'updateMcpServers': // Likely deprecated for App state
-                    console.log("[MessageHandler] Received updateMcpServers message (potentially deprecated).");
-                    break;
-                default:
-                    // console.log(`[MessageHandler] Received unhandled message type: ${message.type}`);
-                    break;
-            }
-        };
-
-        window.addEventListener('message', handleMessagesFromExtension);
-        console.log("[MessageHandler] Initializing and triggering webviewReady.");
-        // Removed: triggerReady(); // Initial load now handled by async atoms
-
-        return () => {
-            window.removeEventListener('message', handleMessagesFromExtension);
-        };
-        // Ensure dependencies cover all setters and trigger functions used inside
-    // Removed dependencies on removed setters/triggers
-    // Removed triggerReady/triggerFetchModels from dependencies
-    }, [setChatSessions, setActiveChatId, setIsStreaming, setSuggestedActionsMap, setLocation]);
-
-    return null; // This component does not render anything
-};
+// Removed StateUpdateMessageHandler component and its useEffect hook.
+// State updates are now handled by MessageHandlerComponent rendered in main.tsx.
 
 
 // --- App Component ---
@@ -252,7 +116,7 @@ export function App() {
     // Use derived atoms directly
     const activeChatMessages = useAtomValue(activeChatMessagesAtom);
     const activeChatProviderId = useAtomValue(activeChatProviderIdAtom);
-    const activeChatModelName = useAtomValue(activeChatModelNameAtom);
+    const currentModelId = useAtomValue(activeChatModelIdAtom); // Corrected: Read model ID atom
     const activeChatCombinedModelId = useAtomValue(activeChatCombinedModelIdAtom);
     const suggestedActionsMap = useAtomValue(suggestedActionsMapAtom); // Read derived value
 
@@ -260,7 +124,7 @@ export function App() {
     const [location, setLocation] = useLocation(); // Keep wouter for routing for now
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
-    const [isChatListLoading, setIsChatListLoading] = useState(false);
+    // const [isChatListLoading, setIsChatListLoading] = useState(false); // Replaced with atom
 
     // --- Define ALL Jotai Setters at the Top ---
     const setChatSessionsDirect = useSetAtom(chatSessionsAtom);
@@ -270,6 +134,7 @@ export function App() {
     const setIsStreamingDirect = useSetAtom(isStreamingAtom);
     // Removed setter for read-only async atom:
     const setSelectedImagesAtomDirect = useSetAtom(selectedImagesAtom); // Setter for the atom
+    const setIsChatListLoading = useSetAtom(isChatListLoadingAtom); // Get setter for the new atom
 
     // --- Custom Hooks ---
     // Call useImageUpload and get state and functions
@@ -301,8 +166,9 @@ export function App() {
     const currentIsStreaming = useAtomValue(isStreamingAtom);
     const currentActiveChatId = useAtomValue(activeChatIdAtom);
     const currentProviderId = useAtomValue(activeChatProviderIdAtom);
-    const currentModelName = useAtomValue(activeChatModelNameAtom);
+    // const currentModelName = useAtomValue(activeChatModelNameAtom); // Removed, use currentModelId
     const currentChatSessions = useAtomValue(chatSessionsAtom);
+    const isChatListLoading = useAtomValue(isChatListLoadingAtom); // Read value from atom
 
     // --- Effects ---
     // Scroll to bottom when active chat messages change
@@ -313,13 +179,24 @@ export function App() {
     // Removed useEffect for location updates (can be handled differently if needed, maybe via atom effect)
     // Removed useEffect for initial setup messages (moved to MessageHandlerComponent)
 
+    // Add useEffect to log derived state changes for debugging
+    useEffect(() => {
+        console.log(`[App useEffect] Active Provider ID changed to: ${activeChatProviderId}`);
+    }, [activeChatProviderId]);
+
+    useEffect(() => {
+        // Assuming activeChatModelNameAtom holds the selected model ID for now based on atom definition
+        console.log(`[App useEffect] Active Model ID changed to: ${currentModelId}`); // Corrected to use currentModelId
+    }, [currentModelId]); // Corrected dependency
+
+
     // --- Event Handlers (Remaining in App) ---
     // --- Event Handlers (Refactored for Jotai) ---
     const handleSend = useCallback(() => {
         // Use values read outside the callback
 
         // Use setters defined above
-        if ((currentInputValue.trim() || currentSelectedImages.length > 0) && !currentIsStreaming && currentProviderId && currentModelName && currentActiveChatId) {
+        if ((currentInputValue.trim() || currentSelectedImages.length > 0) && !currentIsStreaming && currentProviderId && currentModelId && currentActiveChatId) { // Check currentModelId
             // Map SelectedImage[] to UiImagePart[] for the backend message
             const contentParts: UiMessageContentPart[] = currentSelectedImages.map(img => ({
                 type: 'image',
@@ -332,7 +209,7 @@ export function App() {
                 contentParts.push({ type: 'text', text: currentInputValue });
             }
             // Add message optimistically to the correct chat session
-            const newUserMessage: UiMessage = { id: generateUniqueId(), sender: 'user', content: contentParts, timestamp: Date.now() };
+            const newUserMessage: UiMessage = { id: generateUniqueId(), role: 'user', content: contentParts, timestamp: Date.now() }; // Use role instead of sender
             setChatSessionsDirect(prevSessions =>
                 prevSessions.map(session =>
                     session.id === currentActiveChatId
@@ -342,11 +219,11 @@ export function App() {
             );
             // Send message with chatId
             // Combine provider and model name for the backend message
-            const combinedModelId = currentProviderId && currentModelName ? `${currentProviderId}:${currentModelName}` : null;
+            const combinedModelId = currentProviderId && currentModelId ? `${currentProviderId}:${currentModelId}` : null; // Use currentModelId
             if (combinedModelId) {
                  postMessage({ type: 'sendMessage', chatId: currentActiveChatId, content: contentParts, providerId: currentProviderId, modelId: combinedModelId });
             } else {
-                 console.error("Cannot send message: Missing provider or model name for active chat.");
+                 console.error("Cannot send message: Missing provider or model ID for active chat."); // Corrected log
                  setIsStreamingDirect(false); // Stop streaming indicator if we can't send
                  return; // Prevent sending
             }
@@ -356,23 +233,25 @@ export function App() {
             setIsStreamingDirect(true);
         } else if (!currentActiveChatId) {
              console.warn("Cannot send message: No active chat selected.");
-        } else if (!currentProviderId || !currentModelName) {
-             console.warn("Cannot send message: Provider or Model not selected for the active chat.");
+        } else if (!currentProviderId || !currentModelId) { // Check currentModelId
+             console.warn("Cannot send message: Provider or Model ID not selected for the active chat."); // Corrected log
         }
     }, [ // Add atom values read outside to dependency array
-         currentInputValue, currentSelectedImages, currentIsStreaming, currentActiveChatId, currentProviderId, currentModelName,
+         currentInputValue, currentSelectedImages, currentIsStreaming, currentActiveChatId, currentProviderId, currentModelId, // Use currentModelId in dependencies
          setChatSessionsDirect, setInputValueDirect, setIsStreamingDirect, clearSelectedImages
     ]);
 
+    // Read isStreaming value outside the callback
+    const isStreamingValue = useAtomValue(isStreamingAtom);
+
     // Define handleKeyDown separately
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
-        // Read isStreaming inside handler as it can change
-        const currentIsStreamingVal = useAtomValue(isStreamingAtom);
-        if (e.key === 'Enter' && !e.shiftKey && !currentIsStreamingVal) {
+        // Use the value read outside the callback
+        if (e.key === 'Enter' && !e.shiftKey && !isStreamingValue) {
             e.preventDefault();
             handleSend(); // Call the existing handleSend callback
         }
-    }, [handleSend]); // Dependency on handleSend
+    }, [handleSend, isStreamingValue]); // Add isStreamingValue to dependencies
 
 
      // Use activeChatId read outside
@@ -408,9 +287,9 @@ export function App() {
     const handleSuggestedActionClick = useCallback((action: SuggestedAction) => {
         const currentActiveChatIdForSuggest = currentActiveChatId;
         const currentProviderIdForSuggest = currentProviderId;
-        const currentModelNameForSuggest = currentModelName;
-        const combinedModelIdForAction = currentProviderIdForSuggest && currentModelNameForSuggest ? `${currentProviderIdForSuggest}:${currentModelNameForSuggest}` : null;
-        if (currentActiveChatIdForSuggest && currentProviderIdForSuggest && combinedModelIdForAction) {
+        const currentModelIdForSuggest = currentModelId; // Use currentModelId
+        const combinedModelIdForAction = currentProviderIdForSuggest && currentModelIdForSuggest ? `${currentProviderIdForSuggest}:${currentModelIdForSuggest}` : null; // Use currentModelIdForSuggest
+        if (currentActiveChatIdForSuggest && currentProviderIdForSuggest && currentModelIdForSuggest && combinedModelIdForAction) { // Check currentModelIdForSuggest
             switch (action.action_type) {
                 case 'send_message':
                     if (typeof action.value === 'string') {
@@ -431,9 +310,9 @@ export function App() {
                 default: console.warn("Unknown suggested action type");
             }
         } else {
-             console.warn("Cannot handle suggested action: Missing activeChatId, provider, or model name for the chat.");
+             console.warn("Cannot handle suggested action: Missing activeChatId, provider, or model ID for the chat."); // Corrected log
         }
-    }, [ currentActiveChatId, currentProviderId, currentModelName, setInputValueDirect, setIsStreamingDirect]); // Add dependencies
+    }, [ currentActiveChatId, currentProviderId, currentModelId, setInputValueDirect, setIsStreamingDirect]); // Use currentModelId in dependencies
 
     const handleStopGeneration = useCallback(() => {
         console.log("[App Handler] Stop generation requested.");
@@ -462,26 +341,26 @@ export function App() {
         console.log("[App Handler] Requesting new chat creation...");
         setIsChatListLoading(true); // Start loading
         postMessage({ type: 'createChat' });
-        // Loading will stop when 'loadChatState' is received
-    }, [setIsChatListLoading]); // Add dependency
+        // Loading will stop when 'loadChatState' is received and handled in MessageHandlerComponent
+    }, [setIsChatListLoading]); // Keep dependency on the setter
 
     const handleDeleteChat = useCallback((chatId: string) => {
         console.log(`[App Handler] Requesting delete chat: ${chatId}`);
         setIsChatListLoading(true); // Start loading
         postMessage({ type: 'deleteChat', payload: { chatId } });
-        // Loading will stop when 'loadChatState' is received
+        // Loading will stop when 'loadChatState' is received and handled in MessageHandlerComponent
         // If the deleted chat was active, the backend/HistoryManager should handle resetting activeChatId.
-    }, [setIsChatListLoading]); // Add dependency
+    }, [setIsChatListLoading]); // Keep dependency on the setter
 
     // --- Handler for Chat-Specific Model Change ---
     // Use activeChatId read outside
-    const handleChatModelChange = useCallback((newProviderId: string | null, newModelName: string | null) => {
+    const handleChatModelChange = useCallback((newProviderId: string | null, newModelId: string | null) => {
         const currentActiveChatIdForModelChange = currentActiveChatId; // Use value from closure
         if (currentActiveChatIdForModelChange) {
-            console.log(`[App Handler] Updating model for chat ${currentActiveChatIdForModelChange} to Provider: ${newProviderId}, Model: ${newModelName}`);
+            console.log(`[App Handler] Updating model for chat ${currentActiveChatIdForModelChange} to Provider: ${newProviderId}, Model: ${newModelId}`);
             const newConfig: Partial<ChatConfig> = {
                 providerId: newProviderId ?? undefined, // Store null as undefined
-                modelName: newModelName ?? undefined,   // Store null as undefined
+                modelId: newModelId ?? undefined,
                 useDefaults: false // Explicitly set model, so don't use defaults
             };
 
@@ -508,16 +387,14 @@ export function App() {
     // This now handles setting the provider *and* updating the chat's model
     // This handler is now simplified as ModelSelector handles finding the default model
     // It just needs to call handleChatModelChange with the new provider and model
-    const handleModelSelectorChange = useCallback((newCombinedModelId: string | null) => { // Allow null
-         if (newCombinedModelId && newCombinedModelId.includes(':')) {
-             // Valid combined ID string
-             const [newProviderId, ...modelNameParts] = newCombinedModelId.split(':');
-             const newModelName = modelNameParts.join(':');
-             handleChatModelChange(newProviderId, newModelName);
-         } else {
-             // Handle null (cleared selection) or invalid format
-             handleChatModelChange(null, null);
-         }
+    // This handler now correctly accepts two arguments: providerId and modelId
+    const handleModelSelectorChange = useCallback((newProviderId: string | null, newModelId: string | null) => {
+         console.log(`[App handleModelSelectorChange] Received Provider: ${newProviderId}, Model: ${newModelId}`); // Updated log
+
+         // Directly call the actual update function with the received IDs
+         // No need for parsing logic here anymore
+         handleChatModelChange(newProviderId, newModelId);
+
     }, [handleChatModelChange]);
 
     // --- Message Action Handlers ---
@@ -581,13 +458,17 @@ const handleDeleteMessage = useCallback((messageId: string) => {
     // --- Main Render ---
     return (
         <Router>
-            {/* Add the non-rendering message handler component */}
-            <MessageHandlerComponent />
-            <div class="app-layout h-screen flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-                <main class="content-area flex-1 flex flex-col overflow-y-auto p-4">
+            {/* Removed StateUpdateMessageHandler rendering */}
+            {/* Wrap the main content in Suspense */}
+            <Suspense fallback={<div class="flex justify-center items-center h-full">Loading...</div>}>
+            {/* Use a slightly different dark background for the main app */}
+            <div class="app-layout h-screen flex flex-col bg-gray-100 dark:bg-gray-850 text-gray-900 dark:text-gray-100">
+                {/* Remove padding from main, apply to inner containers */}
+                <main class="content-area flex-1 flex flex-col overflow-hidden"> {/* Changed overflow-y-auto to overflow-hidden */}
                     <Switch>
                         <Route path="/index.html">
-                            <div class="chat-container flex flex-col flex-1 h-full">
+                            {/* Added padding here, removed from main */}
+                            <div class="chat-container flex flex-col flex-1 h-full p-4 overflow-hidden"> {/* Added overflow-hidden */}
                                 {/* TODO: Update HeaderControls to potentially show chat name/list button */}
                                 <HeaderControls
                                     // Pass only the required callback props
@@ -595,14 +476,18 @@ const handleDeleteMessage = useCallback((messageId: string) => {
                                     onSettingsClick={handleSettingsClick}
                                     onChatsClick={handleChatsClick}
                                 />
+                                {/* MessagesArea will now handle its own scrolling */}
                                 <MessagesArea
                                     // Removed props: messages, suggestedActionsMap, isStreaming
                                     handleSuggestedActionClick={handleSuggestedActionClick}
                                     messagesEndRef={messagesEndRef}
                                     onCopyMessage={handleCopyMessage} // Pass copy handler
                                     onDeleteMessage={handleDeleteMessage} // Pass delete handler
+                                    className="flex-1 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
                                 />
+                                {/* Add some margin-top to InputArea */}
                                 <InputArea
+                                    className="mt-auto"
                                     // Pass only required props (callbacks, refs, image handlers)
                                     // Pass refactored handleKeyDown
                                     handleKeyDown={handleKeyDown}
@@ -629,7 +514,7 @@ const handleDeleteMessage = useCallback((messageId: string) => {
                                 onSelectChat={handleSelectChat}
                                 onCreateChat={handleCreateChat}
                                 onDeleteChat={handleDeleteChat}
-                                isLoading={isChatListLoading} // Pass loading state
+                                isLoading={isChatListLoading} // Pass loading state from atom
                             />
                         </Route>
                         {/* Default route - Redirect to last active chat or chat list */}
@@ -656,6 +541,7 @@ const handleDeleteMessage = useCallback((messageId: string) => {
                     confirmText="Confirm Clear"
                 />
             </div>
+            </Suspense>
         </Router>
     );
 }

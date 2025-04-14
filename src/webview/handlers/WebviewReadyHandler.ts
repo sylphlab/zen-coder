@@ -44,43 +44,21 @@ export class WebviewReadyHandler implements MessageHandler {
             console.log(`[WebviewReadyHandler] Sent ${allChats.length} chats, last active ID (${lastActiveId}), last location (${lastLocation}).`);
 
             // Use ProviderStatusManager
-            const statusList = await context.providerStatusManager.getProviderStatus();
+            const statusList = await context.providerStatusManager.getProviderStatus(context.aiService.allProviders, context.aiService.providerMap);
            context.postMessage({ type: 'providerStatus', payload: statusList });
            console.log("[WebviewReadyHandler] Sent provider status list.");
 
            // --- Get and Send All Tools Status ---
-           const allToolsStatus: AllToolsStatusPayload = {};
-           const toolEnabledStatus = context.extensionContext.globalState.get<{ [toolId: string]: boolean }>(TOOL_ENABLED_STATUS_KEY, {});
-
-           // Process Standard Tools
-           const standardToolNames = Object.keys(allTools) as ToolName[];
-           standardToolNames.forEach(toolName => {
-               const toolDefinition = allTools[toolName];
-               const isEnabled = toolEnabledStatus[toolName] !== false; // Default true
-               allToolsStatus[toolName] = {
-                   description: toolDefinition.description,
-                   enabled: isEnabled,
-                   type: 'standard'
-               };
-           });
-
-           // Process MCP Tools
-           const mcpToolsMap = context.aiService['mcpManager'].getMcpServerTools(); // Access McpManager via AiService
-           for (const [serverName, tools] of mcpToolsMap.entries()) {
-               for (const [mcpToolName, mcpToolDefinition] of Object.entries(tools)) {
-                   const unifiedIdentifier = `mcp_${serverName}_${mcpToolName}`;
-                   const isEnabled = toolEnabledStatus[unifiedIdentifier] !== false; // Default true
-                   allToolsStatus[unifiedIdentifier] = {
-                       description: mcpToolDefinition.description,
-                       enabled: isEnabled,
-                       type: 'mcp',
-                       serverName: serverName
-                   };
-               }
-           }
+           // Directly call the method on AiService to get combined status
+           const allToolsStatus = await context.aiService.getAllToolsWithStatus();
            context.postMessage({ type: 'updateAllToolsStatus', payload: allToolsStatus });
            console.log(`[WebviewReadyHandler] Sent status for ${Object.keys(allToolsStatus).length} tools.`);
-           // --- End Tool Status Logic ---
+
+           // --- Get and Send MCP Status ---
+           const mcpStatus = context.mcpManager.getMcpServerConfiguredStatus(); // Use correct method name
+           context.postMessage({ type: 'updateMcpConfiguredStatus', payload: mcpStatus });
+           console.log(`[WebviewReadyHandler] Sent status for ${Object.keys(mcpStatus).length} MCP servers.`);
+           // --- End MCP Status Logic ---
 
        } catch (error: any) {
            console.error("[WebviewReadyHandler] Error fetching initial state:", error);
@@ -89,7 +67,7 @@ export class WebviewReadyHandler implements MessageHandler {
            context.postMessage({ type: 'availableModels', payload: [] });
            context.postMessage({ type: 'providerStatus', payload: [] });
            context.postMessage({ type: 'loadChatState', payload: { chats: [], lastActiveChatId: null, lastLocation: '/index.html' } }); // Include default location on error
-           context.postMessage({ type: 'updateAllToolsStatus', payload: {} }); // Send empty tools status on error
+           context.postMessage({ type: 'updateAllToolsStatus', payload: {} });
         }
     }
 }

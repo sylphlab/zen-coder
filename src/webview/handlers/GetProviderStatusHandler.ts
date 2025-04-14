@@ -8,7 +8,7 @@ export class GetProviderStatusHandler implements MessageHandler {
         console.log("[GetProviderStatusHandler] Handling getProviderStatus message...");
         try {
             // Use ProviderStatusManager
-            const currentStatusList = await context.providerStatusManager.getProviderStatus();
+            const currentStatusList = await context.providerStatusManager.getProviderStatus(context.aiService.allProviders, context.aiService.providerMap);
             context.postMessage({ type: 'providerStatus', payload: currentStatusList });
             console.log("[GetProviderStatusHandler] Sent updated provider status list.");
         } catch (error: any) {

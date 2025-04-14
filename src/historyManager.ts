@@ -62,6 +62,20 @@ export class HistoryManager {
                      const chat = loadedState.chats[chatId];
                      // Add more robust validation if needed (e.g., check history/config structure)
                      if (chat && chat.id === chatId && typeof chat.name === 'string' && Array.isArray(chat.history) && typeof chat.config === 'object') {
+                         // Validate/fix message roles within history
+                         chat.history.forEach((msg: any, index: number) => {
+                             if (!msg.role || !['user', 'assistant', 'system', 'tool'].includes(msg.role)) {
+                                 // Attempt to infer from old 'sender' or default
+                                 const inferredRole = msg.sender === 'user' ? 'user' : 'assistant'; // Basic inference
+                                 console.warn(`[HistoryManager] Chat ${chatId}, Message ${index}: Missing or invalid role. Inferring as '${inferredRole}'. Message ID: ${msg.id}`);
+                                 msg.role = inferredRole;
+                             }
+                             // Ensure content is an array (basic check)
+                             if (!Array.isArray(msg.content)) {
+                                 console.warn(`[HistoryManager] Chat ${chatId}, Message ${index}: Content is not an array. Resetting. Message ID: ${msg.id}`);
+                                 msg.content = [{ type: 'text', text: '[Invalid Content]' }];
+                             }
+                         });
                          validChats[chatId] = chat;
                      } else {
                          console.warn(`[HistoryManager] Invalid chat session data found for ID ${chatId}. Skipping.`);
@@ -351,7 +365,7 @@ export class HistoryManager {
 
         const userUiMessage: UiMessage = {
             id: `user-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-            sender: 'user',
+            role: 'user', // Use role
             content: content,
             timestamp: Date.now()
         };
@@ -377,7 +391,7 @@ export class HistoryManager {
         const assistantUiMsgId = `asst-${Date.now()}-${Math.random().toString(16).slice(2)}`;
         const initialAssistantUiMessage: UiMessage = {
             id: assistantUiMsgId,
-            sender: 'assistant',
+            role: 'assistant', // Use role
             content: [],
             timestamp: Date.now()
         };
@@ -401,7 +415,7 @@ export class HistoryManager {
             return;
         }
         const message = chat.history.find(msg => msg.id === assistantMessageId);
-        if (message?.sender === 'assistant') {
+        if (message?.role === 'assistant') { // Use role
             if (!Array.isArray(message.content)) { message.content = []; }
             const lastContentPart = message.content[message.content.length - 1];
             if (lastContentPart?.type === 'text') {
@@ -431,7 +445,7 @@ export class HistoryManager {
             return;
         }
         const message = chat.history.find(msg => msg.id === assistantMessageId);
-        if (message?.sender === 'assistant') {
+        if (message?.role === 'assistant') { // Use role
             if (!Array.isArray(message.content)) { message.content = []; }
             const toolCallPart: UiToolCallPart = { type: 'tool-call', toolCallId, toolName, args, status: 'pending' };
             message.content.push(toolCallPart);
@@ -459,7 +473,7 @@ export class HistoryManager {
         let historyChanged = false;
         for (let i = chat.history.length - 1; i >= 0; i--) {
             const msg = chat.history[i];
-            if (msg.sender === 'assistant' && Array.isArray(msg.content)) {
+            if (msg.role === 'assistant' && Array.isArray(msg.content)) { // Use role
                 const toolCallIndex = msg.content.findIndex((p: any) => p.type === 'tool-call' && p.toolCallId === toolCallId);
                 if (toolCallIndex !== -1) {
                     const toolCallPart = msg.content[toolCallIndex] as UiToolCallPart;
@@ -593,12 +607,12 @@ export class HistoryManager {
 
         const coreMessages: CoreMessage[] = [];
         for (const uiMsg of chatHistory) {
-            if (uiMsg.sender === 'user') {
+            if (uiMsg.role === 'user') { // Use role
                 const coreMsg = translateUserMessageToCore(uiMsg);
                 if (coreMsg) {
                     coreMessages.push(coreMsg);
                 }
-            } else if (uiMsg.sender === 'assistant') {
+            } else if (uiMsg.role === 'assistant') { // Use role
                 const coreMsgs = translateAssistantMessageToCore(uiMsg);
                 coreMessages.push(...coreMsgs);
             }
@@ -614,7 +628,8 @@ export class HistoryManager {
         const config = vscode.workspace.getConfiguration('zencoder.defaults');
         // Provide fallback values (e.g., undefined or a known default model) if settings are missing
         const defaultConfig: DefaultChatConfig = {
-            defaultChatModelId: config.get<string>('chatModelId'),
+            defaultProviderId: config.get<string>('defaultProviderId'), // Use correct setting ID
+            defaultModelId: config.get<string>('defaultModelId'),       // Use correct setting ID
             defaultImageModelId: config.get<string>('imageModelId'),
             defaultOptimizeModelId: config.get<string>('optimizeModelId'),
         };
@@ -629,18 +644,23 @@ export class HistoryManager {
 
         // Determine final providerId and modelName based on chat config and defaults
         let finalProviderId: string | undefined;
-        let finalModelName: string | undefined;
+        let finalModelId: string | undefined; // Changed from finalModelName
 
         if (chat?.config.useDefaults === false) {
             // Use only chat-specific settings if defined
             finalProviderId = chat.config.providerId;
-            finalModelName = chat.config.modelName;
+            // If not using defaults, use the chat-specific providerId and modelId
+            finalProviderId = chat.config.providerId;
+            finalModelId = chat.config.modelId;
+            // We will combine these later if both are present
+            // finalProviderId = chat.config.providerId; // Keep for reference if needed elsewhere
+            finalModelId = chat.config.modelId; // Keep for reference if needed elsewhere
             effectiveConfig.imageModelId = chat.config.imageModelId; // Keep combined for now
             effectiveConfig.optimizeModelId = chat.config.optimizeModelId; // Keep combined for now
         } else {
             // Use defaults, overridden by chat specifics if they exist
-            finalProviderId = chat?.config.providerId ?? defaults.defaultChatModelId?.split(':')[0]; // Extract provider from default combined ID
-            finalModelName = chat?.config.modelName ?? defaults.defaultChatModelId?.split(':').slice(1).join(':'); // Extract model name from default combined ID
+            finalProviderId = chat?.config.providerId ?? defaults.defaultProviderId; // Use defaultProviderId
+            finalModelId = chat?.config.modelId ?? defaults.defaultModelId;       // Use defaultModelId
             effectiveConfig.imageModelId = chat?.config.imageModelId ?? defaults.defaultImageModelId;
             effectiveConfig.optimizeModelId = chat?.config.optimizeModelId ?? defaults.defaultOptimizeModelId;
         }
@@ -648,14 +668,16 @@ export class HistoryManager {
         // Store the derived providerId
         effectiveConfig.providerId = finalProviderId;
 
-        // Combine providerId and modelName into the chatModelId expected by AiService
-        if (finalProviderId && finalModelName) {
-            effectiveConfig.chatModelId = `${finalProviderId}:${finalModelName}`;
+        // Combine providerId and modelId into the chatModelId expected by AiService
+        // This block is primarily for the case where defaults are used or partially overridden
+        // Combine providerId and modelId into the chatModelId
+        if (finalProviderId && finalModelId) {
+            effectiveConfig.chatModelId = `${finalProviderId}:${finalModelId}`;
         } else {
             effectiveConfig.chatModelId = undefined; // Set to undefined if either part is missing
-            if (finalProviderId || finalModelName) {
+            if (finalProviderId || finalModelId) {
                  // Log a warning if only one part is defined, indicating inconsistent state
-                 console.warn(`[HistoryManager] Inconsistent chat model config for chat ${chatId}. Provider: ${finalProviderId}, Model: ${finalModelName}. Setting chatModelId to undefined.`);
+                 console.warn(`[HistoryManager] Inconsistent chat model config for chat ${chatId}. Provider: ${finalProviderId}, Model: ${finalModelId}. Setting chatModelId to undefined.`);
             }
         }
 

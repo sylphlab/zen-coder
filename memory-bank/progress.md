@@ -14,13 +14,19 @@
     - Basic routing added in `app.tsx` to navigate between the chat view (`/index.html`) and the chat list view (`/chats`).
     - `HeaderControls.tsx` updated with a button to navigate to the chat list view.
     - `MessagesArea.tsx` updated to display messages from the currently active chat session.
-- **Jotai Async Refactor & Model ID Correction (Complete):**
-    - Implemented request/response mechanism between webview and extension host.
-    - Refactored data fetching atoms (`providerStatus`, `availableProviders`, `defaultConfig`, `modelsForProvider`) to use async logic and the request mechanism.
-    - Updated UI components (`ModelSelector`, `HeaderControls`, `SettingPage`, `App`) to use async atoms with `loadable` for loading/error states.
-    - Corrected model ID handling to use separate `providerId` and `modelId` fields across types, components, and handlers.
-    - Removed redundant message handlers (`GetProviderStatusHandler`, etc.) in `extension.ts`.
-    - Added placeholder methods to `AiService` for required request handlers (`getMcpStatuses`, `getAllToolsWithStatus`, `getCombinedCustomInstructions`).
+- **Jotai Async Refactor & Model ID Correction (Complete):** (Details omitted for brevity, see activeContext.md)
+- **TypeScript Error Fixes:** Resolved various TS errors introduced during refactoring.
+- **VS Code Tool Enhancements:**
+    - Added `goToDefinitionTool`.
+    - Added `findReferencesTool`.
+    - Added `renameSymbolTool`.
+    - Added `getConfigurationTool`.
+    - Added `startDebuggingTool`.
+    - Verified `replaceInActiveEditorTool` insertion capability.
+- **UI Improvements:**
+    - Added loading feedback to chat list actions.
+    - **Fixed Model Input Field:** Resolved issue where users couldn't type into the model input field in `ModelSelector.tsx` by correcting the `useEffect` hook's dependencies.
+    - Applied styling adjustments to chat list and main chat view.
 +- **MCP Server Configuration:**
 +    - Defined `zencoder.mcp.servers` setting in `package.json`.
 +    - `AiService.ts` updated to dynamically load MCP servers based on settings.
@@ -93,8 +99,8 @@
     - Chat deletion confirmation dialog verified.
     - `useMessageHandler` hook verified for `loadChatState`.
     - Chat-specific model selection UI verified in `HeaderControls`.
-    - **TODO:** Improve UI feedback during chat creation/deletion.
-    - **TODO:** Style `ChatListPage.tsx`.
+    - UI feedback during chat creation/deletion improved (loading state added).
+    - `ChatListPage.tsx` styling improved.
 - **Refine Backend (Complete):**
     - Default config loading from VS Code settings verified in `HistoryManager`.
     - VS Code settings definitions exist in `package.json`.
@@ -103,14 +109,12 @@
 
 ## What's Left (Other Features/Enhancements)
 - Resume and complete image upload functionality.
-- Implement remaining VS Code tool enhancements (`goToDefinition`, etc.).
-- Confirm `replaceInActiveEditorTool` insertion capability.
-- Test structured output and suggested actions thoroughly.
+- Implement remaining VS Code tool enhancements (debugging tools: stop, step, breakpoints; enhance `runCommandTool`).
+- Test structured output and suggested actions thoroughly (Manual).
 - Improve error handling throughout.
-- Refine UI styling and potentially add animations.
-- Implement placeholder methods in `AiService` (`getMcpStatuses`, `getAllToolsWithStatus`, `getCombinedCustomInstructions`).
-- Verify/update backend handlers (`SetDefaultConfigHandler`, `UpdateChatConfigHandler`) and VS Code settings to use separate `providerId`/`modelId`.
-- Thoroughly test UI interactions, especially model selection and async data loading/error states.
+- Further refine UI styling and potentially add animations.
+- Thoroughly test UI interactions (model selection, async states, etc.) (Manual).
+- Resume and complete image upload functionality (Manual Testing/Debugging).
 
 ## Current Status (Multi-Chat Implementation)
 - Backend services (`HistoryManager`, `AiService`, `StreamProcessor`) and core handlers updated for `chatId`.
@@ -122,15 +126,10 @@
 - Frontend model selection UI updated to reflect active chat config.
 - Backend config loading and usage verified.
 
-## Known Issues / TODOs (Multi-Chat)
-- **Model ID Handling:** Corrected to use separate `providerId` and `modelId`.
-- **Frontend State Hook (`useMessageHandler`):** Verified.
-- **Chat Deletion:** Confirmation dialog verified.
-- **Chat Configuration UI:** Implemented via `HeaderControls`.
-- **Default Config Loading:** Implemented in `HistoryManager`.
-- **`AiService._getProviderInstance`:** Verified.
+## Known Issues / TODOs
+- **Model Input Field (Fixed):** Resolved issue where users couldn't type into the model input field in `ModelSelector.tsx` by correcting the `useEffect` hook's dependencies.
+- **Model ID Strategy (Future):** Plan to refactor `AvailableModel` structure to `{ internal_id, provider_id, display_name, reference_id }` for clarity and robustness. (Recorded in activeContext)
+- **Communication Model (Future):** Plan to refactor communication between Extension Host and Webview to use a Pub/Sub pattern over `postMessage` instead of the current hybrid approach.
 - **Testing:** Multi-chat functionality is largely untested.
-- **TODO:** Improve UI feedback during chat creation/deletion (e.g., loading indicators).
-- **TODO:** Style `ChatListPage.tsx`.
 - **(Previous Known Issues Still Apply where relevant)**
 - **MCP Tool Schema Error:** Believed to be resolved by unifying tool ID format to `mcp_serverName_toolName`. Requires testing.

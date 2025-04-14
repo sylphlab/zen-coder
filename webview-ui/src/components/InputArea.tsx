@@ -5,7 +5,7 @@ import { JSX } from 'preact/jsx-runtime';
 import {
     inputValueAtom,
     isStreamingAtom,
-    activeChatModelNameAtom,
+    activeChatModelIdAtom, // Corrected: Import activeChatModelIdAtom
     selectedImagesAtom
 } from '../store/atoms'; // Import atoms
 
@@ -28,6 +28,7 @@ interface InputAreaProps {
     removeSelectedImage: (id: string) => void;
     handleImageFileChange: (event: JSX.TargetedEvent<HTMLInputElement>) => void;
     handleStopGeneration: () => void; // Add prop for stop handler
+    className?: string; // Add className prop for styling
 }
 
 export const InputArea: FunctionalComponent<InputAreaProps> = ({
@@ -45,7 +46,7 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
     // Read state from atoms
     const [inputValue, setInputValue] = useAtom(inputValueAtom);
     const isStreaming = useAtomValue(isStreamingAtom);
-    const currentModelInput = useAtomValue(activeChatModelNameAtom); // Use derived atom
+    const currentModelInput = useAtomValue(activeChatModelIdAtom); // Corrected: Use activeChatModelIdAtom
     const selectedImages = useAtomValue(selectedImagesAtom);
 
     return (

@@ -11,7 +11,8 @@ import {
     DefaultChatConfig,
     WebviewRequestMessage,
     WebviewResponseMessage,
-    WebviewRequestType
+    WebviewRequestType,
+    ProviderInfoAndStatus // Import missing type
 } from './common/types';
 import { getWebviewContent } from './webview/webviewContent';
 import { HistoryManager } from './historyManager';
@@ -19,6 +20,7 @@ import { StreamProcessor } from './streamProcessor';
 import { ProviderStatusManager } from './ai/providerStatusManager';
 import { ModelResolver } from './ai/modelResolver';
 import { MessageHandler, HandlerContext } from './webview/handlers/MessageHandler';
+import { McpManager } from './ai/mcpManager'; // Import McpManager
 // Import necessary handlers (excluding those replaced by requests)
 import { WebviewReadyHandler } from './webview/handlers/WebviewReadyHandler';
 import { SendMessageHandler } from './webview/handlers/SendMessageHandler';
@@ -52,7 +54,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
     try {
         const historyManagerInstance = new HistoryManager(context);
-        aiServiceInstance = new AiService(context, historyManagerInstance);
+        // Instantiate ProviderStatusManager first
+        const providerStatusManagerInstance = new ProviderStatusManager(context);
+        // Pass ProviderStatusManager to AiService constructor
+        aiServiceInstance = new AiService(context, historyManagerInstance, providerStatusManagerInstance);
         await aiServiceInstance.initialize();
 
         if (!aiServiceInstance) {
@@ -103,9 +108,10 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     private readonly _extensionMode: vscode.ExtensionMode;
     private readonly _aiService: AiService;
     private readonly _historyManager: HistoryManager;
-    private readonly _providerStatusManager: ProviderStatusManager;
+    // private readonly _providerStatusManager: ProviderStatusManager; // Removed, accessed via AiService
     private readonly _modelResolver: ModelResolver;
     private _streamProcessor?: StreamProcessor;
+    private readonly _mcpManager: McpManager; // Add McpManager instance
     private readonly _messageHandlers: Map<string, MessageHandler>;
     private readonly _requestHandlers: { [key in WebviewRequestType]?: (payload?: any, context?: HandlerContext) => Promise<any> };
 
@@ -119,10 +125,16 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._extensionMode = context.extensionMode;
         this._aiService = aiService;
         this._historyManager = historyManager;
-        this._providerStatusManager = new ProviderStatusManager(context, aiService);
-        this._modelResolver = new ModelResolver(context, this._providerStatusManager, aiService);
+        // ProviderStatusManager is now created in activate() and passed to AiService
+        // We get it from AiService if needed, or pass it down if AiService doesn't hold it
+        // Let's assume AiService holds it for now. If not, adjust later.
+        // Remove direct instantiation here.
+        // this._providerStatusManager = new ProviderStatusManager(context, aiService);
+        this._modelResolver = new ModelResolver(context, aiService.providerStatusManager, aiService); // Get manager from AiService
         this._messageHandlers = new Map();
         this._requestHandlers = this._initializeRequestHandlers(); // Initialize request handlers map
+        // Instantiate McpManager, passing context and the postMessage callback
+        this._mcpManager = new McpManager(context, this.postMessageToWebview.bind(this));
         console.log("ZenCoderChatViewProvider constructed.");
     }
 
@@ -130,7 +142,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     private _initializeRequestHandlers(): { [key in WebviewRequestType]?: (payload?: any, context?: HandlerContext) => Promise<any> } {
         // Context is created within _handleWebviewMessage when needed
         return {
-            getProviderStatus: async () => this._providerStatusManager.getProviderStatus(),
+            getProviderStatus: async () => this._aiService.providerStatusManager.getProviderStatus(this._aiService.allProviders, this._aiService.providerMap), // Pass args
             getAvailableProviders: async () => this._modelResolver.getAvailableProviders(),
             getModelsForProvider: async (payload) => this._modelResolver.fetchModelsForProvider(payload?.providerId),
             getDefaultConfig: async () => {
@@ -140,21 +152,18 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                     // Add other defaults later
                 };
             },
-            // TODO: Implement these methods in AiService/McpManager
+            // Correctly implement these handlers
             getMcpConfiguredStatus: async () => {
-                console.warn("Request handler 'getMcpConfiguredStatus' not fully implemented.");
-                // return this._aiService.getMcpStatuses(); // Placeholder
-                return {}; // Return empty object for now
+                // Use the McpManager instance
+                return this._mcpManager.getMcpServerConfiguredStatus();
             },
             getAllToolsStatus: async () => {
-                 console.warn("Request handler 'getAllToolsStatus' not fully implemented.");
-                // return this._aiService.getAllToolsWithStatus(); // Placeholder
-                return {}; // Return empty object for now
+                // Use the AiService instance
+                return this._aiService.getAllToolsWithStatus();
             },
             getCustomInstructions: async () => {
-                 console.warn("Request handler 'getCustomInstructions' not fully implemented.");
-                // return this._aiService.getCombinedCustomInstructions(); // Placeholder
-                return { global: '', project: '', projectPath: null }; // Return empty object for now
+                // Use the AiService instance to get combined instructions
+                return this._aiService.getCombinedCustomInstructions();
             },
         };
     }
@@ -212,7 +221,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             this.postMessageToWebview.bind(this)
         );
         this._registerHandlers(); // Register handlers AFTER stream processor is ready
-        console.log("StreamProcessor instantiated and handlers registered.");
+        this._subscribeToServiceEvents(); // Subscribe to events from backend services
+        console.log("StreamProcessor instantiated, handlers registered, and subscribed to service events.");
 
         webviewView.webview.options = {
             enableScripts: true,
@@ -257,8 +267,9 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             const context: HandlerContext = {
                  aiService: this._aiService,
                  historyManager: this._historyManager,
-                 providerStatusManager: this._providerStatusManager,
+                 providerStatusManager: this._aiService.providerStatusManager, // Get from AiService
                  modelResolver: this._modelResolver,
+                 mcpManager: this._mcpManager, // Add McpManager instance
                  postMessage: this.postMessageToWebview.bind(this),
                  extensionContext: this._context
             };
@@ -293,8 +304,9 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             const context: HandlerContext = {
                 aiService: this._aiService,
                 historyManager: this._historyManager,
-                providerStatusManager: this._providerStatusManager,
+                providerStatusManager: this._aiService.providerStatusManager, // Get from AiService
                 modelResolver: this._modelResolver,
+                mcpManager: this._mcpManager, // Add McpManager instance
                 postMessage: this.postMessageToWebview.bind(this),
                 extensionContext: this._context
             };
@@ -318,13 +330,34 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
 
     // --- Post Message Helper ---
     public postMessageToWebview(message: ExtensionMessageType) {
+        console.log(`[Extension] Attempting to post message: ${message.type}. View exists: ${!!this._view}`); // DEBUG LOG
         if (this._view) {
+            console.log(`[Extension] Posting message: ${message.type}`, message); // DEBUG LOG
             this._view.webview.postMessage(message);
         } else {
-            console.warn("Attempted to post message to unresolved webview view:", message.type);
+            console.warn(`[Extension] Failed to post message: Webview view is not resolved. Message type: ${message.type}`);
         }
     }
-}
+    // --- Subscribe to Backend Service Events ---
+    private _subscribeToServiceEvents(): void {
+        // Subscribe to Provider Status Changes
+        this._aiService.eventEmitter.on('providerStatusChanged', (status: ProviderInfoAndStatus[]) => {
+            console.log('[Extension] Received providerStatusChanged event from AiService.');
+            this.postMessageToWebview({
+                type: 'pushUpdateProviderStatus', // New message type for push update
+                payload: status
+            });
+        });
+
+        // TODO: Subscribe to Tool Status Changes from AiService/ToolManager
+        // this._aiService.eventEmitter.on('toolsStatusChanged', (status: AllToolsStatusPayload) => { ... });
+
+        // TODO: Subscribe to MCP Server Status Changes from McpManager
+        // this._mcpManager.eventEmitter.on('serversStatusChanged', (status: McpConfiguredStatusPayload) => { ... });
+
+        console.log('[Extension] Subscribed to backend service events.');
+    }
+} // End of ZenCoderChatViewProvider class
 
 // --- Deactivation Function ---
 export function deactivate() {}

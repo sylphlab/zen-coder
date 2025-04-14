@@ -19,6 +19,7 @@ interface MessagesAreaProps {
     messagesEndRef: Ref<HTMLDivElement>;
     onCopyMessage: (messageId: string) => void; // Add copy handler prop
     onDeleteMessage: (messageId: string) => void; // Add delete handler prop
+    className?: string; // Add className prop for styling
 }
 
 // Moved renderContentPart logic here
@@ -118,9 +119,9 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
             {messages.map((msg) => (
                 <> {/* Return a fragment */}
                     {/* Add group class for hover effects - Comment now inside fragment */}
-                    <div key={msg.id} class={`message group relative flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div key={msg.id} class={`message group relative flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     {/* Action buttons container - appears on hover */}
-                    <div class={`message-actions absolute top-0 mx-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${msg.sender === 'user' ? 'right-full mr-1' : 'left-full ml-1'}`}>
+                    <div class={`message-actions absolute top-0 mx-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${msg.role === 'user' ? 'right-full mr-1' : 'left-full ml-1'}`}>
                         {/* Copy Button */}
                         <button
                             onClick={() => onCopyMessage(msg.id)}
@@ -143,12 +144,12 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
                         </button>
                     </div>
                     {/* Original message content */}
-                    <div class={`message-content p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
+                    <div class={`message-content p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
                         {/* Removed Thinking Process rendering */}
                         {/* Render Main Content Parts */}
                         {Array.isArray(msg.content) ? msg.content.map(renderContentPart) : null}
                         {/* Render Suggested Actions */}
-                        {msg.sender === 'assistant' && suggestedActionsMap[msg.id] && (
+                        {msg.role === 'assistant' && suggestedActionsMap[msg.id] && (
                             <div class="suggested-actions mt-2 pt-2 border-t border-gray-300 dark:border-gray-600 flex flex-wrap gap-2">
                                 {suggestedActionsMap[msg.id].map((action, actionIndex) => (
                                     <button

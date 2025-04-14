@@ -48,7 +48,8 @@ export class GetCustomInstructionsHandler implements MessageHandler {
         // This handler re-uses 'settingsPageReady', so we need to trigger the tool status fetch here as well.
         // Ideally, 'settingsPageReady' might be split or handled differently, but this works for now.
         try {
-            const allToolsStatus = await this._getAllToolsStatus(context); // Use helper
+            // Directly call the method on AiService
+            const allToolsStatus = await context.aiService.getAllToolsWithStatus();
             context.postMessage({ type: 'updateAllToolsStatus', payload: allToolsStatus });
             console.log("[GetCustomInstructionsHandler] Sent all tools status to webview:", Object.keys(allToolsStatus).length, "tools");
         } catch (error) {
@@ -57,49 +58,5 @@ export class GetCustomInstructionsHandler implements MessageHandler {
         }
     }
 
-    // Helper function copied from extension.ts to get tool status
-    // TODO: Refactor this into a shared utility or service
-    private async _getAllToolsStatus(context: HandlerContext): Promise<{ [toolIdentifier: string]: { description?: string, enabled: boolean, type: 'standard' | 'mcp', serverName?: string } }> {
-        const allToolsStatus: { [toolIdentifier: string]: { description?: string, enabled: boolean, type: 'standard' | 'mcp', serverName?: string } } = {};
-        const config = vscode.workspace.getConfiguration('zencoder.tools');
-        const mcpOverrides = context.extensionContext.globalState.get<{ [toolId: string]: boolean }>(MCP_TOOL_OVERRIDES_KEY, {});
-
-        // 1. Get Standard Tools Status
-        const standardToolNames = Object.keys(allTools) as ToolName[];
-        standardToolNames.forEach(toolName => {
-            const toolDefinition = allTools[toolName] as Tool | undefined;
-            if (toolDefinition) {
-                const isEnabled = config.get<boolean>(`${toolName}.enabled`, true); // Get enabled status from config
-                allToolsStatus[toolName] = {
-                    description: toolDefinition.description,
-                    enabled: isEnabled,
-                    type: 'standard'
-                };
-            }
-        });
-
-        // 2. Get MCP Tools Status (from McpManager and overrides)
-        // Need access to AiService/McpManager here. Assuming HandlerContext provides it.
-        const mcpServersStatus = context.aiService.getMcpServerConfiguredStatus();
-        for (const [serverName, serverStatus] of Object.entries(mcpServersStatus)) {
-            if (serverStatus.isConnected && serverStatus.tools) {
-                for (const [mcpToolName, mcpToolDefinition] of Object.entries(serverStatus.tools)) {
-                    const toolIdentifier = `${serverName}/${mcpToolName}`;
-                    const isEnabled = mcpOverrides[toolIdentifier] !== false;
-                    allToolsStatus[toolIdentifier] = {
-                        description: mcpToolDefinition.description,
-                        enabled: isEnabled,
-                        type: 'mcp',
-                        serverName: serverName
-                    };
-                }
-            }
-        }
-        return allToolsStatus;
-    }
 }
-
-// Constants needed by the helper function (copy from extension.ts or import if refactored)
-import { allTools, ToolName } from '../../tools'; // Corrected path
-import { Tool } from 'ai';
-const MCP_TOOL_OVERRIDES_KEY = 'mcpToolEnabledOverrides';
+// Removed outdated helper function and its imports

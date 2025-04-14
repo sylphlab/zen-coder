@@ -9,7 +9,7 @@ import {
     // Removed: providerModelsMapAtom,
     // Removed: activeChatCombinedModelIdAtom,
     activeChatProviderIdAtom, // Import separate provider ID
-    activeChatModelNameAtom,  // Import separate model name/ID
+    activeChatModelIdAtom,  // Corrected: Import activeChatModelIdAtom
     activeChatMessagesAtom
 } from '../store/atoms';
 // Define the extended model type expected from the hook
@@ -32,7 +32,7 @@ export const HeaderControls: FunctionalComponent<HeaderControlsProps> = ({
     const availableProviders = useAtomValue(availableProvidersAtom);
     // Removed: const providerModelsMap = useAtomValue(providerModelsMapAtom); // Not needed directly here
     const selectedProviderId = useAtomValue(activeChatProviderIdAtom); // Read provider ID
-    const selectedModelId = useAtomValue(activeChatModelNameAtom);    // Read model name/ID
+    const selectedModelId = useAtomValue(activeChatModelIdAtom);    // Corrected: Read model ID
     const activeChatMessages = useAtomValue(activeChatMessagesAtom);
     const hasMessages = activeChatMessages.length > 0; // Derive hasMessages
     return (

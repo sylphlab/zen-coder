@@ -38,7 +38,7 @@ export class ModelResolver {
      */
     public async getAvailableProviders(): Promise<AvailableModel[]> {
         const availableProviders: AvailableModel[] = [];
-        const providerInfoList = await this.providerStatusManager.getProviderStatus();
+        const providerInfoList = await this.providerStatusManager.getProviderStatus(this._aiService.allProviders, this._aiService.providerMap);
 
         console.log(`[ModelResolver] Getting available providers based on status for ${providerInfoList.length} providers.`);
 
@@ -78,11 +78,31 @@ export class ModelResolver {
      * @param providerId The ID of the provider.
      * @returns An array of ModelDefinition objects or undefined if not cached.
      */
-    public getCachedModelsForProvider(providerId: string): ModelDefinition[] | undefined {
+    public getCachedModelsForProvider(providerId: string): AvailableModel[] | undefined {
         const cacheKey = `${MODEL_CACHE_PREFIX}${providerId}`;
-        const cachedData = this.context.globalState.get<ModelDefinition[]>(cacheKey);
-        console.log(`[ModelResolver] Cache check for ${providerId}: ${cachedData ? `HIT (${cachedData.length} models)` : 'MISS'}`);
-        return cachedData;
+        const cachedDefinitions = this.context.globalState.get<ModelDefinition[]>(cacheKey);
+        console.log(`[ModelResolver] Cache check for ${providerId}: ${cachedDefinitions ? `HIT (${cachedDefinitions.length} models)` : 'MISS'}`);
+
+        if (!cachedDefinitions) {
+            return undefined;
+        }
+
+        // Convert cached ModelDefinition[] to AvailableModel[]
+        const provider = this._aiService.providerMap.get(providerId);
+        if (!provider) {
+             console.warn(`[ModelResolver] Provider implementation not found for ID '${providerId}' when converting cached models. Returning raw definitions.`);
+             // Fallback or return undefined? Let's return undefined for consistency.
+             return undefined;
+        }
+
+        const availableModels: AvailableModel[] = cachedDefinitions.map(def => ({
+            id: def.id,
+            name: def.name,
+            providerId: provider.id,
+            providerName: provider.name,
+        }));
+
+        return availableModels;
     }
 
     /**
@@ -90,12 +110,12 @@ export class ModelResolver {
      * @param providerId The ID of the provider.
      * @returns A promise resolving to an array of ModelDefinition objects.
      */
-    public async fetchModelsForProvider(providerId: string): Promise<ModelDefinition[]> {
+    public async fetchModelsForProvider(providerId: string): Promise<AvailableModel[]> { // Return AvailableModel[]
         const provider = this._aiService.providerMap.get(providerId);
         if (!provider) {
             console.error(`[ModelResolver] Provider implementation not found for ID '${providerId}' when fetching models.`);
             // Return empty list instead of throwing to avoid breaking UI completely if provider disappears
-            return [];
+            return []; // Return empty AvailableModel array
             // throw new Error(`Provider not found: ${providerId}`);
         }
 
@@ -105,23 +125,33 @@ export class ModelResolver {
             apiKey = await provider.getApiKey(this.context.secrets);
             if (!apiKey) {
                  console.warn(`[ModelResolver] Cannot fetch models for ${provider.name}: API key required but not found/retrieved.`);
-                 return []; // Return empty, don't update cache on key error
+                 return []; // Return empty AvailableModel array, don't update cache on key error
             }
         }
 
         try {
-            const models = await provider.getAvailableModels(apiKey);
-            console.log(`[ModelResolver] Successfully fetched ${models.length} fresh models from ${provider.name}.`);
-            // Update cache
+            const modelDefinitions = await provider.getAvailableModels(apiKey);
+            console.log(`[ModelResolver] Successfully fetched ${modelDefinitions.length} fresh model definitions from ${provider.name}.`);
+
+            // Convert ModelDefinition[] to AvailableModel[] and add provider info
+            const availableModels: AvailableModel[] = modelDefinitions.map(def => ({
+                id: def.id, // Use the ID from the definition
+                name: def.name,
+                providerId: provider.id, // Add providerId
+                providerName: provider.name, // Add providerName
+            }));
+
+            // Update cache with ModelDefinition[] (or AvailableModel[] if cache format needs update)
+            // Let's keep caching ModelDefinition[] for now to minimize changes
             const cacheKey = `${MODEL_CACHE_PREFIX}${providerId}`;
-            // Use await for the update operation
-            await this.context.globalState.update(cacheKey, models);
+            await this.context.globalState.update(cacheKey, modelDefinitions); // Cache original definitions
             console.log(`[ModelResolver] Updated cache for ${providerId}.`);
-            return models;
+
+            return availableModels; // Return the enriched AvailableModel array
         } catch (error) {
             console.error(`[ModelResolver] Failed to fetch fresh models for provider ${provider.name}:`, error);
             // Return empty list on error, don't update cache
-            return [];
+            return []; // Return empty AvailableModel array
         }
     }
 }

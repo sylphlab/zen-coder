@@ -12,7 +12,8 @@ export class GetMcpConfiguredStatusHandler implements MessageHandler {
         console.log(`[Handler] Handling ${this.messageType}`);
         try {
             // Directly call the method on the aiService instance provided in the context
-            const configuredStatus = context.aiService.getMcpServerConfiguredStatus();
+            // Call the correct method on AiService which delegates to McpManager
+            const configuredStatus = context.aiService.getMcpStatuses();
             console.log(`[Handler] Fetched configured status for ${Object.keys(configuredStatus).length} MCP servers.`);
 
             // Send the status back to the webview

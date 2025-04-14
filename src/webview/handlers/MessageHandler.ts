@@ -3,6 +3,7 @@ import { AiService } from '../../ai/aiService';
 import { HistoryManager } from '../../historyManager';
 import { ProviderStatusManager } from '../../ai/providerStatusManager';
 import { ModelResolver } from '../../ai/modelResolver';
+import { McpManager } from '../../ai/mcpManager'; // Import McpManager
 
 /**
  * Defines the context required by message handlers.
@@ -13,6 +14,7 @@ export interface HandlerContext {
     historyManager: HistoryManager;
     providerStatusManager: ProviderStatusManager; // For getting provider status
     modelResolver: ModelResolver; // For resolving available models
+    mcpManager: McpManager; // Add McpManager
     postMessage: (message: any) => void; // Function to post messages back to the webview
     extensionContext: vscode.ExtensionContext; // Provide full context if needed by handlers
 }

@@ -24,8 +24,10 @@ export class SetApiKeyHandler implements MessageHandler {
                     console.log(`[SetApiKeyHandler] API Key set request processed for ${providerKey}`);
 
                     // Refresh and send updated provider status list using ProviderStatusManager
-                    const updatedStatusList = await context.providerStatusManager.getProviderStatus();
-                    context.postMessage({ type: 'providerStatus', payload: updatedStatusList });
+                    // No need to manually get/send status here anymore.
+                    // AiService.setApiKey triggers the event emitter, which updates the webview atom.
+                    // const updatedStatusList = await context.providerStatusManager.getProviderStatus(context.aiService.allProviders, context.aiService.providerMap);
+                    // context.postMessage({ type: 'providerStatus', payload: updatedStatusList }); // REMOVED
 
                     // Refresh available *providers* as a new one might be available
                     const currentProviders = await context.modelResolver.getAvailableProviders();

@@ -3,8 +3,7 @@ import { MessageHandler } from './MessageHandler';
 import { DefaultChatConfig } from '../../common/types'; // Import the type
 
 export class SetDefaultConfigHandler implements MessageHandler {
-    public readonly messageType = 'setDefaultConfig'; // Add missing property
-    // public readonly command = 'setDefaultConfig'; // Remove redundant property if messageType is used
+    public readonly messageType = 'setDefaultConfig';
 
     public async handle(payload: any): Promise<void> {
         if (!payload || typeof payload.config !== 'object' || payload.config === null) {
@@ -17,12 +16,17 @@ export class SetDefaultConfigHandler implements MessageHandler {
         console.log('[SetDefaultConfigHandler] Received request to update default config:', newConfig);
 
         try {
+            // Target the correct configuration section 'zencoder.defaults'
             const config = vscode.workspace.getConfiguration('zencoder.defaults');
             const updates: Promise<void>[] = [];
 
             // Update only the settings that are present in the payload
-            if (newConfig.defaultChatModelId !== undefined) {
-                updates.push(Promise.resolve(config.update('chatModelId', newConfig.defaultChatModelId, vscode.ConfigurationTarget.Global)));
+            // Use correct property names and setting IDs
+            if (newConfig.defaultProviderId !== undefined) {
+                updates.push(Promise.resolve(config.update('defaultProviderId', newConfig.defaultProviderId, vscode.ConfigurationTarget.Global)));
+            }
+            if (newConfig.defaultModelId !== undefined) {
+                updates.push(Promise.resolve(config.update('defaultModelId', newConfig.defaultModelId, vscode.ConfigurationTarget.Global)));
             }
             if (newConfig.defaultImageModelId !== undefined) {
                 updates.push(Promise.resolve(config.update('imageModelId', newConfig.defaultImageModelId, vscode.ConfigurationTarget.Global)));

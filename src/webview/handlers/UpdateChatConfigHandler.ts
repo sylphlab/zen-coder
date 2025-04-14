@@ -31,7 +31,7 @@ export class UpdateChatConfigHandler implements MessageHandler {
         // Validate the config object structure minimally (more robust validation can be added)
         const validConfig: Partial<ChatConfig> = {};
         if (config.providerId !== undefined) { validConfig.providerId = config.providerId; }
-        if (config.modelName !== undefined) { validConfig.modelName = config.modelName; }
+        if (config.modelId !== undefined) { validConfig.modelId = config.modelId; } // Check for modelId instead of modelName
         if (config.imageModelId !== undefined) { validConfig.imageModelId = config.imageModelId; }
         if (config.optimizeModelId !== undefined) { validConfig.optimizeModelId = config.optimizeModelId; }
         if (config.useDefaults !== undefined) { validConfig.useDefaults = config.useDefaults; }
