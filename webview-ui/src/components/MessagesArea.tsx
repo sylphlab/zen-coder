@@ -1,20 +1,22 @@
 import { FunctionalComponent } from 'preact';
-import { useAtomValue } from 'jotai'; // Import Jotai hook
+// Removed Jotai: import { useAtomValue } from 'jotai';
 import { Ref } from 'preact'; // Import Ref from preact
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { SuggestedAction } from '../app'; // Keep SuggestedAction if defined there
-import { UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, UiImagePart } from '../../../src/common/types';
+// Corrected import for SuggestedAction:
+import { SuggestedAction, UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, UiImagePart } from '../../../src/common/types';
 import {
-    activeChatMessagesAtom,
+    // Removed: activeChatMessagesAtom,
     suggestedActionsMapAtom,
     isStreamingAtom
 } from '../store/atoms'; // Import atoms
 // Removed DisplayMessage interface definition below
 interface MessagesAreaProps {
-    // Removed props: messages, suggestedActionsMap, isStreaming
+    messages: UiMessage[]; // Add messages prop
+    suggestedActionsMap: Record<string, SuggestedAction[]>; // Added prop
+    isStreaming: boolean; // Added prop
     handleSuggestedActionClick: (action: SuggestedAction) => void;
     messagesEndRef: Ref<HTMLDivElement>;
     onCopyMessage: (messageId: string) => void; // Add copy handler prop
@@ -108,12 +110,12 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
     handleSuggestedActionClick,
     messagesEndRef,
     onCopyMessage, // Destructure new props
-    onDeleteMessage
+    onDeleteMessage,
+    messages, // Destructure messages prop
+    suggestedActionsMap, // Use prop
+    isStreaming // Use prop
 }) => {
-    // Read state from atoms
-    const messages = useAtomValue(activeChatMessagesAtom);
-    const suggestedActionsMap = useAtomValue(suggestedActionsMapAtom);
-    const isStreaming = useAtomValue(isStreamingAtom);
+    // Removed Jotai state reading
     return (
         <div class="messages-area flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((msg) => (

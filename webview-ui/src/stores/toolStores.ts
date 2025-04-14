@@ -14,4 +14,23 @@ export const $allToolsStatus = createFetcherStore<AllToolsStatusInfo | null>( //
   }
 );
 
+// --- Mutation Store for Tool Authorization ---
+import { createMutationStore } from './utils/createMutationStore';
+import { ToolAuthorizationConfig } from '../../../src/common/types'; // Import the config type
+import { requestData } from '../utils/communication'; // Add missing import
+
+type SetToolAuthPayload = { config: Partial<ToolAuthorizationConfig> }; // Allow partial updates
+
+export const $setToolAuthorization = createMutationStore<
+  undefined, // No optimistic update for now
+  any,
+  SetToolAuthPayload,
+  void // Assuming no return value needed
+>({
+  performMutation: async (payload: SetToolAuthPayload) => {
+    await requestData<void>('setToolAuthorization', payload);
+    // Relies on backend push via $allToolsStatus update
+  },
+});
+
 // Potential future atoms related to tools can be added here.

@@ -1,4 +1,4 @@
-import { atom } from 'nanostores';
+import { map } from 'nanostores'; // Removed MapStore import
 import { ChatSession, DefaultChatConfig } from '../../../src/common/types'; // Removed non-existent Payload types
 import { createFetcherStore } from './utils/createFetcherStore'; // Renamed import
 import { createMutationStore } from './utils/createMutationStore'; // Correct import name
@@ -22,21 +22,10 @@ export const $chatSessions = createFetcherStore<ChatSession[], ChatSessionsPaylo
     initialData: [], // Start with an empty array before the first fetch
     // Transform the raw { sessions: [...] } payload into just the array
     transformFetchResponse: (payload) => payload?.sessions ?? [],
-  }
+  } // Added missing closing brace and parenthesis
 );
 
-// Potential future atoms related to chat state can be added here.
-// For example:
-/**
- * Atom holding the ID of the currently active chat session.
- * Null means no chat is active (e.g., showing the chat list).
- */
-export const activeChatIdAtom = atom<string | null>(null);
-
-// We might need a way to update the active chat ID based on backend communication
-// (e.g., when a new chat is created or selected).
-// For now, components can directly use activeChatIdAtom.set() if needed,
-// but a dedicated function might be better later.
+// Removed activeChatIdAtom definition and related comments.
 
 /**
  * Atom that fetches and subscribes to the default chat configuration.
@@ -50,10 +39,6 @@ export const $defaultConfig = createFetcherStore<DefaultChatConfig | null>( // R
     // No transformer needed as the fetch response is the correct type
   }
 );
-
-
-
-
 
 // --- Mutation Stores for Chat Sessions ---
 
@@ -71,7 +56,6 @@ export const $createChat = createMutationStore< // Export the store directly
     if (!newSession) throw new Error("Create chat failed: Backend didn't return a session.");
     return newSession;
   },
-  // Add explicit types for parameters
   getOptimisticUpdate: (_payload: void, currentState: ChatSession[] | null) => {
     const tempId = `temp_${Date.now()}`;
     const tempSession: ChatSession = {
@@ -83,15 +67,13 @@ export const $createChat = createMutationStore< // Export the store directly
       history: [],
     };
     return {
-      optimisticState: [...(currentState ?? []), tempSession], // Add temp session
-      revertState: currentState,                             // Revert to original state on failure
+      optimisticState: [...(currentState ?? []), tempSession],
+      revertState: currentState,
       tempId: tempId
     };
   },
-  // Add explicit types for parameters
   applyMutationResult: (newSession: CreateChatResult, currentState: ChatSession[] | null, tempId?: string) => {
-    // Replace the temporary session with the real one from the backend
-    return (currentState ?? []).map((session: ChatSession) => // Add type for session
+    return (currentState ?? []).map((session: ChatSession) =>
       session.id === tempId ? newSession : session
     );
   }
@@ -110,26 +92,210 @@ export const $deleteChat = createMutationStore< // Export the store directly
   targetAtom: $chatSessions, // Renamed targetAtom
   performMutation: async (chatId: DeleteChatPayload) => {
     await requestData<void>('deleteChat', { chatId });
-    // Check if the currently active chat is being deleted
-    if (activeChatIdAtom.get() === chatId) {
-        console.log("[deleteChatSessionAction] Active chat deleted, clearing activeChatIdAtom.");
-        activeChatIdAtom.set(null); // Clear active chat ID if it was the one deleted
-    // Optionally navigate away - router.open('/') - might be better handled in component effect
-    }
+    // Logic to handle active chat ID reset was removed as the atom is gone.
+    // Components should react to changes in $chatSessions or route parameters.
     return { deletedId: chatId };
   },
-  // Add explicit types for parameters
   getOptimisticUpdate: (chatId: DeleteChatPayload, currentState: ChatSession[] | null) => {
     return {
-      optimisticState: (currentState ?? []).filter(session => session.id !== chatId), // Remove immediately
+      optimisticState: (currentState ?? []).filter(session => session.id !== chatId),
       revertState: currentState
     };
   },
-  // Add explicit types for parameters
   applyMutationResult: (result: DeleteChatResult, currentState: ChatSession[] | null) => {
-    // Ensure the session is removed (might be redundant if optimistic is reliable, but safe to include)
-    return (currentState ?? []).filter((session: ChatSession) => session.id !== result.deletedId); // Add type for session
+    return (currentState ?? []).filter((session: ChatSession) => session.id !== result.deletedId);
   }
 });
 
 // TODO: Add updateChatSessionAction if needed
+
+// NOTE: Need to re-import these types after the store definitions
+// because the previous import statement was removed by mistake in an earlier step
+import { UiMessage, UiMessageContentPart, ChatConfig } from '../../../src/common/types';
+
+// --- Mutation Stores for Chat Messages ---
+
+// Send Message
+type SendMessagePayload = {
+    chatId: string;
+    content: UiMessageContentPart[];
+    providerId?: string;
+    modelId?: string;
+};
+type SendMessageResult = void;
+
+const createOptimisticUserMessage = (chatId: string, content: UiMessageContentPart[]): UiMessage => ({
+    id: `temp_user_${Date.now()}`,
+    role: 'user',
+    content: content,
+    timestamp: Date.now(),
+});
+
+export const $sendMessage = createMutationStore<
+  typeof $chatSessions,
+  ChatSession[],
+  SendMessagePayload,
+  SendMessageResult
+>({
+  targetAtom: $chatSessions,
+  performMutation: async (payload: SendMessagePayload) => {
+    await requestData<void>('sendMessage', payload);
+  },
+  getOptimisticUpdate: (payload: SendMessagePayload, currentState: ChatSession[] | null) => {
+    const { chatId, content } = payload;
+    const userMessage = createOptimisticUserMessage(chatId, content);
+    const updatedSessions = (currentState ?? []).map(session => {
+      if (session.id === chatId) {
+        return {
+          ...session,
+          history: [...session.history, userMessage],
+          lastModified: Date.now(),
+        };
+      }
+      return session;
+    });
+    return {
+      optimisticState: updatedSessions,
+      revertState: currentState,
+    };
+  },
+});
+
+
+// Delete Message
+type DeleteMessagePayload = { chatId: string; messageId: string };
+type DeleteMessageResult = { chatId: string; deletedMessageId: string };
+export const $deleteMessage = createMutationStore<
+    typeof $chatSessions,
+    ChatSession[],
+    DeleteMessagePayload,
+    DeleteMessageResult
+>({
+    targetAtom: $chatSessions,
+    performMutation: async (payload: DeleteMessagePayload) => {
+        await requestData<void>('deleteMessage', payload);
+        return { chatId: payload.chatId, deletedMessageId: payload.messageId };
+    },
+    getOptimisticUpdate: (payload: DeleteMessagePayload, currentState: ChatSession[] | null) => {
+        const { chatId, messageId } = payload;
+        const updatedSessions = (currentState ?? []).map(session => {
+            if (session.id === chatId) {
+                return {
+                    ...session,
+                    history: session.history.filter(msg => msg.id !== messageId),
+                    lastModified: Date.now(),
+                };
+            }
+            return session;
+        });
+        return {
+            optimisticState: updatedSessions,
+            revertState: currentState,
+        };
+    },
+    applyMutationResult: (result: DeleteMessageResult, currentState: ChatSession[] | null) => {
+        return (currentState ?? []).map(session => {
+            if (session.id === result.chatId) {
+                 return {
+                    ...session,
+                    history: session.history.filter(msg => msg.id !== result.deletedMessageId)
+                 };
+            }
+            return session;
+        });
+    }
+});
+
+// Clear Chat History
+type ClearHistoryPayload = { chatId: string };
+type ClearHistoryResult = { chatId: string };
+export const $clearChatHistory = createMutationStore<
+    typeof $chatSessions,
+    ChatSession[],
+    ClearHistoryPayload,
+    ClearHistoryResult
+>({
+    targetAtom: $chatSessions,
+    performMutation: async (payload: ClearHistoryPayload) => {
+        await requestData<void>('clearChatHistory', payload);
+        return { chatId: payload.chatId };
+    },
+    getOptimisticUpdate: (payload: ClearHistoryPayload, currentState: ChatSession[] | null) => {
+        const { chatId } = payload;
+        const updatedSessions = (currentState ?? []).map(session => {
+            if (session.id === chatId) {
+                return { ...session, history: [], lastModified: Date.now() };
+            }
+            return session;
+        });
+        return { optimisticState: updatedSessions, revertState: currentState };
+    },
+    applyMutationResult: (result: ClearHistoryResult, currentState: ChatSession[] | null) => {
+        return (currentState ?? []).map(session => {
+            if (session.id === result.chatId) {
+                 return { ...session, history: [] };
+            }
+            return session;
+        });
+    }
+});
+
+// Execute Tool Action
+type ExecuteToolActionPayload = { toolName: string; args: any };
+type ExecuteToolActionResult = any;
+export const $executeToolAction = createMutationStore<
+    undefined, any, ExecuteToolActionPayload, ExecuteToolActionResult
+>({
+    performMutation: async (payload: ExecuteToolActionPayload) => {
+        return await requestData<ExecuteToolActionResult>('executeToolAction', payload);
+    },
+});
+
+// Stop Generation
+type StopGenerationResult = void;
+export const $stopGeneration = createMutationStore<
+    undefined, any, void, StopGenerationResult
+>({
+    performMutation: async () => {
+        await requestData<void>('stopGeneration');
+    },
+});
+
+// Update Chat Config
+type UpdateChatConfigPayload = { chatId: string; config: Partial<ChatConfig> };
+type UpdateChatConfigResult = { chatId: string; newConfig: ChatConfig };
+export const $updateChatConfig = createMutationStore<
+    typeof $chatSessions,
+    ChatSession[],
+    UpdateChatConfigPayload,
+    UpdateChatConfigResult
+>({
+    targetAtom: $chatSessions,
+    performMutation: async (payload: UpdateChatConfigPayload) => {
+        const result = await requestData<{ config: ChatConfig }>('updateChatConfig', payload);
+        if (!result || !result.config) throw new Error('Update chat config failed: Invalid response from backend.');
+        return { chatId: payload.chatId, newConfig: result.config };
+    },
+    getOptimisticUpdate: (payload: UpdateChatConfigPayload, currentState: ChatSession[] | null) => {
+        const { chatId, config: configUpdate } = payload;
+        const updatedSessions = (currentState ?? []).map(session => {
+            if (session.id === chatId) {
+                return {
+                    ...session,
+                    config: { ...session.config, ...configUpdate },
+                    lastModified: Date.now(),
+                };
+            }
+            return session;
+        });
+        return { optimisticState: updatedSessions, revertState: currentState };
+    },
+    applyMutationResult: (result: UpdateChatConfigResult, currentState: ChatSession[] | null) => {
+        return (currentState ?? []).map(session => {
+            if (session.id === result.chatId) {
+                 return { ...session, config: result.newConfig };
+            }
+            return session;
+        });
+    }
+});

@@ -1,13 +1,6 @@
 import { FunctionalComponent } from 'preact';
 import { Ref } from 'preact';
-import { useAtom, useAtomValue } from 'jotai'; // Import Jotai hooks
 import { JSX } from 'preact/jsx-runtime';
-import {
-    inputValueAtom,
-    isStreamingAtom,
-    activeChatModelIdAtom, // Corrected: Import activeChatModelIdAtom
-    selectedImagesAtom
-} from '../store/atoms'; // Import atoms
 
 // Interface for selected image state (can be moved to common types)
 export interface SelectedImage { // Ensure this is exported
@@ -18,39 +11,49 @@ export interface SelectedImage { // Ensure this is exported
 }
 
 interface InputAreaProps {
-    // Removed state props: inputValue, setInputValue, handleInputChange, isStreaming, currentModelInput, selectedImages
+    // State props passed down from parent (ChatView)
+    inputValue: string;
+    setInputValue: (value: string) => void;
+    isStreaming: boolean;
+    selectedImages: SelectedImage[];
+
+    // Event handlers passed down
     handleKeyDown: (e: KeyboardEvent) => void;
     handleSend: () => void;
-    // Kept image upload related props
+    handleStopGeneration: () => void;
+
+    // Image upload hook props passed down
     setSelectedImages: (images: SelectedImage[] | ((prev: SelectedImage[]) => SelectedImage[])) => void;
     fileInputRef: Ref<HTMLInputElement>;
     triggerImageUpload: () => void;
     removeSelectedImage: (id: string) => void;
     handleImageFileChange: (event: JSX.TargetedEvent<HTMLInputElement>) => void;
-    handleStopGeneration: () => void; // Add prop for stop handler
-    className?: string; // Add className prop for styling
+
+    // Other props
+    className?: string;
+    currentModelId: string | null;
 }
 
 export const InputArea: FunctionalComponent<InputAreaProps> = ({
-    // Removed state props
+    // Destructure all props
+    inputValue,
+    setInputValue,
+    isStreaming,
+    selectedImages,
     handleKeyDown,
     handleSend,
-    // Kept image upload related props
-    setSelectedImages,
+    handleStopGeneration,
+    setSelectedImages, // Note: This comes from the useImageUpload hook, not local state
     fileInputRef,
     triggerImageUpload,
     removeSelectedImage,
     handleImageFileChange,
-    handleStopGeneration
+    className,
+    currentModelId
 }) => {
-    // Read state from atoms
-    const [inputValue, setInputValue] = useAtom(inputValueAtom);
-    const isStreaming = useAtomValue(isStreamingAtom);
-    const currentModelInput = useAtomValue(activeChatModelIdAtom); // Corrected: Use activeChatModelIdAtom
-    const selectedImages = useAtomValue(selectedImagesAtom);
 
     return (
-        <div class="input-area p-2 border-t border-gray-300 dark:border-gray-700 flex flex-col">
+        <div class={`input-area p-2 border-t border-gray-300 dark:border-gray-700 flex flex-col ${className ?? ''}`}>
             {/* Selected Images Preview Area */}
             {selectedImages.length > 0 && (
                 <div class="selected-images-preview mb-2 p-2 border border-dashed border-gray-400 dark:border-gray-600 rounded flex flex-wrap gap-2">
@@ -82,7 +85,7 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
                 {/* Image Upload Button */}
                 <button
                     onClick={triggerImageUpload}
-                    disabled={isStreaming || !currentModelInput}
+                    disabled={isStreaming || !currentModelId} // Use prop
                     title="Attach Image"
                     class="p-2 mr-2 border rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -93,22 +96,22 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
                 </button>
                 {/* Text Input */}
                 <textarea
-                    value={inputValue}
+                    value={inputValue} // Use prop
                     onInput={(e) => {
                         const target = e.currentTarget;
                         target.style.height = 'auto';
                         target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
-                        setInputValue(e.currentTarget.value); // Use atom setter directly
+                        setInputValue(e.currentTarget.value); // Use prop setter
                     }}
                     onKeyDown={handleKeyDown}
-                    placeholder={selectedImages.length > 0 ? "Add a caption or message..." : "Type your message..."}
+                    placeholder={selectedImages.length > 0 ? "Add a caption or message..." : "Type your message..."} // Use prop
                     rows={1}
                     style={{ minHeight: '40px', maxHeight: '120px' }}
-                    disabled={isStreaming || !currentModelInput}
+                    disabled={isStreaming || !currentModelId} // Use prop
                     class="flex-1 p-2 border rounded bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 resize-none mr-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
                 {/* Send/Stop Buttons */}
-                {isStreaming ? (
+                {isStreaming ? ( // Use prop
                     <button
                         onClick={handleStopGeneration}
                         class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 self-end"
@@ -122,7 +125,7 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
                 ) : (
                     <button
                         onClick={handleSend}
-                        disabled={(!inputValue.trim() && selectedImages.length === 0) || !currentModelInput}
+                        disabled={(!inputValue.trim() && selectedImages.length === 0) || !currentModelId} // Use prop for inputValue & selectedImages
                         class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed self-end"
                     >
                         Send

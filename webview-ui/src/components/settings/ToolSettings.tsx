@@ -2,19 +2,21 @@ import { useCallback } from 'preact/hooks'; // Removed useEffect, useRef
 // Removed Jotai imports
 import { useStore } from '@nanostores/react'; // Use Nanostores hook
 import { JSX } from 'preact/jsx-runtime';
-import { requestData } from '../../utils/communication'; // Import requestData
+// import { requestData } from '../../utils/communication'; // Removed requestData import
 import {
     AllToolsStatusInfo,
     ToolInfo,
     ToolStatus,
     CategoryStatus,
-    ToolCategoryInfo
+    ToolCategoryInfo,
+    ToolAuthorizationConfig // Added config type import
 } from '../../../../src/common/types';
-import { $allToolsStatus } from '../../stores/toolStores'; // Renamed import
+import { $allToolsStatus, $setToolAuthorization } from '../../stores/toolStores'; // Import mutation store
 
 export function ToolSettings(): JSX.Element {
-    const allToolsStatus = useStore($allToolsStatus); // Use renamed atom
-    const isLoading = allToolsStatus === null; // Derive loading state
+    const allToolsStatus = useStore($allToolsStatus);
+    const { mutate: setAuthMutate, loading: isSavingAuth } = useStore($setToolAuthorization); // Use mutation store
+    const isLoading = allToolsStatus === null;
 
     const handleToolToggle = useCallback((toolIdentifier: string, currentStatus: ToolStatus) => {
         const statusCycle: ToolStatus[] = [
@@ -26,18 +28,15 @@ export function ToolSettings(): JSX.Element {
         const currentIndex = statusCycle.indexOf(currentStatus);
         const nextIndex = (currentIndex + 1) % statusCycle.length;
         const newStatus = statusCycle[nextIndex];
-
-        console.log(`Setting tool ${toolIdentifier} override status to ${newStatus}`);
-        requestData('setToolAuthorization', { // Use requestData
-            config: {
-                overrides: {
-                    [toolIdentifier]: newStatus
-                }
-            }
-        })
-        .then(() => console.log(`Tool ${toolIdentifier} status updated.`))
-        .catch(error => console.error(`Error setting tool ${toolIdentifier} status:`, error));
-    }, []);
+        const payload: { config: Partial<ToolAuthorizationConfig> } = {
+            config: { overrides: { [toolIdentifier]: newStatus } }
+        };
+        console.log(`Setting tool ${toolIdentifier} override status to ${newStatus} via mutation store.`);
+        setAuthMutate(payload)
+            .then(() => console.log(`Tool ${toolIdentifier} status update request sent.`))
+            .catch(error => console.error(`Error setting tool ${toolIdentifier} status:`, error));
+        // Update will happen via $allToolsStatus subscription
+    }, [setAuthMutate]);
 
     const handleCategoryStatusToggle = useCallback((categoryId: string, currentStatus: CategoryStatus) => {
         const statusCycle: CategoryStatus[] = [
@@ -48,23 +47,21 @@ export function ToolSettings(): JSX.Element {
         const currentIndex = statusCycle.indexOf(currentStatus);
         const nextIndex = (currentIndex + 1) % statusCycle.length;
         const newStatus = statusCycle[nextIndex];
-
-        console.log(`Setting category/server ${categoryId} status to ${newStatus}`);
+        console.log(`Setting category/server ${categoryId} status to ${newStatus} via mutation store.`);
 
         const isMcp = categoryId.startsWith('mcp_');
         const configKey = isMcp ? 'mcpServers' : 'categories';
         const keyName = isMcp ? categoryId.substring(4) : categoryId;
 
-        requestData('setToolAuthorization', { // Use requestData
-            config: {
-                [configKey]: {
-                    [keyName]: newStatus
-                }
-            }
-        })
-        .then(() => console.log(`Category ${categoryId} status updated.`))
-        .catch(error => console.error(`Error setting category ${categoryId} status:`, error));
-    }, []);
+        const payload: { config: Partial<ToolAuthorizationConfig> } = {
+            config: { [configKey]: { [keyName]: newStatus } }
+        };
+
+        setAuthMutate(payload)
+            .then(() => console.log(`Category ${categoryId} status update request sent.`))
+            .catch(error => console.error(`Error setting category ${categoryId} status:`, error));
+        // Update will happen via $allToolsStatus subscription
+    }, [setAuthMutate]);
 
     const renderToolItem = (toolInfo: ToolInfo, categoryStatus: CategoryStatus) => {
         const { id: toolId, name: displayName, description, status: configuredStatus, resolvedStatus } = toolInfo;
@@ -109,8 +106,9 @@ export function ToolSettings(): JSX.Element {
                     )}
                 </div>
                 <button
-                    class={buttonClass}
+                    class={`${buttonClass} ${isSavingAuth ? 'opacity-50 cursor-not-allowed' : ''}`} // Add loading state styling
                     onClick={() => handleToolToggle(toolId, configuredStatus)}
+                    disabled={isSavingAuth} // Disable button while saving
                     title={resolvedTooltip}
                 >
                     {buttonText}
@@ -134,9 +132,9 @@ export function ToolSettings(): JSX.Element {
                             <div key={category.id}>
                                 <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-300 dark:border-gray-600">
                                     <h4 class="text-lg font-medium text-gray-700 dark:text-gray-300">{category.name}</h4>
-                                    <button
-                                        onClick={() => handleCategoryStatusToggle(category.id, category.status)}
-                                        class={`text-xs px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                                     <button
+                                         onClick={() => handleCategoryStatusToggle(category.id, category.status)}
+                                         class={`text-xs px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-offset-1 ${isSavingAuth ? 'opacity-50 cursor-not-allowed' : ''} ${ // Add loading state styling
                                             category.status === CategoryStatus.AlwaysAvailable ? 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-400' :
                                             category.status === CategoryStatus.RequiresAuthorization ? 'bg-yellow-500 text-black hover:bg-yellow-600 focus:ring-yellow-400' :
                                             'bg-red-500 text-white hover:bg-red-600 focus:ring-red-400'

@@ -46,4 +46,4 @@
 - *(Plus transitive dependencies)*
 
 ## Guideline Checksums
-<!-- This section will be populated automatically by the SHA verification process -->
+- docs/general_guidelines.md: 7eff9c8fe6876e567f2270c09c60d35f7beb47f1

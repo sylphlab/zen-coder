@@ -1,16 +1,30 @@
-import { useState, useMemo, useCallback } from 'preact/hooks';
+import { useState, useMemo, useCallback } from 'preact/hooks'; // Consolidated hooks import
 // Removed: import { useAtomValue } from 'jotai';
 // Removed: import { loadable } from 'jotai/utils';
-import { useStore } from '@nanostores/react'; // Corrected import for React
+import { useStore } from '@nanostores/react';
 import { JSX } from 'preact/jsx-runtime';
-import { requestData } from '../../utils/communication'; // Import requestData
+// import { requestData } from '../../utils/communication'; // Removed requestData import
 import { ProviderInfoAndStatus } from '../../../../src/common/types';
-import { $providerStatus } from '../../stores/providerStores'; // Renamed import
-// Removed: import { useProviderStatus } from '../../hooks/useProviderStatus';
+import {
+    $providerStatus,
+    $setApiKey,
+    $deleteApiKey,
+    $setProviderEnabled,
+    availableProvidersStore // Keep if still used for filtering/display?
+} from '../../stores/providerStores'; // Import stores
 
 export function ProviderSettings(): JSX.Element {
-    const providerStatus = useStore($providerStatus); // Use renamed atom
-    const isLoadingProviders = providerStatus === null; // Derive loading from store value
+    // --- State from Stores ---
+    const providerStatus = useStore($providerStatus);
+    const { mutate: setApiKeyMutate, loading: isSettingKey } = useStore($setApiKey);
+    const { mutate: deleteApiKeyMutate, loading: isDeletingKey } = useStore($deleteApiKey);
+    const { mutate: setProviderEnabledMutate, loading: isTogglingEnabled } = useStore($setProviderEnabled);
+    // TODO: Check if availableProvidersStore is still needed or if $providerStatus is sufficient
+    const availableProviders = useStore(availableProvidersStore); // Keep for now
+
+    const isLoadingProviders = providerStatus === null; // Loading based on main status store
+
+    // --- Local State ---
     const [apiKeysInput, setApiKeysInput] = useState<{ [providerId: string]: string }>({});
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -21,36 +35,33 @@ export function ProviderSettings(): JSX.Element {
     const handleSetApiKey = (providerId: string) => {
         const apiKey = apiKeysInput[providerId];
         if (apiKey && apiKey.trim() !== '') {
-            console.log(`Setting API Key for ${providerId} via requestData`);
-            requestData('setApiKey', { // Use requestData
-                provider: providerId, apiKey: apiKey.trim()
-            })
-            .then(() => {
-                console.log(`API Key set successfully for ${providerId}`);
-                setApiKeysInput(prev => ({ ...prev, [providerId]: '' })); // Clear input on success
-            })
-            .catch(error => {
-                console.error(`Error setting API Key for ${providerId}:`, error);
-                // Optionally show error to user
-            });
+            console.log(`Setting API Key for ${providerId} via mutation store`);
+            setApiKeyMutate({ provider: providerId, apiKey: apiKey.trim() })
+                .then(() => {
+                    console.log(`API Key set request successful for ${providerId}`);
+                    setApiKeysInput(prev => ({ ...prev, [providerId]: '' })); // Clear input on success
+                    // Optimistic update handles UI change
+                })
+                .catch(error => {
+                    console.error(`Error setting API Key for ${providerId}:`, error);
+                    // TODO: Show error
+                });
         } else {
             console.warn(`API Key input for ${providerId} is empty.`);
         }
     };
 
     const handleDeleteApiKey = (providerId: string) => {
-        console.log(`Deleting API Key for ${providerId} via requestData`);
-        requestData('deleteApiKey', { // Use requestData
-            provider: providerId
-        })
-        .then(() => {
-            console.log(`API Key deleted successfully for ${providerId}`);
-            // UI state (apiKeySet) should update via providerStatusAtom subscription
-        })
-        .catch(error => {
-            console.error(`Error deleting API Key for ${providerId}:`, error);
-            // Optionally show error to user
-        });
+        console.log(`Deleting API Key for ${providerId} via mutation store`);
+        deleteApiKeyMutate({ provider: providerId })
+            .then(() => {
+                console.log(`API Key delete request successful for ${providerId}`);
+                // Optimistic update handles UI change
+            })
+            .catch(error => {
+                console.error(`Error deleting API Key for ${providerId}:`, error);
+                // TODO: Show error
+            });
     };
 
     const handleSearchChange = (e: Event) => {
@@ -58,10 +69,11 @@ export function ProviderSettings(): JSX.Element {
     };
 
     const onProviderToggle = useCallback((providerId: string, enabled: boolean) => {
-        console.log(`Requesting toggle provider ${providerId} to ${enabled} via requestData`);
-        requestData('setProviderEnabled', { provider: providerId, enabled: enabled }) // Use requestData
-            .then(() => console.log(`Provider ${providerId} enabled status set to ${enabled}`))
+        console.log(`Requesting toggle provider ${providerId} to ${enabled} via mutation store`);
+        setProviderEnabledMutate({ provider: providerId, enabled: enabled })
+            .then(() => console.log(`Provider ${providerId} enabled status request sent.`))
             .catch(error => console.error(`Error setting provider ${providerId} enabled status:`, error));
+        // Optimistic update handles UI change
     }, []);
 
     const filteredProviders = useMemo(() => {
@@ -107,19 +119,21 @@ export function ProviderSettings(): JSX.Element {
                                 value={apiKeysInput[id] || ''}
                                 onInput={(e) => handleApiKeyInputChange(id, (e.target as HTMLInputElement).value)}
                                 aria-label={`${name} API Key Input`}
+                                disabled={isSettingKey || isDeletingKey} // Disable input during actions
                             />
                             <button
-                                class="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                class={`px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isSettingKey ? 'animate-pulse' : ''}`}
                                 onClick={() => handleSetApiKey(id)}
-                                disabled={!apiKeysInput[id]?.trim()}
+                                disabled={!apiKeysInput[id]?.trim() || isSettingKey || isDeletingKey}
                                 aria-label={`Set ${name} API Key`}
                             >
-                                設定
+                                {isSettingKey ? 'Setting...' : 'Set'}
                             </button>
                             {apiKeySet && (
                                 <button
-                                    class="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                                    class={`px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${isDeletingKey ? 'animate-pulse' : ''}`}
                                     onClick={() => handleDeleteApiKey(id)}
+                                    disabled={isSettingKey || isDeletingKey}
                                     aria-label={`Delete ${name} API Key`}
                                 >
                                     刪除

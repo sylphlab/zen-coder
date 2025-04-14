@@ -184,8 +184,10 @@ export interface WebviewRequestMessage {
   type: 'requestData'; // Generic type for requests needing a response
   requestId: string;
   requestType: string; // Use string to allow any handler type
-  payload?: any; // Optional payload for the request (e.g., providerId for getModelsForProvider)
+    payload?: any; // Optional payload for the request (e.g., providerId for getModelsForProvider)
 }
+
+// Removed WebviewActionMessage interface
 
 // --- Payload Types for Message Passing ---
 

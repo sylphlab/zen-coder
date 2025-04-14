@@ -1,35 +1,34 @@
 import { FunctionalComponent } from 'preact';
 import { useCallback } from 'preact/hooks';
 // Removed: import { useLocation } from 'wouter';
-import { useAtomValue } from 'jotai'; // Keep for now, other atoms might still be used
+// Removed Jotai: import { useAtomValue } from 'jotai';
 // Removed: import { useSetAtom } from 'jotai';
 import { JSX } from 'preact/jsx-runtime';
-import { AvailableModel } from '../../../src/common/types';
+// Removed: import { AvailableModel } from '../../../src/common/types'; // Likely handled by ModelSelector
 import { ModelSelector } from './ModelSelector';
 import { router } from '../stores/router'; // Import Nanostores router
-import {
-    availableProvidersAtom, // Keep for now
-    activeChatProviderIdAtom, // Keep for now
-    activeChatModelIdAtom, // Keep for now
-    activeChatMessagesAtom, // Keep for now
-    // Removed: updateLocationAtom
-} from '../store/atoms';
+// Removed atom imports:
+// import {
+//     availableProvidersAtom,
+//     activeChatProviderIdAtom,
+//     activeChatModelIdAtom,
+//     activeChatMessagesAtom,
+//     // Removed: updateLocationAtom
+// } from '../store/atoms';
 
 interface HeaderControlsProps {
+    selectedProviderId: string | null; // Added prop
+    selectedModelId: string | null;    // Added prop
     onModelChange: (providerId: string | null, modelId: string | null) => void;
 }
 
 export const HeaderControls: FunctionalComponent<HeaderControlsProps> = ({
+    selectedProviderId, // Use prop
+    selectedModelId,  // Use prop
     onModelChange
 }) => {
     // Removed wouter/jotai location hooks
-
-    // --- Atoms (Keep for now, will be replaced later) ---
-    const availableProviders = useAtomValue(availableProvidersAtom);
-    const selectedProviderId = useAtomValue(activeChatProviderIdAtom);
-    const selectedModelId = useAtomValue(activeChatModelIdAtom);
-    const activeChatMessages = useAtomValue(activeChatMessagesAtom);
-    const hasMessages = activeChatMessages.length > 0;
+    // Removed direct atom usage
 
     // --- Event Handlers (Use Nanostores router) ---
     const handleSettingsClick = useCallback(() => {

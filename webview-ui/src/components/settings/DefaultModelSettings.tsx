@@ -1,28 +1,34 @@
 import { useCallback } from 'preact/hooks';
-// Removed: import { useAtomValue } from 'jotai';
-// Removed: import { loadable } from 'jotai/utils';
 import { JSX } from 'preact/jsx-runtime';
-import { requestData } from '../../utils/communication'; // Import requestData
+import { useStore } from '@nanostores/react'; // Import useStore
+// import { requestData } from '../../utils/communication'; // Removed requestData
+import { $defaultConfig } from '../../stores/chatStores'; // Import fetcher store
+import { $setDefaultConfig } from '../../stores/settingsStores'; // Import mutation store
 import { ModelSelector } from '../ModelSelector';
-import { useDefaultConfig } from '../../hooks/useDefaultConfig'; // Import the new hook
+// Removed: import { useDefaultConfig } from '../../hooks/useDefaultConfig'; // Removed non-existent hook import
 // Removed: import { defaultConfigAtom } from '../../store/atoms';
 
 export function DefaultModelSettings(): JSX.Element {
-    const defaultConfig = useDefaultConfig(); // Use the refactored hook
+    const defaultConfig = useStore($defaultConfig); // Use the fetcher store
+    const { mutate: setDefaultConfigMutate, loading: isSaving } = useStore($setDefaultConfig); // Use the mutation store
     const isLoadingConfig = defaultConfig === null; // Derive loading state
 
-    const handleDefaultChatModelChange = useCallback((newProviderId: string | null, newModelId: string | null) => {
-        console.log(`[DefaultModelSettings] Setting default chat model via requestData: Provider=${newProviderId}, Model=${newModelId}`);
-        requestData('setDefaultConfig', { // Use requestData
-            config: {
-                defaultProviderId: newProviderId ?? undefined,
-                defaultModelId: newModelId ?? undefined
-            }
-        })
-        .then(() => console.log(`Default chat model updated.`))
-        .catch(error => console.error(`Error setting default chat model:`, error));
-    }, []);
-    // Removed subscription useEffect
+    const handleDefaultChatModelChange = useCallback(async (newProviderId: string | null, newModelId: string | null) => {
+        console.log(`[DefaultModelSettings] Calling mutation store to set default chat model: Provider=${newProviderId}, Model=${newModelId}`);
+        try {
+            await setDefaultConfigMutate({ // Use the mutate function
+                config: {
+                    defaultProviderId: newProviderId ?? undefined,
+                    defaultModelId: newModelId ?? undefined
+                }
+            });
+            console.log(`Default chat model update request sent.`);
+            // Update will happen via $defaultConfig subscription
+        } catch (error) {
+             console.error(`Error setting default chat model via mutation store:`, error);
+             // TODO: Display error to user
+        }
+    }, [setDefaultConfigMutate]); // Depend on the mutate function
 
     return (
         <section class="mb-8">

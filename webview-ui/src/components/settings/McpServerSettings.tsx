@@ -1,35 +1,54 @@
-import { useCallback, useEffect, useRef } from 'preact/hooks';
-import { useAtomValue } from 'jotai';
-import { loadable } from 'jotai/utils';
+import { useCallback } from 'preact/hooks';
+import { useStore } from '@nanostores/react';
 import { JSX } from 'preact/jsx-runtime';
-import { requestData } from '../../utils/communication';
 import { McpServerStatus } from '../../../../src/ai/mcpManager';
-import { mcpServerStatusAtom } from '../../store/atoms';
+import {
+    $mcpStatus,
+    $openGlobalMcpConfig,
+    $openProjectMcpConfig,
+    $retryMcpConnection
+} from '../../stores/mcpStores';
 
 export function McpServerSettings(): JSX.Element {
-    const isSubscribedRef = useRef(false);
-    const mcpServersLoadable = useAtomValue(loadable(mcpServerStatusAtom));
+    // --- State from Nanostores ---
+    const mcpServersData = useStore($mcpStatus);
+    const { mutate: openGlobalMutate, loading: isOpeningGlobal } = useStore($openGlobalMcpConfig);
+    const { mutate: openProjectMutate, loading: isOpeningProject } = useStore($openProjectMcpConfig);
+    const { mutate: retryMutate, loading: isRetrying } = useStore($retryMcpConnection);
 
-    const handleOpenGlobalMcpConfig = useCallback(() => {
-        console.log('Requesting to open global MCP config via requestData');
-        requestData('openGlobalMcpConfig') // Use requestData
-            .catch(error => console.error(`Error opening global MCP config:`, error)); // Basic error handling
-    }, []);
+    const isLoading = mcpServersData === null;
 
-    const handleOpenProjectMcpConfig = useCallback(() => {
-        console.log('Requesting to open project MCP config via requestData');
-        requestData('openProjectMcpConfig') // Use requestData
-            .catch(error => console.error(`Error opening project MCP config:`, error)); // Basic error handling
-    }, []);
+    // --- Handlers with useCallback (kept due to try/catch logic) ---
+    const handleOpenGlobalMcpConfig = useCallback(async () => {
+        console.log('Requesting to open global MCP config via mutation store');
+        try {
+            await openGlobalMutate();
+        } catch (error) {
+            console.error(`Error opening global MCP config:`, error);
+            // TODO: Display error
+        }
+    }, [openGlobalMutate]);
 
-    const handleRetryConnection = useCallback((serverName: string) => {
-        console.log(`Requesting retry for MCP server: ${serverName} via requestData`);
-        requestData('retryMcpConnection', { serverName }) // Use requestData
-            .then(() => console.log(`Retry request sent for ${serverName}.`))
-            .catch(error => console.error(`Error requesting retry for ${serverName}:`, error));
-    }, []);
+    const handleOpenProjectMcpConfig = useCallback(async () => {
+        console.log('Requesting to open project MCP config via mutation store');
+        try {
+            await openProjectMutate();
+        } catch (error) {
+            console.error(`Error opening project MCP config:`, error);
+            // TODO: Display error
+        }
+    }, [openProjectMutate]);
 
-    // Removed subscription useEffect
+    const handleRetryConnection = useCallback(async (serverName: string) => {
+        console.log(`Requesting retry for MCP server: ${serverName} via mutation store`);
+        try {
+            await retryMutate({ serverName });
+            console.log(`Retry request sent for ${serverName}.`);
+        } catch (error) {
+             console.error(`Error requesting retry for ${serverName}:`, error);
+             // TODO: Display error
+        }
+    }, [retryMutate]);
 
     return (
         <section class="mt-8">
@@ -39,23 +58,23 @@ export function McpServerSettings(): JSX.Element {
             </p>
             <div class="flex space-x-4 mb-4">
                 <button
-                    onClick={handleOpenGlobalMcpConfig}
-                    class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                    onClick={handleOpenGlobalMcpConfig} // Use the useCallback handler
+                    class={`px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${isOpeningGlobal ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={isOpeningGlobal}
                 >
-                    Configure Global Servers
+                    {isOpeningGlobal ? 'Opening...' : 'Configure Global Servers'}
                 </button>
                 <button
-                    onClick={handleOpenProjectMcpConfig}
-                    class="px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500"
+                    onClick={handleOpenProjectMcpConfig} // Use the useCallback handler
+                    class={`px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 ${isOpeningProject ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={isOpeningProject}
                 >
-                    Configure Project Servers
+                    {isOpeningProject ? 'Opening...' : 'Configure Project Servers'}
                 </button>
             </div>
 
-            {mcpServersLoadable.state === 'loading' && <p class="text-gray-500 dark:text-gray-400 italic">Loading MCP server configurations...</p>}
-            {mcpServersLoadable.state === 'hasError' && <p class="text-red-500 dark:text-red-400 italic">Error loading MCP server configurations.</p>}
-            {mcpServersLoadable.state === 'hasData' && mcpServersLoadable.data && (() => { // Add null check
-                const mcpServersData = mcpServersLoadable.data ?? {};
+            {isLoading && <p class="text-gray-500 dark:text-gray-400 italic">Loading MCP server configurations...</p>}
+            {!isLoading && mcpServersData && (() => {
                 return Object.keys(mcpServersData).length > 0 ? (
                     <ul class="space-y-3">
                         {Object.entries(mcpServersData).map(([serverName, serverState]) => {
@@ -65,6 +84,7 @@ export function McpServerSettings(): JSX.Element {
                             let statusText = '';
                             let statusColor = '';
                             let showRetryButton = false;
+                            const isCurrentlyRetrying = isRetrying; // Global loading state
                             const toolCount = tools ? Object.keys(tools).length : 0;
 
                             if (!enabled) {
@@ -101,12 +121,13 @@ export function McpServerSettings(): JSX.Element {
                                         )}
                                     </div>
                                     {showRetryButton && (
-                                        <button
-                                            onClick={() => handleRetryConnection(serverName)}
-                                            class="flex-shrink-0 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                            aria-label={`Retry connection for ${serverName}`}
-                                        >
-                                            Retry
+                                         <button
+                                             onClick={() => handleRetryConnection(serverName)} // Use arrow function wrapper for parameter
+                                             class={`flex-shrink-0 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isCurrentlyRetrying ? 'animate-pulse' : ''}`}
+                                             disabled={isCurrentlyRetrying}
+                                             aria-label={`Retry connection for ${serverName}`}
+                                         >
+                                             {isCurrentlyRetrying ? 'Retrying...' : 'Retry'}
                                         </button>
                                      )}
                                 </li>
