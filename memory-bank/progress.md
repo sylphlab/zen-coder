@@ -1,6 +1,7 @@
 # Project Progress
 
 ## What Works
+- **Fixed Settings Page Issues:** Corrected custom instruction input interference and restored the missing tool settings section.
 - **Frontend State Refactoring (Nanostores Complete):**
     - Migrated core state management from Jotai/custom hooks to Nanostores.
     - Implemented `createFetcherStore` and `createMutationStore` utilities.
@@ -42,6 +43,6 @@
 
 ## Known Issues / TODOs
 - **Suggested Actions:** Currently use temporary local state in `ChatView`; needs proper Nanostore/PubSub implementation.
-- **Testing:** Major refactoring requires thorough manual testing.
+- **Testing:** Major refactoring requires thorough manual testing, including verifying the settings page fixes.
 - **Image Upload:** Backend processing needs verification/completion.
 - **(Previous Known Issues Still Apply where relevant, e.g., filesystem test linter issue)**

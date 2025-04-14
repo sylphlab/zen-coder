@@ -8,22 +8,26 @@ import { requestData } from '../utils/communication';
 type CustomInstructionsData = { global: string; project: string | null; projectPath: string | null };
 
 /**
- * Represents the raw payload received from the backend for custom instructions.
- * Adjust based on the actual payload structure if needed.
+ * Represents the raw payload pushed via updates (if different from fetch).
+ * Assuming updates push { payload: CustomInstructionsData | null }
  */
-type CustomInstructionsPayload = { payload: CustomInstructionsData | null };
+type CustomInstructionsUpdatePayload = { payload: CustomInstructionsData | null }; // Keep for update type checking if needed, but fetch is direct
 
 /**
  * Store that fetches and subscribes to custom instructions (global and project).
  * Holds `CustomInstructionsData | null`. Null indicates the initial loading state.
+ * Initial fetch returns CustomInstructionsData directly.
+ * Updates might push { payload: CustomInstructionsData | null }.
  */
-export const $customInstructions = createFetcherStore<CustomInstructionsData | null, CustomInstructionsPayload>(
+export const $customInstructions = createFetcherStore<
+  CustomInstructionsData | null, // Store data type
+  CustomInstructionsData // Raw response type from initial fetch
+>(
   'customInstructions',   // Topic to listen for updates
   'getCustomInstructions', // Request type for initial fetch
   {
     initialData: null,    // Start with null
-    // Transform the raw { payload: {...} } payload into just the object
-    transformFetchResponse: (response) => response?.payload ?? null,
+    // No transform needed for initial fetch as raw response matches store type
   }
 );
 

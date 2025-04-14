@@ -60,12 +60,21 @@ export function createFetcherStore<T, TRawResponse = T>(
                 console.log(`[createFetcherStore ${topic}] Received update via listen. Full messagePayload:`, JSON.stringify(messagePayload)); // Log raw message
                 // Extract the 'data' part of the message before processing
                 const updateData = messagePayload.data;
-                 console.log(`[createFetcherStore ${topic}] Extracted updateData:`, JSON.stringify(updateData)); // Log extracted data
-                // Process the extracted 'data' using the same logic as fetch response
-                const transformedUpdate = processFetchResponse(updateData as TRawResponse | null | undefined);
+                 console.log(`[createFetcherStore ${topic}] Extracted updateData from message:`, JSON.stringify(updateData)); // Log extracted data from message
+                // Check if the updateData has a 'payload' property, common for push updates
+                let dataToProcess: TRawResponse | null | undefined;
+                if (typeof updateData === 'object' && updateData !== null && 'payload' in updateData) {
+                    console.log(`[createFetcherStore ${topic}] Update seems to have a 'payload' property. Extracting payload.`);
+                    dataToProcess = (updateData as { payload: TRawResponse | null }).payload;
+                } else {
+                     console.log(`[createFetcherStore ${topic}] Update does not have 'payload'. Using data directly.`);
+                    dataToProcess = updateData as TRawResponse | null | undefined; // Use data directly if no payload property
+                }
+                console.log(`[createFetcherStore ${topic}] Data prepared for processing:`, JSON.stringify(dataToProcess));
+                // Process the prepared 'dataToProcess'
+                const transformedUpdate = processFetchResponse(dataToProcess);
                 console.log(`[createFetcherStore ${topic}] Data after transformFetchResponse:`, JSON.stringify(transformedUpdate)); // Log transformed data
                 store.set(transformedUpdate); // Update store with transformed data
-                // If waitForSubscription was true, this is the first time setting non-null data
             }
         });
     } catch (error) {

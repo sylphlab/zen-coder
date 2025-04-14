@@ -5,6 +5,7 @@ import { JSX } from 'preact/jsx-runtime';
 import { DefaultModelSettings } from '../components/settings/DefaultModelSettings';
 import { CustomInstructionsSettings } from '../components/settings/CustomInstructionsSettings';
 import { ProviderSettings } from '../components/settings/ProviderSettings';
+import { ToolSettings } from '../components/settings/ToolSettings'; // Uncommented
 import { McpServerSettings } from '../components/settings/McpServerSettings';
 import { router } from '../stores/router'; // Import Nanostores router
 // Removed: import { updateLocationAtom } from '../store/atoms';
@@ -43,7 +44,7 @@ export function SettingPage(): JSX.Element {
            <DefaultModelSettings />
            <CustomInstructionsSettings />
            <ProviderSettings />
-           {/* <ToolSettings /> */}
+           <ToolSettings /> {/* Uncommented */}
            <McpServerSettings />
 
        </div>

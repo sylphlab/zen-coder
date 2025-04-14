@@ -34,13 +34,16 @@ export function CustomInstructionsSettings(): JSX.Element {
             if (newProject !== projectInstructions) setProjectInstructions(newProject);
             // No need to set projectInstructionsPath locally
         }
-    }, [customInstructionsData, globalInstructions, projectInstructions]); // Rerun if store data or local state differs
+    }, [customInstructionsData]); // Rerun only when store data changes
 
     const handleGlobalInstructionsChange = (e: Event) => {
+        setGlobalInstructions((e.target as HTMLTextAreaElement).value);
+        console.log('[CustomInstructionsSettings] Global input change:', (e.target as HTMLTextAreaElement).value);
         setGlobalInstructions((e.target as HTMLTextAreaElement).value);
     };
 
     const handleProjectInstructionsChange = (e: Event) => {
+        console.log('[CustomInstructionsSettings] Project input change:', (e.target as HTMLTextAreaElement).value);
         setProjectInstructions((e.target as HTMLTextAreaElement).value);
     };
 
