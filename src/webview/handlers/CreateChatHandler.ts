@@ -1,5 +1,5 @@
-import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
-
+import { RequestHandler, HandlerContext } from './RequestHandler';
+import { ChatSession } from '../../common/types'; // Import ChatSession
 export class CreateChatHandler implements RequestHandler {
     public readonly requestType = 'createChat'; // Change messageType to requestType
 
@@ -10,12 +10,21 @@ export class CreateChatHandler implements RequestHandler {
             // Create the new chat session (HistoryManager handles saving and setting it active)
             const newChat = await context.historyManager.createChatSession(); // Name is optional
 
-            // No need to manually push 'loadChatState'.
-            // The frontend will refetch or update based on other events if necessary,
-            // or we can implement a dedicated 'chatListUpdated' Pub/Sub topic later.
+            // No push needed here. Frontend navigates, ChatView mounts,
+            // and chatSessionAtomFamily gets initial state from chatSessionsAtom.
+            // chatSessionsAtom itself is updated via chatSessionsUpdate pushed by Create/Delete handlers.
+            // Correction: CreateChatHandler *should* push chatSessionsUpdate so the list page updates.
+            const allSessions = context.historyManager.getAllChatSessions();
+            context.postMessage({
+                type: 'pushUpdate',
+                payload: {
+                    topic: 'chatSessionsUpdate',
+                    data: { sessions: allSessions }
+                }
+            });
 
-            console.log(`[CreateChatHandler] New chat created (ID: ${newChat.id}).`);
-            return { newChatId: newChat.id }; // Return the ID of the newly created chat
+            console.log(`[CreateChatHandler] New chat created (ID: ${newChat.id}) and chatSessionsUpdate pushed.`);
+            return { newChatId: newChat.id };
 
         } catch (error: any) {
             console.error("[CreateChatHandler] Error creating chat session:", error);

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Correct import path
 import { ToolName } from '../../tools'; // Assuming ToolName is exported from tools index
 
 interface SetStandardToolEnabledPayload {
@@ -7,35 +7,38 @@ interface SetStandardToolEnabledPayload {
     enabled: boolean;
 }
 
-export class SetStandardToolEnabledHandler implements MessageHandler {
-    public readonly messageType = 'setStandardToolEnabled';
+/**
+ * WARNING: This handler modifies a potentially deprecated configuration setting.
+ * Tool authorization is now primarily managed via the 'zencoder.toolAuthorization' setting
+ * and the SetToolAuthorizationHandler. This handler might be removed in the future.
+ */
+export class SetStandardToolEnabledHandler implements RequestHandler { // Implement correct interface
+    public readonly requestType = 'setStandardToolEnabled'; // Use correct property name
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
-        const payload = message.payload as SetStandardToolEnabledPayload;
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> { // Update signature and return type
         if (!payload || typeof payload.toolName !== 'string' || typeof payload.enabled !== 'boolean') {
             console.error('Invalid payload for setStandardToolEnabled:', payload);
-            vscode.window.showErrorMessage('Invalid request to update tool setting.');
-            return;
+             throw new Error('Invalid payload for setStandardToolEnabled'); // Throw error for request failure
         }
 
         const { toolName, enabled } = payload;
+        // NOTE: This config key ('zencoder.tools.${toolName}.enabled') is likely deprecated.
+        // The new system uses 'zencoder.toolAuthorization'.
         const configKey = `zencoder.tools.${toolName}.enabled`;
 
         try {
-            // Update the setting globally. Consider Workspace scope if needed later.
+            // Update the deprecated setting globally.
             await vscode.workspace.getConfiguration().update(configKey, enabled, vscode.ConfigurationTarget.Global);
-            console.log(`Updated setting '${configKey}' to ${enabled}`);
-            vscode.window.showInformationMessage(`Tool '${toolName}' ${enabled ? 'enabled' : 'disabled'}.`);
+            console.warn(`Updated deprecated setting '${configKey}' to ${enabled}. Consider using 'zencoder.toolAuthorization'.`);
 
-            // Optionally, re-send the updated tool list to the webview
-            // This requires access to the logic currently in extension.ts's settingsPageReady handler
-            // For simplicity now, we rely on the user potentially reloading the view or
-            // triggering a refresh manually if immediate UI update is critical.
-            // Or, we could add a method to ZenCoderChatViewProvider to trigger this update.
+            // Notify the system that tool statuses might have changed, triggering a push update.
+            context.aiService._notifyToolStatusChange();
+
+            return { success: true }; // Return success object
 
         } catch (error: any) {
-            console.error(`Failed to update setting '${configKey}':`, error);
-            vscode.window.showErrorMessage(`Failed to update setting for tool '${toolName}': ${error.message}`);
+            console.error(`Failed to update deprecated setting '${configKey}':`, error);
+             throw new Error(`Failed to update setting for tool '${toolName}': ${error.message}`); // Rethrow error
         }
     }
 }

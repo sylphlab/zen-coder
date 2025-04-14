@@ -1,21 +1,29 @@
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Correct import path
 
-export class SubscribeToToolStatusHandler implements MessageHandler {
-    public readonly messageType = 'subscribeToToolStatus';
+export class SubscribeToToolStatusHandler implements RequestHandler { // Implement correct interface
+    public readonly requestType = 'subscribeToToolStatus'; // Use correct property name
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
-        console.log(`[${this.messageType}] Handling request...`);
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> { // Update signature and return type
+        console.log(`[${this.requestType}] Handling request...`); // Use correct property name
         try {
             context.aiService.setToolStatusSubscription(true);
-            console.log(`[${this.messageType}] Webview subscribed to Tool status updates.`);
+            console.log(`[${this.requestType}] Webview subscribed to Tool status updates.`); // Use correct property name
 
-            // Push the current status immediately upon subscription
+            // Push the current status immediately upon subscription via pushUpdate
             const currentStatus = await context.aiService.getAllToolsWithStatus();
-            // Use a specific push type for tool status
-            context.postMessage({ type: 'pushUpdateAllToolsStatus', payload: currentStatus });
+            context.postMessage({
+                type: 'pushUpdate',
+                topic: 'toolStatusUpdate', // Use a specific topic
+                payload: currentStatus
+            });
+            console.log(`[${this.requestType}] Sent initial Tool status state.`); // Use correct property name
+
+            return { success: true }; // Return success
 
         } catch (error: any) {
-            console.error(`[${this.messageType}] Error setting subscription:`, error);
+            console.error(`[${this.requestType}] Error setting subscription:`, error); // Use correct property name
+            // Rethrow the error
+            throw new Error(`Failed to subscribe to Tool status: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 }

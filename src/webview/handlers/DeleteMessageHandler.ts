@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { HistoryManager } from '../../historyManager'; // Adjust path as needed
-import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
-
+import { HistoryManager } from '../../historyManager';
+import { RequestHandler, HandlerContext } from './RequestHandler';
+import { ChatSession } from '../../common/types'; // Import ChatSession
 interface DeleteMessagePayload {
     chatId: string;
     messageId: string;
@@ -23,8 +23,25 @@ export class DeleteMessageHandler implements RequestHandler { // Implement Reque
         console.log(`[DeleteMessageHandler] Handling delete request for message ${messageId} in chat ${chatId}`);
 
         try {
-            await context.historyManager.deleteMessageFromHistory(chatId, messageId); // Use context
-            console.log(`[DeleteMessageHandler] Successfully requested deletion of message ${messageId} from history manager.`);
+            await context.historyManager.deleteMessageFromHistory(chatId, messageId);
+            console.log(`[DeleteMessageHandler] Successfully deleted message ${messageId} from history manager.`);
+// Get the updated session data
+const updatedSession = context.historyManager.getChatSession(chatId);
+if (updatedSession) {
+    // Trigger a push update for the specific chat session
+    const topic = `chatSessionUpdate/${chatId}`;
+    context.postMessage({
+        type: 'pushUpdate',
+        payload: {
+            topic: topic,
+            data: updatedSession // Send the full updated session object
+        }
+    });
+    console.log(`[DeleteMessageHandler] Message ${messageId} deleted for chat ${chatId} and ${topic} pushed.`);
+} else {
+     console.warn(`[DeleteMessageHandler] Could not find session ${chatId} after deleting message to push.`);
+}
+
             return { success: true }; // Return success
         } catch (error: any) {
             console.error(`[DeleteMessageHandler] Error deleting message ${messageId} from chat ${chatId}:`, error);

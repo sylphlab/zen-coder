@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { Tool, CoreMessage, StreamTextResult, TextStreamPart, ToolCallPart, ToolResultPart, ToolSet } from 'ai'; // Import necessary types
 // AiServiceResponse import removed
-import { StructuredAiResponse, UiTextMessagePart } from './common/types'; // Import UiTextMessagePart, removed structuredAiResponseSchema for now
+import { StructuredAiResponse, UiTextMessagePart, ChatSession } from './common/types'; // Import ChatSession
 import { allTools } from './tools'; // Correct path for allTools
 import { HistoryManager } from './historyManager';
 import { isPromise } from 'util/types';
@@ -121,19 +121,25 @@ export class StreamProcessor {
 
     private async _handleTextDelta(part: { textDelta: string }, chatId: string, assistantMessageId: string): Promise<void> {
         await this._historyManager.appendTextChunk(chatId, assistantMessageId, part.textDelta);
-        // Get updated session and push
-        const updatedSession = await this._historyManager.getChatSession(chatId);
-        if (updatedSession) {
-            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: 'chatUpdate', data: updatedSession } });
+        // Get the specific updated message and push it
+        const updatedMessage = await this._historyManager.getMessage(chatId, assistantMessageId);
+        if (updatedMessage) {
+            const topic = `chatMessageUpdate/${chatId}/${assistantMessageId}`; // More specific topic
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: updatedMessage } });
+        } else {
+             console.warn(`[StreamProcessor] Could not find message ${assistantMessageId} after text delta to push.`);
         }
     }
 
     private async _handleToolCall(part: ToolCallPart, chatId: string, assistantMessageId: string): Promise<void> {
         await this._historyManager.addToolCall(chatId, assistantMessageId, part.toolCallId, part.toolName, part.args);
-        // Get updated session and push
-        const updatedSession = await this._historyManager.getChatSession(chatId);
-        if (updatedSession) {
-            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: 'chatUpdate', data: updatedSession } });
+        // Get the specific updated message and push it
+        const updatedMessage = await this._historyManager.getMessage(chatId, assistantMessageId);
+         if (updatedMessage) {
+            const topic = `chatMessageUpdate/${chatId}/${assistantMessageId}`; // More specific topic
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: updatedMessage } });
+        } else {
+             console.warn(`[StreamProcessor] Could not find message ${assistantMessageId} after tool call to push.`);
         }
     }
 
@@ -149,10 +155,14 @@ export class StreamProcessor {
 
     private async _handleToolResult(part: ToolResultPart, chatId: string): Promise<void> {
         await this._historyManager.updateToolStatus(chatId, part.toolCallId, 'complete', part.result); // Use updateToolStatus
-        // Get updated session and push
-        const updatedSession = await this._historyManager.getChatSession(chatId);
-        if (updatedSession) {
-            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: 'chatUpdate', data: updatedSession } });
+        // Get the specific updated message (containing the tool result) and push it
+        // Need to find the message ID associated with the tool call ID
+        const assistantMessage = await this._historyManager.findMessageByToolCallId(chatId, part.toolCallId);
+        if (assistantMessage) {
+            const topic = `chatMessageUpdate/${chatId}/${assistantMessage.id}`; // More specific topic
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: assistantMessage } });
+        } else {
+             console.warn(`[StreamProcessor] Could not find message for tool call ${part.toolCallId} after tool result to push.`);
         }
     }
 

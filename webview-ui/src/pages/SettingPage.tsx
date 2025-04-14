@@ -1,31 +1,30 @@
-import { useCallback, useRef } from 'preact/hooks'; // Removed unused useState, useMemo
-// Removed unused loadable import
+import { useCallback, useRef } from 'preact/hooks';
 import { useLocation } from "wouter";
+import { useSetAtom } from 'jotai'; // Added useSetAtom
 import { JSX } from 'preact/jsx-runtime';
-// Removed unused type imports
-// Import only necessary components
 import { DefaultModelSettings } from '../components/settings/DefaultModelSettings';
 import { CustomInstructionsSettings } from '../components/settings/CustomInstructionsSettings';
 import { ProviderSettings } from '../components/settings/ProviderSettings';
 import { McpServerSettings } from '../components/settings/McpServerSettings';
+import { updateLocationAtom } from '../store/atoms'; // Import atom setter
 
 export function SettingPage(): JSX.Element {
    const [, setLocation] = useLocation();
+   const updateLocation = useSetAtom(updateLocationAtom); // Get atom setter
    const isSubscribedRef = useRef(false);
 
-   // Removed local state and handlers related to providers, tools, MCP, custom instructions, default config
+   // Removed local state and handlers
    // These are now handled within their respective components.
 
    // Removed central subscription useEffect. Subscriptions are now handled in individual setting components.
 
    // Removed the useEffect hook for custom instructions state sync.
-   // This logic is now handled within the CustomInstructionsSettings component.
-   // Handler for the back button
+   // Handler for the back button (with backend sync)
    const handleBackClick = useCallback(() => {
-       setLocation('/index.html'); // Navigate back to the chat page
-   }, [setLocation]);
-
-
+       const newPath = '/'; // Navigate to root (ChatListPage)
+       setLocation(newPath);
+       updateLocation(newPath); // Sync backend
+   }, [setLocation, updateLocation]);
    // Removed duplicate handleBackClick definition
 
    return (

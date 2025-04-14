@@ -685,4 +685,36 @@ export class HistoryManager {
         return effectiveConfig;
     }
 
+    /**
+     * Gets a specific message from a chat session's history.
+     * @param chatId The ID of the chat session.
+     * @param messageId The ID of the message to retrieve.
+     * @returns The UiMessage object or null if not found.
+     */
+    public getMessage(chatId: string, messageId: string): UiMessage | null {
+        const chat = this.getChatSession(chatId);
+        return chat?.history.find(msg => msg.id === messageId) ?? null;
+    }
+
+    /**
+     * Finds the assistant message containing a specific tool call ID.
+     * @param chatId The ID of the chat session.
+     * @param toolCallId The ID of the tool call to find.
+     * @returns The UiMessage object or null if not found.
+     */
+    public findMessageByToolCallId(chatId: string, toolCallId: string): UiMessage | null {
+        const chat = this.getChatSession(chatId);
+        if (!chat) return null;
+
+        for (const message of chat.history) {
+            if (message.role === 'assistant' && Array.isArray(message.content)) {
+                for (const part of message.content) {
+                    if (part.type === 'tool-call' && part.toolCallId === toolCallId) {
+                        return message;
+                    }
+                }
+            }
+        }
+        return null;
+    }
 }

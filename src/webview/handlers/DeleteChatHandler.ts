@@ -1,5 +1,5 @@
-import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
-
+import { RequestHandler, HandlerContext } from './RequestHandler';
+import { ChatSession } from '../../common/types'; // Import ChatSession
 export class DeleteChatHandler implements RequestHandler {
     public readonly requestType = 'deleteChat'; // Change messageType to requestType
 
@@ -16,10 +16,17 @@ export class DeleteChatHandler implements RequestHandler {
         try {
             await context.historyManager.deleteChatSession(chatIdToDelete);
 
-            // No need to manually push 'loadChatState'.
-            // Frontend will refetch or update based on other events.
+            // Trigger a push update with the latest sessions list
+            const allSessions = context.historyManager.getAllChatSessions();
+            context.postMessage({
+                type: 'pushUpdate',
+                payload: {
+                    topic: 'chatSessionsUpdate', // Renamed topic
+                    data: { sessions: allSessions } // Only send sessions
+                }
+            });
 
-            console.log(`[DeleteChatHandler] Chat deleted (ID: ${chatIdToDelete}).`);
+            console.log(`[DeleteChatHandler] Chat deleted (ID: ${chatIdToDelete}) and chatSessionsUpdate pushed.`);
             return { success: true }; // Return success
 
         } catch (error: any) {

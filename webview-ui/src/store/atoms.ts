@@ -10,6 +10,7 @@ import {
     AllToolsStatusInfo, // Changed from AllToolsStatusPayload
     McpConfiguredStatusPayload, // Keep this, it was re-added to types.ts
     DefaultChatConfig,
+    ChatConfig, // Import ChatConfig
     // Removed CustomInstructionsPayload import
 } from '../../../src/common/types'; // Corrected relative path
 
@@ -25,8 +26,31 @@ type SelectedImage = {
 import { requestData, listen } from '../utils/communication'; // Import from new communication file
 
 // --- Core State Atoms ---
-export const chatSessionsAtom = atom<ChatSession[]>([]);
-export const activeChatIdAtom = atom<string | null>(null);
+// Atom to hold the list of chat sessions with fetch/listen logic
+export const chatSessionsAtom = atomWithDefault<ChatSession[] | null>(() => null); // Initialize with null
+chatSessionsAtom.onMount = (set) => {
+    console.log('[chatSessionsAtom] onMount: Subscribing and fetching initial data...');
+    // Subscribe to updates
+    const subscription = listen('chatSessionsUpdate', (data: { sessions: ChatSession[] } | null) => {
+        console.log('[chatSessionsAtom] Received update via listen callback.');
+        set(data?.sessions ?? []); // Update with new sessions list or empty array
+    });
+    // Initial fetch
+    requestData<{ sessions: ChatSession[] }>('getChatSessions') // Only fetch sessions
+        .then(response => set(response.sessions ?? []))
+        .catch(err => {
+            console.error("Error fetching initial chat sessions:", err);
+            set([]); // Set to empty array on error
+        });
+
+    // Return the dispose function for onUnmount
+    return () => {
+        console.log('[chatSessionsAtom] onUnmount: Disposing subscription.');
+        subscription.dispose();
+    };
+};
+
+export const activeChatIdAtom = atom<string | null>(null); // Keep for initial redirect, set by initial getChatSessions response
 // --- Async Atoms for Initial/Fetched Data ---
 
 // Atom to trigger provider status refresh
@@ -239,10 +263,12 @@ export const isChatListLoadingAtom = atom<boolean>(false); // Atom for chat list
 
 // Derived atom for the currently active chat session
 export const activeChatAtom = atom<ChatSession | null>((get) => {
-    const sessions = get(chatSessionsAtom);
+    const sessions = get(chatSessionsAtom); // Can be null initially
     const activeId = get(activeChatIdAtom);
-    if (!activeId) {return null;}
-    return sessions.find(session => session.id === activeId) ?? null;
+    if (!sessions || !activeId) { // Check if sessions is null or activeId is null
+        return null;
+    }
+    return sessions?.find(session => session.id === activeId) ?? null; // Add optional chaining
 });
 
 // Derived atom for the messages of the active chat
@@ -338,6 +364,135 @@ export const activeChatCombinedModelIdAtom = atom<string | null>((get) => {
 // Removed: triggerWebviewReadyAtom (initial data fetched by async atoms)
 // Removed: triggerFetchModelsForProviderAtom (models fetched by atomFamily)
 
-// Atom to hold the current webview location (can be synced with wouter)
-// For now, just a basic atom. Integration with wouter can be done later.
-export const webviewLocationAtom = atom<string>('/');
+// --- Location Atom ---
+// Atom to manage the webview's location state, syncing with backend persistence
+export const locationAtom = atomWithDefault<string | null>(() => null); // Initialize with null
+
+locationAtom.onMount = (set) => {
+    console.log('[locationAtom] onMount: Fetching initial location...');
+    // Initial fetch for last known location
+    requestData<{ location: string | null }>('getLastLocation') // Expect string or null
+        .then(response => {
+            console.log('[locationAtom] Received initial location:', response.location);
+            // Set the initial state, default to '/chats' if nothing is stored
+            set(response.location || '/chats');
+        })
+        .catch(err => {
+            console.error("Error fetching initial location:", err);
+            set('/chats'); // Fallback to '/chats' on error
+        });
+    // No ongoing subscription needed for location itself, changes are driven by UI router
+    // Return an empty dispose function
+    return () => {};
+};
+
+// Atom to trigger backend update when location changes (called from App.tsx useEffect)
+export const updateLocationAtom = atom(
+    null, // Read function is null
+    async (get, set, newLocation: string) => { // Write function takes newLocation
+        // Update the local atom state immediately (optional, depends on UX)
+        // set(locationAtom, newLocation);
+        console.log(`[updateLocationAtom] Requesting backend update for location: ${newLocation}`);
+        try {
+            await requestData('updateLastLocation', { location: newLocation });
+            console.log(`[updateLocationAtom] Backend location updated successfully.`);
+            // Optionally re-set the local state after confirmation, or rely on initial fetch next time
+            // set(locationAtom, newLocation);
+        } catch (error) {
+            console.error(`[updateLocationAtom] Error updating backend location:`, error);
+            // Handle error, maybe revert local state if it was set optimistically
+        }
+    }
+);
+
+// Removed old webviewLocationAtom
+
+// --- Chat Session Atom Family ---
+// Manages the state of a single chat session, including its history and config
+export const chatSessionAtomFamily = atomFamily((chatId: string | null | undefined) => {
+    const chatAtom = atomWithDefault<ChatSession | null>((get) => {
+        if (!chatId) return null;
+        // Try to get initial state from the main sessions list
+        const sessions = get(chatSessionsAtom);
+        return sessions?.find(s => s.id === chatId) ?? null;
+    });
+
+    // Add onMount to the individual atom created by the family
+    chatAtom.onMount = (setAtom) => {
+        if (!chatId) return () => {}; // No ID, nothing to mount/listen to
+
+        console.log(`[chatSessionAtomFamily(${chatId})] onMount: Subscribing...`);
+
+        // Subscribe to updates for this specific chat session
+        const topic = `chatSessionUpdate/${chatId}`;
+        const subscription = listen(topic, (data: ChatSession | null) => {
+            console.log(`[chatSessionAtomFamily(${chatId})] Received update via listen callback.`);
+            setAtom(data); // Update with the new session data
+        });
+
+        // Initial fetch for this specific chat? Maybe not needed if chatSessionsAtom provides it.
+        // If chatSessionsAtom is null initially, we might need a fetch here.
+        // requestData<{ session: ChatSession }>(`getChatSession`, { chatId }) // Example API
+    //     .then(response => setAtom(response.session))
+    //     .catch(err => console.error(`Error fetching initial chat session ${chatId}:`, err));
+
+    // Return the dispose function for onUnmount
+    return () => {
+        console.log(`[chatSessionAtomFamily(${chatId})] onUnmount: Disposing subscription.`);
+        subscription.dispose();
+    };
+    }; // End of onMount
+
+    return chatAtom; // Return the configured atom
+}); // End of atomFamily
+
+// --- Effective Chat Config Atom Family ---
+// Calculates the effective configuration for a chat, merging defaults if needed
+export const effectiveChatConfigAtomFamily = atomFamily((chatId: string | null | undefined) =>
+    atom((get): ChatConfig => {
+        const chatSession = get(chatSessionAtomFamily(chatId));
+        const defaultsLoadable = get(loadable(defaultConfigAtom));
+
+        // Define a base default structure
+        const baseDefaults: ChatConfig = {
+            useDefaults: true,
+            providerId: undefined,
+            modelId: undefined,
+            // Add other defaultable config fields here
+        };
+
+        let defaults: Partial<DefaultChatConfig> = {};
+        if (defaultsLoadable.state === 'hasData') {
+            defaults = defaultsLoadable.data ?? {};
+        } else if (defaultsLoadable.state === 'hasError') {
+            console.error("[effectiveChatConfigAtomFamily] Error loading defaults:", defaultsLoadable.error);
+        }
+
+        const effectiveDefaults = { ...baseDefaults, ...defaults };
+
+        if (!chatSession) {
+            // No specific chat session found (or ID is null), return defaults
+            return effectiveDefaults;
+        }
+
+        const chatConfig = chatSession.config;
+
+        if (chatConfig.useDefaults) {
+            // Merge defaults with chat-specific overrides
+            return {
+                ...effectiveDefaults,
+                ...chatConfig,
+                providerId: chatConfig.providerId ?? effectiveDefaults.providerId,
+                modelId: chatConfig.modelId ?? effectiveDefaults.modelId,
+            };
+        } else {
+            // Use only the chat-specific config
+            return {
+                 useDefaults: false,
+                 providerId: chatConfig.providerId,
+                 modelId: chatConfig.modelId,
+                 // Add other config fields here if any
+            };
+        }
+    })
+);

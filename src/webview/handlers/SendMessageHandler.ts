@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { CoreMessage, Tool, StreamTextResult } from 'ai'; // Import necessary types
-import { RequestHandler, HandlerContext } from './RequestHandler'; // Implement RequestHandler
-import { StreamProcessor } from '../../streamProcessor'; // Import StreamProcessor
-import { UiMessageContentPart } from '../../common/types'; // Import shared type from common
+import { RequestHandler, HandlerContext } from './RequestHandler';
+import { StreamProcessor } from '../../streamProcessor';
+import { UiMessageContentPart, ChatSession } from '../../common/types'; // Import ChatSession
 
 export class SendMessageHandler implements RequestHandler { // Implement RequestHandler
     public readonly requestType = 'sendMessage'; // Change to requestType
@@ -130,11 +130,28 @@ export class SendMessageHandler implements RequestHandler { // Implement Request
         try {
             console.log(`[SendMessageHandler] Stream processing finished for ${assistantUiMsgId}. Reconciling history.`);
             // Reconcile history using accumulated text and null for finalCoreMessage
-            // Reconcile history for the specific chat
             await context.historyManager.reconcileFinalAssistantMessage(chatId, assistantUiMsgId, null, context.postMessage);
+// Get the updated session data AFTER reconciliation
+const updatedSession = context.historyManager.getChatSession(chatId);
+if (updatedSession) {
+    // Trigger a push update for the specific chat session
+    const topic = `chatSessionUpdate/${chatId}`;
+    context.postMessage({
+        type: 'pushUpdate',
+        payload: {
+            topic: topic,
+            data: updatedSession // Send the full updated session object
+        }
+    });
+    console.log(`[SendMessageHandler] History reconciled for chat ${chatId} and ${topic} pushed.`);
+} else {
+     console.warn(`[SendMessageHandler] Could not find session ${chatId} after reconciliation to push.`);
+}
+
         } catch (finalMsgError) {
             console.error(`[SendMessageHandler] Error during final history reconciliation for ID ${assistantUiMsgId}:`, finalMsgError);
             // Optionally re-throw or handle further? For now, just log.
+            // Consider if we should still push state even if reconciliation fails partially? Probably not.
         }
     }
 }

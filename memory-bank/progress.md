@@ -14,6 +14,11 @@
     - Created `SubscribeToToolStatusHandler` and `UnsubscribeFromToolStatusHandler`.
     - Updated `SetToolEnabledHandler` to call `_notifyToolStatusChange`.
     - Removed direct handling of `updateAllToolsStatus` in `main.tsx` (verified).
++- **App Routing/State Simplification:**
++    - `app.tsx` refactored to solely handle routing based on `locationAtom` (source of truth), using a single `useEffect` for atom-to-router sync. Error handling removed.
++    - State management (e.g., `isChatListLoadingAtom`), event handlers, and navigation logic (`setLocation` + `updateLocationAtom`) moved from `app.tsx` into relevant child components (`ChatListPage`, `HeaderControls`, `SettingPage`).
++    - Home page route changed from `/chats` to `/`, and navigation targets updated accordingly.
++    - Cleaned up unused code and imports in `app.tsx`.
 - **Default Config Pub/Sub:**
     - Implemented explicit subscribe/unsubscribe mechanism for real-time Default Config updates.
     - Frontend (`SettingPage`) now subscribes on mount and unsubscribes on unmount.

@@ -173,7 +173,8 @@ export function listen(topic: string, callback: (data: any) => void): Subscripti
             await requestData('unsubscribe', { subscriptionId });
             console.log(`[Communication] Successfully unsubscribed from topic: ${topic} (ID: ${subscriptionId})`);
         } catch (error) {
-            console.error(`[Communication] Failed to unsubscribe from topic: ${topic} (ID: ${subscriptionId})`, error);
+            // Log as warning instead of error, as backend might have already cleaned up or never received the subscribe
+            console.warn(`[Communication] Failed to unsubscribe from topic: ${topic} (ID: ${subscriptionId}). This might be expected if the subscription was never fully established or already cleaned up. Error:`, error);
         }
     };
 

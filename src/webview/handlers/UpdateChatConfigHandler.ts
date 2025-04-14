@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { RequestHandler, HandlerContext } from './RequestHandler';
-import { ChatConfig } from '../../common/types'; // Import ChatConfig type
+import { ChatConfig, ChatSession } from '../../common/types'; // Import ChatConfig and ChatSession types
 
 interface UpdateChatConfigPayload {
     chatId: string;
@@ -34,11 +34,22 @@ export class UpdateChatConfigHandler implements RequestHandler {
             await context.historyManager.updateChatSession(chatId, { config: mergedConfig });
             console.log(`[UpdateChatConfigHandler] Successfully updated config for chat ${chatId}.`);
 
-            // No need to push updates here, relevant atoms (like activeChatEffectiveConfigAtom)
-            // will recompute based on the updated chatSessionsAtom state, which should be
-            // updated via a separate mechanism if needed (e.g., a 'chatListUpdated' pub/sub).
-            // For now, the frontend optimistically updates its state.
-
+            // Get the updated session data
+            const updatedSession = context.historyManager.getChatSession(chatId);
+            if (updatedSession) {
+                // Trigger a push update for the specific chat session
+                const topic = `chatSessionUpdate/${chatId}`;
+                context.postMessage({
+                    type: 'pushUpdate',
+                    payload: {
+                        topic: topic,
+                        data: updatedSession // Send the full updated session object
+                    }
+                });
+                console.log(`[UpdateChatConfigHandler] Config updated for chat ${chatId} and ${topic} pushed.`);
+            } else {
+                 console.warn(`[UpdateChatConfigHandler] Could not find session ${chatId} after update to push.`);
+            }
             return { success: true };
         } catch (error: any) {
             console.error(`[UpdateChatConfigHandler] Error updating config for chat ${chatId}:`, error);

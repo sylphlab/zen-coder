@@ -1,15 +1,18 @@
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Correct import path
 
-export class UnsubscribeFromToolStatusHandler implements MessageHandler {
-    public readonly messageType = 'unsubscribeFromToolStatus';
+export class UnsubscribeFromToolStatusHandler implements RequestHandler { // Implement correct interface
+    public readonly requestType = 'unsubscribeFromToolStatus'; // Use correct property name
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
-        console.log(`[${this.messageType}] Handling request...`);
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> { // Update signature and return type
+        console.log(`[${this.requestType}] Handling request...`); // Use correct property name
         try {
             context.aiService.setToolStatusSubscription(false);
-            console.log(`[${this.messageType}] Webview unsubscribed from Tool status updates.`);
+            console.log(`[${this.requestType}] Webview unsubscribed from Tool status updates.`); // Use correct property name
+            return { success: true }; // Return success
         } catch (error: any) {
-            console.error(`[${this.messageType}] Error setting subscription:`, error);
+            console.error(`[${this.requestType}] Error setting subscription:`, error); // Use correct property name
+            // Rethrow the error
+            throw new Error(`Failed to unsubscribe from Tool status: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 }

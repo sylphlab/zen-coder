@@ -45,7 +45,8 @@ import { UpdateChatConfigHandler } from './webview/handlers/UpdateChatConfigHand
 import { UpdateLastLocationHandler } from './webview/handlers/UpdateLastLocationHandler';
 import { SetDefaultConfigHandler } from './webview/handlers/SetDefaultConfigHandler';
 import { DeleteMessageHandler } from './webview/handlers/DeleteMessageHandler';
-import { GetChatStateHandler } from './webview/handlers/GetChatStateHandler';
+// Removed: import { GetChatStateHandler } from './webview/handlers/GetChatStateHandler';
+import { GetChatSessionsHandler } from './webview/handlers/GetChatSessionsHandler'; // Added import for new handler
 import { GetAvailableProvidersHandler } from './webview/handlers/GetAvailableProvidersHandler';
 import { GetProviderStatusHandler } from './webview/handlers/GetProviderStatusHandler';
 import { GetAllToolsStatusHandler } from './webview/handlers/GetAllToolsStatusHandler';
@@ -53,6 +54,7 @@ import { GetMcpStatusHandler } from './webview/handlers/GetMcpStatusHandler';
 import { GetCustomInstructionsHandler } from './webview/handlers/GetCustomInstructionsHandler';
 import { GetDefaultConfigHandler } from './webview/handlers/GetDefaultConfigHandler';
 import { GetModelsForProviderHandler } from './webview/handlers/GetModelsForProviderHandler';
+import { GetLastLocationHandler } from './webview/handlers/GetLastLocationHandler'; // Import new handler
 import { SubscribeHandler } from './webview/handlers/SubscribeHandler';
 import { UnsubscribeHandler } from './webview/handlers/UnsubscribeHandler';
 
@@ -144,7 +146,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         // Register All Handlers (Unified)
         const allHandlers: RequestHandler[] = [ // Use RequestHandler interface for all
             // Data Fetching
-            new GetChatStateHandler(),
+            // Removed: new GetChatStateHandler(),
+            new GetChatSessionsHandler(), // Added new handler
             new GetAvailableProvidersHandler(),
             new GetProviderStatusHandler(),
             new GetAllToolsStatusHandler(),
@@ -152,6 +155,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new GetCustomInstructionsHandler(),
             new GetDefaultConfigHandler(),
             new GetModelsForProviderHandler(),
+            new GetLastLocationHandler(), // Register new handler
             // Actions
             new SetApiKeyHandler(this._aiService),
             new DeleteApiKeyHandler(this._aiService),

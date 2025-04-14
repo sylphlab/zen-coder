@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Refactoring initial data loading mechanism to use Request/Response instead of `WebviewReady` push.
+Refactoring frontend components (`app.tsx`, `ChatListPage`, `HeaderControls`, `SettingPage`) to simplify routing and state synchronization logic. Ensuring `locationAtom` is the single source of truth for navigation state.
 
 ## Next Steps
 1.  **Testing (Manual):** Thoroughly test the new Request/Response data loading mechanism. Verify that all initial states (chats, providers, statuses) load correctly and UI updates accordingly.
@@ -158,152 +158,13 @@ Refactoring initial data loading mechanism to use Request/Response instead of `W
     - **`src/ai/aiService.ts`:**
         - Corrected return type annotation for `getAiResponseStream` (implicitly `Promise<StreamTextResult<...> | null>`).
         - Refactored `activeTools` construction using `reduce` for better readability.
-- **Fixed Streaming TypeError & Final Message Handling (Attempt 6 - User Guided):** Corrected previous incorrect fixes based on user feedback.
-- **Cleaned Up Redundant Tools:** Deleted unused interaction tool files (`showInformationMessage.ts`, `showWarningMessage.ts`, `showErrorMessage.ts`, `showInputBox.ts`, `showQuickPick.ts`) from `src/tools/vscode/` and updated `src/tools/vscode/index.ts` accordingly. Confirmed `src/tools/index.ts` requires no changes.
-- **Finalized Suggested Actions Design:** Agreed to abandon tool-based approach (`presentOptionsTool`, `show...Tool`) for AI-suggested actions. New strategy: AI appends a ```json { "suggested_actions": [...] } ``` block at the end of its text response. `StreamProcessor` parses this block post-stream, sends actions to UI, and removes the block from the final history text. Schema (`structuredAiResponseSchema`) now only defines `suggested_actions`.
-- **Corrected Toolset Understanding:** Focused analysis on core VS Code interaction tools, excluding filesystem tools from this specific discussion and clarifying the role of existing interaction tools before deciding on the structured output approach.
-+- **Filesystem Tool Refactoring (Complete):**
-+    - Finalized design based on feedback: Prioritized consistency, Glob support (except for write/edit), and clear separation of concerns (`replaceContent` vs `editFile`).
-+    - Implemented unified `lineRange` schema (using `start_line`/`end_line` with negative indexing) for `readFiles`, `searchContent`, `replaceContent`.
-+    - Created `searchContent`, `replaceContent`, `deleteItems` tools.
-+    - Implemented core logic for `editFile` (including indentation).
-+    - Updated tool indices and fixed related test errors.
-+- **Comprehensive Refactoring (Extension Host):**
-+    - Implemented handler registration pattern in `extension.ts` (`ZenCoderChatViewProvider`). Message logic moved to dedicated handlers in `src/webview/handlers/`.
-+    - Refactored `AiService` (`src/ai/aiService.ts`): Extracted provider status logic to `ProviderStatusManager` (`src/ai/providerStatusManager.ts`) and model resolution logic to `ModelResolver` (`src/ai/modelResolver.ts`). `AiService` now focuses on core AI interaction and API key storage.
-+    - Created shared types file `src/common/types.ts`.
-+    - Extracted webview HTML generation to `src/webview/webviewContent.ts`.
-+    - History management remains in `src/historyManager.ts`.
-+    - Stream processing remains in `src/streamProcessor.ts`.
-+ - **Implemented Provider Selection Persistence:** Modified `app.tsx` to save/restore both selected provider and model ID using `vscode.getState`/`setState`.
-- **Added Clear Chat Button:** Implemented button and handler in `app.tsx` and backend message handling in `extension.ts` to clear chat history.
-- **Fixed UI Update on Stream (Attempt 3):** Implemented stricter immutability in `appendMessageChunk` handler (`app.tsx`) by creating new objects/arrays for all modified levels of the state.
-- **Fixed UI Update on Stream (Attempt 2):** Further refined frontend logic (`app.tsx`) for `appendMessageChunk` using deep cloning to ensure state updates trigger immediate UI re-renders.
-- **Fixed UI Update on Stream:** Modified frontend logic (`app.tsx`) for `appendMessageChunk` to ensure state updates trigger immediate UI re-renders by creating new array references, resolving the issue where messages only appeared after reload.
-- **Fixed AI Response Handling:** Corrected frontend logic (`app.tsx`) in the `startAssistantMessage` handler to properly use the `messageId` sent from the backend, resolving issues where AI responses weren't displayed after the previous fix.
-- **Fixed Immediate User Message Display:** Updated `handleSend` in `app.tsx` to add the user message to the UI state *before* sending it to the backend, ensuring immediate visibility.
-- **Implemented UI State Persistence:** Refactored history management to use a single persistent store (`UiMessage[]` format mirroring frontend state) saved in `globalState` (`zenCoderUiHistory`).
-    - Backend (`extension.ts`) now incrementally updates this UI history during streaming (text chunks, tool calls, tool status updates) and saves frequently.
-    - Backend translates `UiMessage[]` to `CoreMessage[]` on demand before calling the AI SDK.
-    - Frontend (`app.tsx`) now receives and directly uses the persisted `UiMessage[]` history via `loadUiHistory` message, ensuring partial messages and tool statuses are restored correctly on reload.
-- **Removed Deprecated Dependency:** Removed `@vscode/webview-ui-toolkit` from root `package.json`.
-- **Applied UnoCSS Styling:** Added utility classes to `App.tsx` (layout, chat elements) and `SettingPage.tsx` for basic styling and dark mode support. Fixed related JSX errors.
-- **Fixed UI Rendering Error:** Corrected message rendering logic in `App.tsx` to handle both string and array types for `msg.content`, resolving `msg.content.map is not a function` error.
-- **Added Tool Result History Saving:** Modified `extension.ts` stream processing to create and save `role: 'tool'` messages to history when tool results are received.
-- **Fixed History Format Error:** Corrected `_chatHistory` type in `extension.ts` to `CoreMessage[]` and ensured user messages are converted to the correct format before being added, resolving `AI_InvalidPromptError`.
-- **Fixed UI Infinite Loop:** Adjusted `useEffect` dependencies and removed automatic model re-fetch on status update in `App.tsx` to prevent loop.
-- **Implemented Chat History Persistence:**
-    - Extension (`extension.ts`) now loads/saves history using `context.globalState`.
-    - History is passed to `AiService` and sent to webview (`App.tsx`) on load.
-    - `AiService` refactored to return final assistant message via promise for saving.
-- **Implemented Model Selection Persistence:** Used `vscode.getState()`/`setState()` in `App.tsx` to save and restore the last selected model ID across webview reloads.
-- **Fixed Stream End Handling:** Added explicit `streamFinished` message from backend (`extension.ts`) to frontend (`App.tsx`) to reliably stop the UI streaming indicator.
-- **Fixed State Synchronization:** Ensured Chat UI model list updates correctly after API key changes in Settings UI. (Triggered model re-fetch on provider status change in `App.tsx`).
-- **Fixed Model List Refresh (`App.tsx`):**
-    - Modified `useEffect` hook in `App.tsx` to re-trigger `getAvailableModels` message when `providerStatus` is updated (e.g., after setting/deleting an API key), ensuring the chat UI's model list reflects newly available providers.
-- **Corrected Settings UI (`SettingPage.tsx`):** (Previous change)
-    - Removed local `providerDetails`.
-    - Updated component to render from `providerStatus` prop.
-    - Updated filtering logic.
-    - Fixed JSX comment issue.
-- **Updated Backend Data Structure (`AiService.ts`, `extension.ts`):** (Previous change)
-    - `AiService.getProviderStatus` returns richer `ProviderInfoAndStatus[]`.
-    - `extension.ts` handlers updated for new structure.
-- **Updated App State (`App.tsx`):** (Previous change)
-    - `providerStatus` state holds `ProviderInfoAndStatus[]`.
-    - Message handling updated.
-- **Updated Settings UI (Initial Features):** (Previous change)
-    - Added "Delete Key" button.
-    - Added `handleDeleteApiKey` handler.
-    - Added `apiKeyUrl` display.
-    - Defined `providerDetails` locally (incorrectly).
-- **Updated Extension (`extension.ts`):** (Previous change)
-    - Added `deleteApiKey` handler.
-    - Updated other handlers.
-    - Imported `providerMap`.
-- **Updated App (`App.tsx`):** (Previous change)
-    - Updated message calls and props.
-- **Updated Extension (`extension.ts`):**
-    - Added message handler for `deleteApiKey`.
-    - Updated handlers for `webviewReady`, `getProviderStatus`, `setApiKey` to use refactored `AiService` methods and `providerMap`.
-    - Imported `providerMap`.
-- **Updated App (`App.tsx`):**
-    - Ensured `getProviderStatus` and `getAvailableModels` are called on `webviewReady`.
-    - Passed necessary props to `SettingPage`.
-- **Further Refactored AI Provider Logic:** (Previous change)
-    - Modified `AiProvider` interface for key/status management.
-    - Updated provider modules to implement the interface.
-    - Refactored `AiService` to delegate key/status management.
-    - Removed redundant properties/methods from `AiService`.
-    - Updated methods in `AiService` to use provider methods.
-    - Fixed `dynamicImport` path.
-- **Refactored AI Provider Logic (Initial):** (Previous change)
-    - Created `src/ai/providers` directory.
-    - Defined initial `AiProvider` interface.
-    - Created individual provider modules implementing the initial interface.
-    - Implemented dynamic model fetching for OpenRouter.
-    - Created `src/ai/providers/index.ts`.
-    - Initial refactor of `AiService` (`_getProviderInstance`, `resolveAvailableModels`).
-    - Removed old SDK imports and helpers.
-    - Created `src/utils/dynamicImport.ts`.
-- **Added Settings Provider Search:** (Previous change)
-    - Added a search input field to `SettingPage.tsx`.
-    - Implemented state (`searchQuery`) and filtering logic (`filteredProviders`, `useMemo`) to dynamically filter the displayed provider list based on the search query (matching name or key).
-- **Implemented OpenRouter Model Fetching:** (Previous change)
-    - Added `fetchOpenRouterModels` method to `AiService`.
-    - Updated `resolveAvailableModels` to use the fetched models.
-- **Implemented Settings API Key Input:** (Previous change)
-    - Added UI elements and message handling for setting API keys in `SettingPage.tsx` and `src/extension.ts`.
-- **Restored Settings Page:** (Previous change)
-    - Updated `SettingPage.tsx` props and rendering logic.
-    - Exported types from `App.tsx`.
-    - Passed props in `App.tsx` route.
-- **Added Nanostores:** (Previous change)
-    - Installed `nanostores` and `@nanostores/preact` dependencies.
-- **Added GSAP:** (Previous change)
-    - Installed `gsap` dependency.
-- **Integrated UnoCSS:** (Previous change)
-    - Installed `unocss`, `@unocss/vite`, `@unocss/reset`.
-    - Configured Vite (`webview-ui/vite.config.ts`).
-    - Created UnoCSS config file (`webview-ui/uno.config.ts`).
-    - Imported UnoCSS styles in `webview-ui/src/main.tsx`.
-- **Implemented Routing:** (Previous change)
-    - Installed `wouter`.
-    - Created `SettingPage.tsx` and `ChatPage.tsx` components.
-    - Updated `webview-ui/src/app.tsx` for routing.
-    - Replaced settings modal with `/settings` route.
-    - Updated `showSettings` message handler.
-- **Relaxed Development CSP:** (Previous change)
-    - Added `'unsafe-eval'` to the `script-src` directive in the development mode Content Security Policy within `src/extension.ts` (`getWebviewContent`). This was to test if Vite's HMR script execution was being blocked.
-- **Fixed Vite Port File Path:**
-    - Corrected the path used in `src/extension.ts` (`getWebviewContent`) to read the `.vite.port` file from the project root directory.
-- **Fixed `package.json` Inconsistency:**
-    - Updated `activationEvents`, `contributes.views`, and removed obsolete `menus`, `commands` to align with `WebviewViewProvider`. Resolved "No data provider registered" error.
-- **Custom Instructions & Config Consolidation:**
-    - Implemented global custom instructions via VS Code setting (`zencoder.customInstructions.global`).
-    - Implemented project-specific custom instructions via `.zen/custom_instructions.md`.
-    - Moved project-specific MCP server configuration from `.vscode/mcp_servers.json` to `.zen/mcp_servers.json`.
-    - Updated `AiService` to load and merge both global and project instructions before sending requests to the AI.
-    - Updated Settings UI (`SettingPage.tsx`) to allow editing/saving of both global and project instructions.
-    - Added backend handlers (`Get/Set...InstructionsHandler`, `OpenOrCreate...FileHandler`) and registered them in `extension.ts`.
-    - Updated config utility functions (`configUtils.ts`, `mcpConfigUtils.ts`) to use the new `.zen` directory for project files.
-- **Vite Port Discovery (Initial Implementation):**
-    - Modified `webview-ui/vite.config.ts` to write the running dev server port to `.vite.port`.
-    - Modified `src/extension.ts` to read the port during development.
-- **Tool Refactoring & Expansion:** (Completed previously)
-- **Fixed Stream Parsing (Comprehensive):** (Completed previously)
-- **Removed Deprecated `StreamData`:** (Completed previously)
-- **Standardized `streamText` Usage:** (Completed previously)
-- **Corrected Stream Handling:** (Completed previously)
-- **Corrected Stream Return Value:** (Completed previously)
-- **UI Update (Tool Status):** (Completed previously, but status updates are now disabled).
-- **AiService Refactoring:** (Completed previously)
-- **Configuration Update:** (Completed previously)
-- **Previous:** Project renamed to Zen Coder; Vercel AI SDK enhancements applied.
-- **UI Tool Display Refinement:** (Completed previously)
-- **`uuidGenerateTool` Enhancement & Progress:** (Completed previously)
-- **Tool Result Handling Clarification:** (Completed previously)
-- **Merged Settings UI into Chat Webview (Complete):** (Completed previously)
++ **Simplified App Routing & State (`app.tsx`, `HeaderControls.tsx`, `ChatListPage.tsx`, `SettingPage.tsx`):**
++    - Refactored `app.tsx` to solely handle routing based on `locationAtom` (source of truth). Removed other atom dependencies, event handlers, and unused code. Consolidated `useEffect` logic for atom-to-router synchronization. Removed error handling for `locationAtom`.
++    - Moved navigation logic (`setLocation` + `updateLocationAtom`) into the components triggering navigation: `HeaderControls`, `ChatListPage`, `SettingPage`.
++    - Changed default/home route from `/chats` to `/`. Updated relevant navigation targets.
++    - Removed props related to navigation and chat list actions from `app.tsx`'s rendering of child components.
++ - **Fixed Backend Handler Imports (TS2307):** Corrected import paths in all handlers within `src/webview/handlers/` to import from `./RequestHandler.ts` instead of the non-existent `./MessageHandler.ts`. Updated classes to implement `RequestHandler` and adjusted `handle` method signatures/return types for the Request/Response pattern. Fixed follow-up TS errors related to this change.
++ - **Fixed Webview Routing 404:** Corrected back button navigation in `SettingPage.tsx` to point to `/` instead of `/index.html`.
 
 ## Next Steps
 - **Current Task:** Implementing multi-chat functionality (see Next Steps above).

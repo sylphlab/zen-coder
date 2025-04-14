@@ -1,20 +1,25 @@
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler';
 import { ModelDefinition } from '../../ai/providers/providerInterface'; // Import ModelDefinition
 import { AvailableModel } from '../../common/types'; // Import AvailableModel
 
 /**
  * Handles requests from the frontend to fetch the actual models for a *specific* provider.
- * Sends cached models immediately if available, then fetches fresh models in the background
- * and sends an update if the list has changed.
+ * Fetches available models for a specific provider, utilizing caching.
+ * This handler is designed for the Request/Response pattern and returns the models.
  */
-export class GetAvailableModelsHandler implements MessageHandler {
-    public readonly messageType = 'getAvailableModels';
+export class GetAvailableModelsHandler implements RequestHandler { // Changed interface
+    public readonly requestType = 'getAvailableModels'; // Changed property name
 
-    public async handle(message: any, context: HandlerContext): Promise<void> {
-        const providerId = message.payload?.providerId;
+    // Note: The original 'handle' method used context.postMessage directly.
+    // The RequestHandler pattern expects the handle method to *return* the payload.
+    // This refactoring focuses on fixing the TS error, assuming the calling code
+    // handles the returned promise correctly. A deeper refactor might be needed
+    // if this handler's logic needs to change significantly for Request/Response.
+    public async handle(payload: any, context: HandlerContext): Promise<AvailableModel[]> { // Changed signature and return type
+        const providerId = payload?.providerId; // Use payload directly
         if (!providerId || typeof providerId !== 'string') {
-            console.error("[GetAvailableModelsHandler] Invalid or missing providerId in payload:", message.payload);
-            return;
+            console.error("[GetAvailableModelsHandler] Invalid or missing providerId in payload:", payload);
+            throw new Error("Invalid or missing providerId"); // Throw error for request failure
         }
 
         console.log(`[GetAvailableModelsHandler] Handling request to fetch models for provider: ${providerId}`);
@@ -32,17 +37,14 @@ export class GetAvailableModelsHandler implements MessageHandler {
             modelsToSend = cachedModels;
             source = 'cache';
             cacheSent = true;
-            // Send cached models immediately
-            context.postMessage({
-                type: 'providerModelsLoaded',
-                payload: {
-                    providerId: providerId,
-                    models: this.mapModelsToAvailableModel(modelsToSend, providerId, context),
-                    source: source // Indicate data source
-                }
-            });
+            // If cache is found, return it immediately (Request/Response pattern)
+            console.log(`[GetAvailableModelsHandler] Returning ${cachedModels.length} cached models for ${providerId}.`);
+            // Trigger background fetch without awaiting here
+            this.fetchAndNotifyInBackground(providerId, cachedModels, context);
+            return this.mapModelsToAvailableModel(modelsToSend, providerId, context);
+
         } else {
-             console.log(`[GetAvailableModelsHandler] No cache found for ${providerId}. Will fetch.`);
+             console.log(`[GetAvailableModelsHandler] No cache found for ${providerId}. Fetching now (and awaiting).`);
         }
 
         // 2. Fetch fresh models in the background
@@ -50,37 +52,47 @@ export class GetAvailableModelsHandler implements MessageHandler {
             const freshModels = await context.modelResolver.fetchModelsForProvider(providerId);
             console.log(`[GetAvailableModelsHandler] Fetched ${freshModels.length} fresh models for ${providerId}.`);
 
-            // 3. Compare fresh models with cache
-            const cacheChanged = !cachedModels || this.didModelListChange(cachedModels, freshModels);
+            // If cache was not found, await the fetch and return the result
+            modelsToSend = freshModels;
+            source = 'fetch';
+            return this.mapModelsToAvailableModel(modelsToSend, providerId, context);
+
+        } catch (error: any) {
+            console.error(`[GetAvailableModelsHandler] Error fetching models for provider ${providerId}:`, error);
+            // If fetching fails (and no cache was returned), throw the error
+             throw new Error(`Failed to fetch models for ${providerId}: ${error.message}`);
+        }
+    } // End handle method
+
+    /**
+     * Fetches models in the background and sends a push update if they changed.
+     */
+    private async fetchAndNotifyInBackground(providerId: string, cachedModels: ModelDefinition[], context: HandlerContext): Promise<void> {
+         try {
+            const freshModels = await context.modelResolver.fetchModelsForProvider(providerId);
+            console.log(`[GetAvailableModelsHandler] Background fetch completed for ${providerId}.`);
+
+            const cacheChanged = this.didModelListChange(cachedModels, freshModels);
 
             if (cacheChanged) {
-                console.log(`[GetAvailableModelsHandler] Model list for ${providerId} changed. Sending update.`);
-                modelsToSend = freshModels;
-                source = 'fetch';
-                // Send updated models
-                context.postMessage({
-                    type: 'providerModelsLoaded',
+                console.log(`[GetAvailableModelsHandler] Model list for ${providerId} changed. Pushing update.`);
+                context.postMessage({ // Use postMessage for background push update
+                    type: 'pushUpdate', // Standard push update type
+                    topic: 'providerModelsUpdate', // Specific topic for model updates
                     payload: {
                         providerId: providerId,
-                        models: this.mapModelsToAvailableModel(modelsToSend, providerId, context),
-                        source: source
+                        models: this.mapModelsToAvailableModel(freshModels, providerId, context),
+                        source: 'fetch'
                     }
                 });
             } else {
-                 console.log(`[GetAvailableModelsHandler] Fresh models for ${providerId} match cache. No update needed.`);
+                 console.log(`[GetAvailableModelsHandler] Background fetch: Fresh models for ${providerId} match cache. No push needed.`);
             }
-
         } catch (error: any) {
-            console.error(`[GetAvailableModelsHandler] Error fetching fresh models for provider ${providerId}:`, error);
-            // If cache wasn't sent initially, send an empty list now to signal completion/error
-            if (!cacheSent) {
-                 context.postMessage({
-                    type: 'providerModelsLoaded',
-                    payload: { providerId: providerId, models: [], source: 'error' }
-                });
-            }
+            console.error(`[GetAvailableModelsHandler] Background fetch error for provider ${providerId}:`, error);
+            // Optionally push an error state? For now, just log.
         }
-    } // End handle method
+    }
 
     // Helper to map ModelDefinition[] to AvailableModel[]
     private mapModelsToAvailableModel(models: ModelDefinition[], providerId: string, context: HandlerContext): AvailableModel[] {

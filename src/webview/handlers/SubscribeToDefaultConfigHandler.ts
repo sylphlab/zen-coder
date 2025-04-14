@@ -1,36 +1,36 @@
-import { MessageHandler } from './MessageHandler';
-import { AiService } from '../../ai/aiService';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Correct import path
+// Removed unused AiService import
 
 /**
- * Handles messages from the webview requesting to subscribe to default config updates.
+ * Handles requests from the webview to subscribe to default config updates.
  */
-export class SubscribeToDefaultConfigHandler implements MessageHandler {
-    public readonly messageType = 'subscribeToDefaultConfig';
+export class SubscribeToDefaultConfigHandler implements RequestHandler { // Implement correct interface
+    public readonly requestType = 'subscribeToDefaultConfig'; // Use correct property name
 
-    constructor(private aiService: AiService) {}
+    // Removed constructor
 
-    public async handle(payload: any, context: { aiService: AiService }): Promise<void> {
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> { // Update signature and return type
         console.log('[SubscribeToDefaultConfigHandler] Received subscription request.');
-        // Use the context provided by the registration pattern, or the injected one if that's the pattern
-        const service = context?.aiService || this.aiService;
-        if (service) {
-            service.setDefaultConfigSubscription(true);
-            console.log('[SubscribeToDefaultConfigHandler] Default config subscription enabled.');
-            // Optionally send the current config immediately upon subscription
-            try {
-                const currentConfig = await service.getDefaultConfig();
-                // Assuming a postMessage function is available in the context or globally
-                // This might need adjustment based on the actual message sending mechanism
-                if (context && typeof (context as any).postMessage === 'function') {
-                     (context as any).postMessage({ type: 'updateDefaultConfig', payload: currentConfig });
-                } else {
-                     console.warn('[SubscribeToDefaultConfigHandler] Could not send initial config state: postMessage function not found in context.');
-                }
-            } catch (error) {
-                console.error('[SubscribeToDefaultConfigHandler] Error sending initial default config state:', error);
-            }
-        } else {
-            console.error('[SubscribeToDefaultConfigHandler] AiService instance not available.');
+        // Use the context directly
+        const service = context.aiService;
+        // Assuming service is always available via context
+        service.setDefaultConfigSubscription(true);
+        console.log('[SubscribeToDefaultConfigHandler] Default config subscription enabled.');
+
+        // Send the current config immediately upon subscription via pushUpdate
+        try {
+            const currentConfig = await service.getDefaultConfig();
+            // Use context.postMessage for push update
+            context.postMessage({
+                type: 'pushUpdate',
+                topic: 'defaultConfigUpdate', // Use a specific topic
+                payload: currentConfig
+            });
+            console.log('[SubscribeToDefaultConfigHandler] Sent initial default config state.');
+        } catch (error) {
+            console.error('[SubscribeToDefaultConfigHandler] Error sending initial default config state:', error);
+            // Don't block success return if initial push fails, just log error
         }
+        return { success: true }; // Return success
     }
 }
