@@ -10,11 +10,15 @@ import {
     suggestedActionsMapAtom,
     // providerStatusAtom, // Read-only async atom
     refreshProviderStatusAtom, // Keep refresh trigger
-    // allToolsStatusAtom, // Read-only async atom
-    // mcpServerStatusAtom, // Read-only async atom
+    // allToolsStatusAtom, // Don't import directly
+    refreshAllToolsStatusAtom, // Import refresh trigger
+    // mcpServerStatusAtom, // Don't import directly
+    refreshMcpServerStatusAtom, // Import refresh trigger
     isChatListLoadingAtom,
     // availableProvidersAtom, // Async
-    // defaultConfigAtom, // Async
+    // defaultConfigAtom, // Don't import directly
+    refreshDefaultConfigAtom, // Import refresh trigger
+    refreshCustomInstructionsAtom, // Import refresh trigger for custom instructions
 } from './store/atoms';
 import {
     // Import ALL relevant payload types
@@ -23,11 +27,12 @@ import {
     AppendMessageChunkPayload,
     UpdateSuggestedActionsPayload,
     ProviderInfoAndStatus, // Needed for pushUpdateProviderStatus payload type hint
-    // AllToolsStatusPayload, // Not directly set here
-    // McpConfiguredStatusPayload, // Not directly set here
-    // DefaultChatConfig, // Not directly set here
+    AllToolsStatusInfo, // Import type for payload
+    McpConfiguredStatusPayload, // Import type for payload
+    DefaultChatConfig, // Import type for payload
     UiMessage, // Needed for appendMessageChunk logic
     UiTextMessagePart, // Needed for appendMessageChunk logic
+    // CustomInstructionsPayload is defined inline in atoms.ts now
 } from '../../src/common/types';
 import 'virtual:uno.css';
 import '@unocss/reset/tailwind.css';
@@ -167,10 +172,41 @@ window.addEventListener('message', (event: MessageEvent) => {
                     // store.set(refreshAllToolsStatusAtom); // Implement refresh atom if needed
                     break;
 
+                case 'updateAllToolsStatus':
+                    // const toolsPayload = message.payload as AllToolsStatusInfo; // Payload not needed for refresh trigger
+                    console.log('[Global Listener] Updating allToolsStatusAtom via refresh trigger.');
+                    store.set(refreshAllToolsStatusAtom); // Trigger refresh
+                    break;
+
+                case 'updateMcpConfiguredStatus': // Handle MCP status push
+                    // const mcpPayload = message.payload as McpConfiguredStatusPayload; // Payload not needed for refresh trigger
+                    console.log('[Global Listener] Updating mcpServerStatusAtom via refresh trigger.');
+                    store.set(refreshMcpServerStatusAtom); // Trigger refresh
+                    break;
+
+                case 'updateDefaultConfig': // Handle Default Config push
+                    // const configPayload = message.payload as DefaultChatConfig; // Payload not needed for refresh trigger
+                    console.log('[Global Listener] Updating defaultConfigAtom via refresh trigger.');
+                    store.set(refreshDefaultConfigAtom); // Trigger refresh
+                    break;
+
+                case 'updateCustomInstructions': // Handle Custom Instructions push
+                    console.log('[Global Listener] Updating customInstructionsAtom via refresh trigger.');
+                    store.set(refreshCustomInstructionsAtom); // Trigger refresh
+                    break;
+
+                case 'pushUpdateProviderStatus': // Handle Provider Status push
+                    // const providerPayload = message.payload as ProviderInfoAndStatus[]; // Payload not needed for refresh trigger
+                    console.log('[Global Listener] Updating providerStatusAtom via refresh trigger.');
+                    // Instead of setting directly, trigger a refresh of the async atom
+                    store.set(refreshProviderStatusAtom);
+                    break;
+
                 // Add other message type handlers here...
 
                 default:
-                    console.log(`[Global Listener] Unhandled push message type: ${message.type}`);
+                    // Keep logging unhandled types
+                    console.warn(`[Global Listener] Unhandled push message type: ${message.type}`);
                     break;
             }
         }

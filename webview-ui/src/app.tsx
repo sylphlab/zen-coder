@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'preact/hooks'; // Keep useState for local UI state
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { Router, Route, useLocation, Switch, Redirect } from "wouter";
-import { Suspense } from 'preact/compat'; // Import Suspense
+// import { Suspense } from 'preact/compat'; // Remove Suspense import
 import { JSX } from 'preact/jsx-runtime'; // Import JSX namespace
 import './app.css';
 import { SettingPage } from './pages/SettingPage';
@@ -459,8 +459,7 @@ const handleDeleteMessage = useCallback((messageId: string) => {
     return (
         <Router>
             {/* Removed StateUpdateMessageHandler rendering */}
-            {/* Wrap the main content in Suspense */}
-            <Suspense fallback={<div class="flex justify-center items-center h-full">Loading...</div>}>
+            {/* Removed Suspense wrapper */}
             {/* Use a slightly different dark background for the main app */}
             <div class="app-layout h-screen flex flex-col bg-gray-100 dark:bg-gray-850 text-gray-900 dark:text-gray-100">
                 {/* Remove padding from main, apply to inner containers */}
@@ -541,7 +540,7 @@ const handleDeleteMessage = useCallback((messageId: string) => {
                     confirmText="Confirm Clear"
                 />
             </div>
-            </Suspense>
+            {/* Removed Suspense closing tag */}
         </Router>
     );
 }

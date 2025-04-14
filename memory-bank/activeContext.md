@@ -20,7 +20,8 @@ Refactoring initial data loading mechanism to use Request/Response instead of `W
 4.  **UI Refinements:** Further improve UI styling and potentially add animations.
 5.  **Error Handling:** Review and improve error handling across the application.
 
-## Recent Changes (Fix App Load, MCP Pub/Sub, Initial Data Load Refactor, UI Debugging, TS Fixes, Tools)
+## Recent Changes (Fix Settings Loop, App Load, MCP Pub/Sub, Initial Data Load Refactor, UI Debugging, TS Fixes, Tools)
++ - **Refactored Settings Page & Subscription Logic:** Broke down `webview-ui/src/pages/SettingPage.tsx` into smaller components (`DefaultModelSettings`, `CustomInstructionsSettings`, `ProviderSettings`, `McpServerSettings`, `ToolSettings`). Moved subscription logic (subscribe/unsubscribe messages) from component `useEffect` hooks to the `onMount`/`onUnmount` lifecycle methods of the corresponding Jotai atoms (`providerStatusAtom`, `defaultConfigAtom`, `allToolsStatusAtom`, `mcpServerStatusAtom`, `customInstructionsAtom`) in `webview-ui/src/store/atoms.ts`. This aligns with Jotai best practices and aims to definitively fix the infinite loop. Corrected `atomWithDefault` usage and added null checks in components.
 + - **Refactored Initial Data Loading:**
 +     - Removed `WebviewReadyHandler` and its push-based logic.
 +     - Created new request handlers (`GetChatStateHandler`, `GetAvailableProvidersHandler`, `GetProviderStatusHandler`, `GetAllToolsStatusHandler`, `GetMcpStatusHandler`) in `src/webview/handlers/`.
@@ -313,6 +314,7 @@ Refactoring initial data loading mechanism to use Request/Response instead of `W
 - **Future:** Test image upload functionality thoroughly across different providers.
 
 ## Debugging Notes
++ - **Settings Page Infinite Loop (Refactored - Atom Lifecycle):** The loop persisted. Refactored `SettingPage.tsx` into smaller components. Moved subscription logic (subscribe/unsubscribe messages) from component `useEffect` hooks to the `onMount`/`onUnmount` lifecycle methods of the corresponding Jotai atoms in `atoms.ts`. Corrected `atomWithDefault` usage and added null checks in components. This is the recommended Jotai pattern for managing side effects tied to atom state.
 + - **Model Input Field (Fixed):** The `useEffect` hook in `ModelSelector.tsx` was incorrectly overwriting `inputValue`. Fixed by adjusting the dependency array to only react to external prop changes (`selectedProviderId`, `selectedModelId`).
 - **TypeScript Errors in `SendMessageHandler.ts`:** Resolved import path issue. Remaining errors related to `HistoryManager` and `AiService` expecting `string` instead of `UiMessageContentPart[]` will be addressed by updating those files.
 - **Filesystem Test (`filesystem.test.ts`):** Added tests for `readFileTool`. Fixed TS errors related to `StreamData` mock and missing `encoding` parameter in tool calls.

@@ -151,13 +151,13 @@
 ## What's Left (Other Features/Enhancements)
 - **Testing:** Thoroughly test the new Request/Response data loading and Pub/Sub mechanisms.
 - **Implement True Pub/Sub (Complete for Settings):** MCP status, Provider status, Tool status, Default Config, and Custom Instructions now use Pub/Sub. Review remaining push updates (e.g., `mcpConfigReloaded`) for potential conversion.
-- Resume and complete image upload functionality.
+- **Image Upload (Verified):** Frontend UI (`app.tsx`, `InputArea.tsx`), backend data handling (`SendMessageHandler`, `HistoryManager`), and frontend display (`MessagesArea.tsx`) logic implemented and verified via code review. Ready for manual testing.
 - Implement remaining VS Code tool enhancements (debugging tools: stop, step, breakpoints; enhance `runCommandTool`).
 - Test structured output and suggested actions thoroughly (Manual).
 - Improve error handling throughout.
 - Further refine UI styling and potentially add animations.
 - Thoroughly test UI interactions (model selection, async states, etc.) (Manual).
-- Resume and complete image upload functionality (Manual Testing/Debugging).
+- **Image Upload (Manual Testing):** Test image upload functionality thoroughly across different providers and scenarios.
 
 ## Current Status (Multi-Chat Implementation)
 - Backend services (`HistoryManager`, `AiService`, `StreamProcessor`) and core handlers updated for `chatId`.

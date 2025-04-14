@@ -1,6 +1,7 @@
 // webview-ui/src/store/atoms.ts
 import { atom } from 'jotai';
-import { atomFamily, loadable } from 'jotai/utils'; // Import atomFamily and loadable
+import { atomWithDefault, atomFamily, loadable } from 'jotai/utils'; // Consolidated imports
+import { postMessage } from '../app';
 import {
     ChatSession,
     ProviderInfoAndStatus,
@@ -10,8 +11,9 @@ import {
     UiImagePart,
     AllToolsStatusInfo, // Changed from AllToolsStatusPayload
     McpConfiguredStatusPayload, // Keep this, it was re-added to types.ts
-    DefaultChatConfig, // Add comma here
+    DefaultChatConfig,
     UiMessageContentPart,
+    // Removed CustomInstructionsPayload import
 } from '../../../src/common/types'; // Corrected relative path
 
 // Define the type expected by UI components based on errors
@@ -33,14 +35,24 @@ export const activeChatIdAtom = atom<string | null>(null);
 // Atom to trigger provider status refresh
 const providerStatusRefreshAtom = atom(0);
 
-// Async atom to fetch provider status, depends on refresh atom
-export const providerStatusAtom = atom(async (get) => { // Add get argument
-    get(providerStatusRefreshAtom); // Read the refresh atom to establish dependency
-    console.log("[Jotai Async] Fetching provider status (triggered by refresh)...");
-    const status = await requestData<ProviderInfoAndStatus[]>('getProviderStatus');
-    console.log("[Jotai Async] Received provider status:", status);
-    return status ?? []; // Return empty array on null/undefined response
-});
+// Atom to hold the status of all providers with subscription management
+export const providerStatusAtom = atomWithDefault<ProviderInfoAndStatus[] | null>(() => null);
+providerStatusAtom.onMount = (set) => {
+    console.log('[providerStatusAtom] Mounted. Subscribing...');
+    postMessage({ type: 'subscribeToProviderStatus' });
+    // Initial fetch
+    requestData<{ payload: ProviderInfoAndStatus[] }>('getProviderStatus')
+        .then(response => set(response.payload))
+        .catch(err => {
+            console.error("Error fetching initial provider status:", err);
+            set(null); // Set to null or empty array on error
+        });
+
+    return () => {
+        console.log('[providerStatusAtom] Unmounted. Unsubscribing...');
+        postMessage({ type: 'unsubscribeFromProviderStatus' });
+    };
+};
 
 // Expose a way to trigger the refresh from components/handlers
 export const refreshProviderStatusAtom = atom(
@@ -100,29 +112,105 @@ export const modelsForProviderAtomFamily = atomFamily((providerId: string | null
 
 // Removed: Simple providerModelsMapAtom - replaced by atomFamily
 
-// Async atom to fetch the default configuration
-export const defaultConfigAtom = atom(async () => {
-    console.log("[Jotai Async] Fetching default config...");
-    const config = await requestData<DefaultChatConfig>('getDefaultConfig');
-    console.log("[Jotai Async] Received default config:", config);
-    return config ?? {}; // Return empty object on null/undefined response
+// --- Default Config Atoms ---
+const defaultConfigRefreshAtom = atom(0);
+// Atom to hold the default configuration with subscription management
+export const defaultConfigAtom = atomWithDefault<DefaultChatConfig | null>(() => null);
+defaultConfigAtom.onMount = (set) => {
+    console.log('[defaultConfigAtom] Mounted. Subscribing...');
+    postMessage({ type: 'subscribeToDefaultConfig' });
+    // Initial fetch
+    requestData<{ payload: DefaultChatConfig }>('getDefaultConfig')
+        .then(response => set(response.payload))
+        .catch(err => {
+            console.error("Error fetching initial default config:", err);
+            set(null);
+        });
+
+    return () => {
+        console.log('[defaultConfigAtom] Unmounted. Unsubscribing...');
+        postMessage({ type: 'unsubscribeFromDefaultConfig' });
+    };
+};
+export const refreshDefaultConfigAtom = atom(null, (get, set) => {
+    set(defaultConfigRefreshAtom, c => c + 1);
 });
 
-// Async atom to fetch the status of all tools (standard + MCP)
-export const allToolsStatusAtom = atom(async () => {
-    console.log("[Jotai Async] Fetching all tools status...");
-    const status = await requestData<AllToolsStatusInfo>('getAllToolsStatus'); // Changed type
-    console.log("[Jotai Async] Received all tools status:", status);
-    return status ?? {}; // Return empty object on null/undefined response
+// --- All Tools Status Atoms ---
+const allToolsStatusRefreshAtom = atom(0);
+// Atom to hold the status of all tools (standard and MCP) with subscription management
+export const allToolsStatusAtom = atomWithDefault<AllToolsStatusInfo | null>(() => null);
+allToolsStatusAtom.onMount = (set) => {
+    console.log('[allToolsStatusAtom] Mounted. Subscribing...');
+    postMessage({ type: 'subscribeToToolStatus' });
+    // Initial fetch
+    requestData<{ payload: AllToolsStatusInfo }>('getAllToolsStatus')
+        .then(response => set(response.payload))
+        .catch(err => {
+            console.error("Error fetching initial tool status:", err);
+            set(null);
+        });
+
+    return () => {
+        console.log('[allToolsStatusAtom] Unmounted. Unsubscribing...');
+        postMessage({ type: 'unsubscribeFromToolStatus' });
+    };
+};
+export const refreshAllToolsStatusAtom = atom(null, (get, set) => {
+    set(allToolsStatusRefreshAtom, c => c + 1);
 });
 
-// Async atom to fetch the configured status of MCP servers
-export const mcpServerStatusAtom = atom(async () => {
-    console.log("[Jotai Async] Fetching MCP server configured status...");
-    const status = await requestData<McpConfiguredStatusPayload>('getMcpConfiguredStatus');
-    console.log("[Jotai Async] Received MCP server configured status:", status);
-    return status ?? {}; // Return empty object on null/undefined response
+// --- MCP Server Status Atoms ---
+const mcpServerStatusRefreshAtom = atom(0);
+// Atom to hold the configured status of MCP servers with subscription management
+export const mcpServerStatusAtom = atomWithDefault<McpConfiguredStatusPayload | null>(() => null);
+mcpServerStatusAtom.onMount = (set) => {
+    console.log('[mcpServerStatusAtom] Mounted. Subscribing...');
+    postMessage({ type: 'subscribeToMcpStatus' });
+    // Initial fetch
+    requestData<{ payload: McpConfiguredStatusPayload }>('getMcpConfiguredStatus')
+        .then(response => set(response.payload))
+        .catch(err => {
+            console.error("Error fetching initial MCP status:", err);
+            set(null);
+        });
+
+    return () => {
+        console.log('[mcpServerStatusAtom] Unmounted. Unsubscribing...');
+        postMessage({ type: 'unsubscribeFromMcpStatus' });
+    };
+};
+export const refreshMcpServerStatusAtom = atom(null, (get, set) => {
+    set(mcpServerStatusRefreshAtom, c => c + 1);
 });
+// --- Custom Instructions Atoms ---
+// Define the payload type inline based on src/common/types.ts
+type CustomInstructionsPayloadType = { global?: string; project?: string; projectPath?: string | null };
+
+const customInstructionsRefreshAtom = atom(0);
+// Atom to hold custom instructions (global and project) with subscription management
+export const customInstructionsAtom = atomWithDefault<{ global: string; project: string | null; projectPath: string | null } | null>(() => null);
+customInstructionsAtom.onMount = (set) => {
+    console.log('[customInstructionsAtom] Mounted. Subscribing...');
+    postMessage({ type: 'subscribeToCustomInstructions' });
+    // Initial fetch
+    requestData<{ payload: { global: string; project: string | null; projectPath: string | null } }>('getCustomInstructions')
+        .then(response => set(response.payload))
+        .catch(err => {
+            console.error("Error fetching initial custom instructions:", err);
+            set(null);
+        });
+
+    return () => {
+        console.log('[customInstructionsAtom] Unmounted. Unsubscribing...');
+        postMessage({ type: 'unsubscribeFromCustomInstructions' });
+    };
+};
+export const refreshCustomInstructionsAtom = atom(null, (get, set) => {
+    set(customInstructionsRefreshAtom, c => c + 1);
+});
+
+
 
 // --- Core State Atoms (User Input / UI State) ---
 export const isStreamingAtom = atom<boolean>(false);
