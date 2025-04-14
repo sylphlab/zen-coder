@@ -1,9 +1,9 @@
 import { FunctionalComponent } from 'preact';
 import { useState, useMemo, useCallback, useEffect } from 'preact/hooks';
-import { useStore } from '@nanostores/react'; // Import useStore
+import { useStore } from '@nanostores/preact'; // Use preact binding
 import { JSX } from 'preact/jsx-runtime';
-import { AvailableModel, ProviderInfoAndStatus } from '../../../src/common/types'; // Added ProviderInfoAndStatus
-import { $providerStatus } from '../stores/providerStores'; // Import Nanostore provider status store
+import { AvailableModel } from '../../../src/common/types'; // Removed ProviderInfoAndStatus, not needed here
+import { $providerStatus, $modelsForSelectedProvider, fetchModels } from '../stores/providerStores'; // Import stores and fetch function
 // Removed Jotai atom imports
 
 interface ModelSelectorProps {
@@ -20,24 +20,43 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     onModelChange,
 }) => {
     // --- State from Nanostores ---
-    const allProvidersStatus = useStore($providerStatus); // Use the Nanostore for provider status
-    console.log('[ModelSelector Render] Direct read from store:', JSON.stringify($providerStatus.get())); // Log direct store read
+    const allProvidersStatus = useStore($providerStatus); // Provider list for the dropdown
+    const modelsState = useStore($modelsForSelectedProvider); // Models for the selected provider { loading, error, models, providerId }
+    console.log('[ModelSelector Render] Provider Status:', JSON.stringify(allProvidersStatus));
+    console.log('[ModelSelector Render] Models State:', JSON.stringify(modelsState));
 
     // --- Local State ---
     const [inputValue, setInputValue] = useState(''); // Input field value
 
-    // Effect to update local input state when external selection changes or provider data loads
+    // Effect to fetch models when provider changes
     useEffect(() => {
-        const providerData = allProvidersStatus?.find(p => p.id === selectedProviderId);
-        const models = providerData?.models ?? [];
-        const selectedModelObject = models.find(m => m.id === selectedModelId);
-        const newValue = selectedModelObject?.name ?? selectedModelId ?? '';
-        // Only update if the calculated value differs from current input, avoids loops
-        if (newValue !== inputValue) {
-            console.log(`[ModelSelector useEffect] Setting inputValue based on props/data: "${newValue}"`);
+        console.log(`[ModelSelector useEffect/ProviderChange] selectedProviderId changed to: ${selectedProviderId}. Triggering fetchModels.`);
+        fetchModels(selectedProviderId); // Call the fetch function
+    }, [selectedProviderId]); // Depend only on selectedProviderId
+
+    // Effect to update local input state based on selected model *from the loaded models state*
+    useEffect(() => {
+        // Use modelsState.models which holds the fetched models for the selected provider
+        const selectedModelObject = modelsState.models.find(m => m.id === selectedModelId);
+        const newValue = selectedModelObject?.name ?? selectedModelId ?? ''; // Use name first, then ID
+
+        // Only update if the calculated value differs from current input and models are loaded for the correct provider
+        if (modelsState.providerId === selectedProviderId && !modelsState.loading && newValue !== inputValue) {
+            console.log(`[ModelSelector useEffect/InputUpdate] Setting inputValue based on selectedModelId "${selectedModelId}" and loaded models: "${newValue}"`);
             setInputValue(newValue);
         }
-    }, [selectedProviderId, selectedModelId, allProvidersStatus, inputValue]); // Re-run if props, provider data, or local input changes
+        // Clear input if provider changes and models haven't loaded for the new provider yet,
+        // or if the selected model is no longer valid for the current provider's models
+        else if (selectedProviderId && modelsState.providerId !== selectedProviderId && inputValue) {
+             console.log(`[ModelSelector useEffect/InputUpdate] Provider changed (${selectedProviderId}), clearing input.`);
+             setInputValue('');
+        } else if (selectedProviderId && modelsState.providerId === selectedProviderId && !modelsState.loading && !selectedModelObject && selectedModelId && inputValue) {
+             console.log(`[ModelSelector useEffect/InputUpdate] Selected model "${selectedModelId}" not found in loaded models, clearing input.`);
+             setInputValue(''); // Clear input if selected model doesn't exist in loaded list
+        }
+        // Note: Removing inputValue from the dependency array to prevent this effect
+        // from running every time the user types. It should now only run when external selections change.
+    }, [selectedProviderId, selectedModelId, modelsState]); // REMOVED inputValue dependency
 
 
     // --- Derived Data from Nanostore ---
@@ -94,30 +113,28 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     }, [allProvidersStatus]);
     */ // End replaced block
 
+    // Use models directly from the dedicated models store
     const modelsForSelectedProvider = useMemo(() => {
-        if (!selectedProviderId || !allProvidersStatus) return [];
-        const providerData = allProvidersStatus.find(p => p.id === selectedProviderId);
-        // Adapt to the structure from ProviderInfoAndStatus
-        return providerData?.models.map(m => ({
-            id: m.id,
-            name: m.name,
-            providerId: providerData.id, // Add providerId
-            providerName: providerData.name // Add providerName
-        } as AvailableModel)) ?? [];
-    }, [selectedProviderId, allProvidersStatus]);
+        // Ensure models are loaded for the currently selected provider
+        if (modelsState.providerId === selectedProviderId && !modelsState.loading) {
+            return modelsState.models;
+        }
+        return []; // Return empty array if loading, error, or provider mismatch
+    }, [selectedProviderId, modelsState]);
 
 
-    // Filter models for datalist based on input and selected provider's models
+    // Filter models for datalist based on input and *loaded* models for the selected provider
     const filteredModelsForDatalist = useMemo(() => {
         const lowerInput = inputValue.toLowerCase();
-        if (!selectedProviderId || modelsForSelectedProvider.length === 0) return [];
-        if (!lowerInput) return modelsForSelectedProvider; // Show all models for provider if input is empty
+        // Filter based on the models loaded into modelsState.models
+        if (!selectedProviderId || modelsState.providerId !== selectedProviderId || modelsState.loading || modelsState.models.length === 0) return [];
+        if (!lowerInput) return modelsState.models; // Show all models for provider if input is empty
 
-        return modelsForSelectedProvider.filter(model =>
-            model.id.toLowerCase().includes(lowerInput) ||
-            model.name.toLowerCase().includes(lowerInput)
+        return modelsState.models.filter(model =>
+            model.id.toLowerCase().includes(lowerInput) || // Match ID
+            (model.name && model.name.toLowerCase().includes(lowerInput)) // Match name (if exists)
         );
-    }, [inputValue, modelsForSelectedProvider, selectedProviderId]);
+    }, [inputValue, selectedProviderId, modelsState]); // Depend on input, selection, and models state
 
     // --- Event Handlers ---
     const handleProviderSelect = useCallback((e: JSX.TargetedEvent<HTMLSelectElement>) => {
@@ -145,9 +162,19 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
 
         console.log(`[ModelSelector handleModelBlur] Input blurred with value: "${inputValue}"`);
 
-        // Try to find an exact match (ID or Name) within the currently selected provider's models first
-        matchedModel = modelsForSelectedProvider.find((m: AvailableModel) =>
-            m.id.toLowerCase() === lowerInput || m.name.toLowerCase() === lowerInput
+        // Use models from the dedicated store (modelsState.models)
+        if (modelsState.providerId !== selectedProviderId || modelsState.loading) {
+            console.log('[ModelSelector handleModelBlur] Models not ready or mismatched, cannot match.');
+            // Optionally revert input here if needed, or just exit
+             const currentSelectedModelAgain = modelsState.models.find(m => m.id === selectedModelId);
+             const revertValueAgain = currentSelectedModelAgain?.name ?? selectedModelId ?? '';
+             setInputValue(revertValueAgain);
+            return;
+        }
+
+        // Try to find an exact match (ID or Name) within the *loaded* models for the selected provider
+        matchedModel = modelsState.models.find((m: AvailableModel) =>
+             m.id.toLowerCase() === lowerInput || (m.name && m.name.toLowerCase() === lowerInput)
         ) ?? null;
 
         if (matchedModel) {
@@ -164,10 +191,10 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                  console.log(`[ModelSelector handleModelBlur] Selection hasn't changed.`);
             }
         } else {
-            // No match found within the current provider
-            console.log(`[ModelSelector handleModelBlur] No exact match found for "${inputValue}" within provider ${selectedProviderId}.`);
+            // No match found within the loaded models for the current provider
+            console.log(`[ModelSelector handleModelBlur] No exact match found for "${inputValue}" within loaded models for provider ${selectedProviderId}.`);
             // Revert input to the currently selected model's display value (or empty if none selected)
-            const currentSelectedModel = modelsForSelectedProvider.find(m => m.id === selectedModelId);
+            const currentSelectedModel = modelsState.models.find(m => m.id === selectedModelId);
             const revertValue = currentSelectedModel?.name ?? selectedModelId ?? '';
             console.log(`[ModelSelector handleModelBlur] Reverting input value to: "${revertValue}"`);
             setInputValue(revertValue);
@@ -181,7 +208,7 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
             }
             // If input was non-empty and didn't match, OR input was empty and nothing was selected, do nothing further.
         }
-    }, [inputValue, selectedProviderId, selectedModelId, modelsForSelectedProvider, onModelChange, setInputValue]);
+    }, [inputValue, selectedProviderId, selectedModelId, modelsState, onModelChange, setInputValue]); // Depend on modelsState now
 
     // Handle selection directly from datalist via onInput event (more reliable than onChange for datalist)
     // This is combined with the input change handler now.
@@ -194,13 +221,12 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     const modelInputId = `model-input-${labelPrefix.toLowerCase().replace(/\s+/g, '-') || 'main'}`;
     const datalistId = `models-datalist-${labelPrefix.toLowerCase().replace(/\s+/g, '-') || 'main'}`;
 
-    // Loading/Error states derived from the single Nanostore
-    const providersLoading = allProvidersStatus === null;
-    // Can't easily distinguish provider fetch error vs model fetch error with current store structure
-    // Assume error if loading is done and data is still null or empty? Or add error state to store?
-    // For now, simplify: disable if loading.
-    const modelsLoading = providersLoading; // If providers haven't loaded, models haven't either
-    const modelsError = !providersLoading && !allProvidersStatus; // Basic error check
+    // Loading/Error states derived from relevant stores
+    const providersLoading = allProvidersStatus === null; // Check if provider list is loading
+    // Model loading/error states from the dedicated store, specific to the selected provider
+    const modelsLoading = modelsState.loading;
+    const modelsError = modelsState.error;
+    const modelFetchProviderId = modelsState.providerId;
 
     return (
         <div class="model-selector flex items-center space-x-2">
@@ -227,13 +253,20 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                 value={inputValue} // Bind to local input state
                 onInput={handleModelInputChange} // Update local state on input
                 onBlur={handleModelBlur} // Finalize on blur
-                // Use onInput and onBlur as before
-                placeholder={!selectedProviderId ? "Select Provider First" : (modelsLoading ? "Loading..." : "Select or Type Model")}
-                disabled={!selectedProviderId || modelsLoading} // Disable if no provider or loading
+                placeholder={
+                    !selectedProviderId ? "Select Provider First"
+                    : modelsLoading ? "Loading Models..."
+                    : modelsError ? "Error loading models"
+                    : "Select or Type Model"
+                }
+                // Disable if no provider selected OR models are loading for the selected provider OR there was an error
+                disabled={!selectedProviderId || (modelsLoading && modelFetchProviderId === selectedProviderId) || !!modelsError}
                 class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm flex-1 min-w-40 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                aria-invalid={!!modelsError} // Indicate error state
+                title={modelsError ?? ''} // Show error message on hover
             />
             <datalist id={datalistId}>
-                {/* Datalist options based on filtered models */}
+                {/* Datalist options based on successfully filtered models */}
                 {filteredModelsForDatalist.map((model) => (
                     // Value should be the model name (or ID if name isn't unique/reliable for selection)
                     // Using name seems more user-friendly for display in datalist suggestion

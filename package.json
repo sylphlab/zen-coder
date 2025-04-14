@@ -54,22 +54,49 @@
           "default": true,
           "description": "Enable DeepSeek provider."
         },
+        "zencoder.defaults.defaultProviderId": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Default AI provider ID to use for new chats.",
+          "scope": "window"
+        },
+        "zencoder.defaults.defaultModelId": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Default model ID (providerId:modelName) to use for new chats.",
+          "scope": "window"
+        },
+        "zencoder.defaults.imageModelId": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Default model ID (providerId:modelName) to use for image generation (if supported). Leave null if none.",
+          "scope": "window"
+        },
+        "zencoder.defaults.optimizeModelId": {
+          "type": ["string", "null"],
+          "default": null,
+          "description": "Default model ID (providerId:modelName) to use for optimizing instructions (if supported). Leave null if none.",
+          "scope": "window"
+        },
         "zencoder.defaults.chatModelId": {
           "type": "string",
           "default": "anthropic:claude-3-5-sonnet-latest",
-          "description": "Default model ID (providerId:modelName) to use for chat interactions.",
+          "markdownDescription": "**DEPRECATED:** Use `zencoder.defaults.defaultProviderId` and `zencoder.defaults.defaultModelId` instead.",
+          "description": "[Deprecated] Default model ID for chat.",
           "scope": "window"
         },
         "zencoder.defaults.imageGenerationModelId": {
           "type": "string",
           "default": "",
-          "description": "Default model ID (providerId:modelName) to use for image generation (if supported). Leave empty if none.",
+          "markdownDescription": "**DEPRECATED:** Use `zencoder.defaults.imageModelId` instead.",
+          "description": "[Deprecated] Default model ID for image generation.",
           "scope": "window"
         },
         "zencoder.defaults.instructionOptimizationModelId": {
           "type": "string",
           "default": "",
-          "description": "Default model ID (providerId:modelName) to use for optimizing instructions (if supported). Leave empty if none.",
+          "markdownDescription": "**DEPRECATED:** Use `zencoder.defaults.optimizeModelId` instead.",
+          "description": "[Deprecated] Default model ID for optimizing instructions.",
           "scope": "window"
         },
         "zencoder.customInstructions.global": {

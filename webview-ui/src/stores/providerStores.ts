@@ -1,14 +1,15 @@
-import { atom, onMount } from 'nanostores';
-import { ProviderInfoAndStatus } from '../../../src/common/types';
+import { atom, onMount, task } from 'nanostores'; // Added task
+import { ProviderInfoAndStatus, AvailableModel } from '../../../src/common/types'; // Added AvailableModel
 import { requestData } from '../utils/communication';
-import { createFetcherStore } from './utils/createFetcherStore'; // Renamed import
+// Removed createFetcherStore import as we'll use task or manual fetch
 import { listen } from '../utils/communication'; // Import listen
+import { createMutationStore } from './utils/createMutationStore';
 
 // --- Type for the specific fetch payload ---
 type ProviderStatusFetchPayload = { payload: ProviderInfoAndStatus[] | null };
 
 // --- Provider Status Store (using basic atom + onMount) ---
-export const $providerStatus = atom<ProviderInfoAndStatus[]>([]); // Start with empty array, null indicates loading but might cause issues
+export const $providerStatus = atom<ProviderInfoAndStatus[]>([]); // Start with empty array
 
 onMount($providerStatus, () => {
     const topic = 'providerStatus';
@@ -82,10 +83,52 @@ onMount($providerStatus, () => {
     };
 }); // End onMount
 
-// --- Available Providers Store (Simple fetch, no subscription needed?) ---
-// This might not need subscription, just fetching once.
-// Consider if it should be a Task or just fetched directly in components needing it.
-// For consistency, let's keep it as a store for now, fetched on mount.
+// --- Models for Selected Provider Store ---
+// Holds the state for models of the currently selected provider
+export const $modelsForSelectedProvider = atom<{
+    loading: boolean;
+    error: string | null;
+    models: AvailableModel[];
+    providerId: string | null; // Keep track of which provider the models are for
+}>({
+    loading: false,
+    error: null,
+    models: [],
+    providerId: null,
+});
+
+// Function to fetch models for a given providerId
+export async function fetchModels(providerId: string | null) {
+    if (!providerId) {
+        console.log('[fetchModels Function] No providerId, clearing models.');
+        $modelsForSelectedProvider.set({ loading: false, error: null, models: [], providerId: null });
+        return; // Exit if no provider is selected
+    }
+
+    // Check if we already have models for this provider
+    const currentState = $modelsForSelectedProvider.get();
+    if (currentState.providerId === providerId && !currentState.error) {
+        console.log(`[fetchModels Function] Models for ${providerId} already loaded.`);
+        // Optionally re-fetch if needed, but for now, just return if loaded
+        return;
+    }
+
+    console.log(`[fetchModels Function] Fetching models for provider: ${providerId}`);
+    $modelsForSelectedProvider.set({ ...currentState, loading: true, error: null, providerId }); // Set loading state
+
+    try {
+        const models = await requestData<AvailableModel[]>('getModelsForProvider', { providerId });
+        console.log(`[fetchModels Function] Received ${models.length} models for ${providerId}.`);
+        $modelsForSelectedProvider.set({ loading: false, error: null, models, providerId });
+    } catch (error: any) {
+        console.error(`[fetchModels Function] Error fetching models for ${providerId}:`, error);
+        $modelsForSelectedProvider.set({ loading: false, error: error.message || 'Failed to fetch models', models: [], providerId });
+    }
+}
+
+
+// --- Available Providers Store (DEPRECATED - Use $providerStatus) ---
+// Keeping for reference but likely removable as $providerStatus has the necessary info
 export const availableProvidersStore = atom<ProviderInfoAndStatus[] | null>(null);
 
 onMount(availableProvidersStore, () => {
@@ -113,7 +156,6 @@ onMount(availableProvidersStore, () => {
 });
 
 // --- Mutation Stores for Provider Settings ---
-import { createMutationStore } from './utils/createMutationStore';
 
 // Set API Key
 type SetApiKeyPayload = { provider: string; apiKey: string };
@@ -136,16 +178,7 @@ export const $setApiKey = createMutationStore<
         return { optimisticState: updatedState, revertState: currentState };
     },
      applyMutationResult: (result: void, currentState: ProviderInfoAndStatus[] | null /* Removed payload, use closure */) => {
-         // Ensure apiKeySet is true on successful confirmation
-         // Access payload via closure if needed, but here we just confirm based on success
-         // For this specific case, the optimistic state should be correct upon success.
-         // If we needed the providerId, it would be payload.provider from the outer scope.
-         // Let's keep it simple and return the current (optimistically updated) state.
-         return currentState;
-         // Or, more explicitly:
-         // return (currentState ?? []).map(p =>
-         //     p.id === payload.provider ? { ...p, apiKeySet: true } : p
-         // );
+         return currentState; // Optimistic state is correct on success
      }
 });
 
@@ -169,14 +202,7 @@ export const $deleteApiKey = createMutationStore<
         return { optimisticState: updatedState, revertState: currentState };
     },
      applyMutationResult: (result: void, currentState: ProviderInfoAndStatus[] | null /* Removed payload, use closure */) => {
-         // Ensure apiKeySet is false on successful confirmation
-         // Access payload via closure if needed.
-         // Return the current (optimistically updated) state.
-         return currentState;
-         // Or, more explicitly:
-         // return (currentState ?? []).map(p =>
-         //     p.id === payload.provider ? { ...p, apiKeySet: false } : p
-         // );
+         return currentState; // Optimistic state is correct on success
      }
 });
 
@@ -200,16 +226,6 @@ export const $setProviderEnabled = createMutationStore<
         return { optimisticState: updatedState, revertState: currentState };
     },
      applyMutationResult: (result: void, currentState: ProviderInfoAndStatus[] | null /* Removed payload, use closure */) => {
-         // Ensure enabled status is correct on confirmation
-         // Access payload via closure if needed.
-         // Return the current (optimistically updated) state.
-         return currentState;
-         // Or, more explicitly:
-         // return (currentState ?? []).map(p =>
-         //     p.id === payload.provider ? { ...p, enabled: payload.enabled } : p
-         // );
+         return currentState; // Optimistic state is correct on success
      }
 });
-
-
-// TODO: Add stores for other provider-related states if needed (e.g., models per provider)

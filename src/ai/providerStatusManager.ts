@@ -22,23 +22,28 @@ export class ProviderStatusManager {
      * @returns A record mapping provider ID to a boolean indicating if the key is set.
      */
     public async getApiKeyStatus(allProviders: readonly AiProvider[]): Promise<Record<string, boolean>> { // Accept providers as argument
+        console.time('[ProviderStatusManager] getApiKeyStatus Execution Time'); // Start timer
         const status: Record<string, boolean> = {};
         // Use passed-in providers
         for (const provider of allProviders) {
             if (provider.requiresApiKey) {
+                 const checkStart = Date.now(); // Individual key check start
                 try {
                     // Use the provider's method to check the key
                     const key = await provider.getApiKey(this.context.secrets);
                     status[provider.id] = !!key;
+                     console.log(`[ProviderStatusManager] Key check for ${provider.name}: ${status[provider.id]} (${Date.now() - checkStart}ms)`); // Log individual time
                 } catch (error) {
                     console.error(`[ProviderStatusManager] Error checking API key status for ${provider.name}:`, error);
                     status[provider.id] = false; // Assume not set if error occurs
+                     console.log(`[ProviderStatusManager] Key check error for ${provider.name} (${Date.now() - checkStart}ms)`); // Log individual time on error
                 }
             } else {
                 // If no API key is required, consider it 'set' for status purposes
                 status[provider.id] = true;
             }
         }
+        console.timeEnd('[ProviderStatusManager] getApiKeyStatus Execution Time'); // End timer
         console.log("[ProviderStatusManager] Calculated API Key Status:", status);
         return status;
     }
