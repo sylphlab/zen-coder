@@ -102,6 +102,56 @@ export interface ChatSession {
     lastModified: number; // Timestamp of last modification
 }
 
+// --- Tool Authorization ---
+
+export enum ToolStatus {
+  Disabled = 'disabled',
+  RequiresAuthorization = 'requiresAuthorization',
+  AlwaysAvailable = 'alwaysAvailable',
+  Inherited = 'inherited', // Only applicable to individual tool overrides
+}
+
+export enum CategoryStatus {
+  Disabled = 'disabled',
+  RequiresAuthorization = 'requiresAuthorization',
+  AlwaysAvailable = 'alwaysAvailable',
+}
+
+// Structure for the zencoder.toolAuthorization setting
+export interface ToolAuthorizationConfig {
+  categories?: {
+    [categoryId: string]: CategoryStatus; // e.g., 'filesystem', 'vscode'
+  };
+  mcpServers?: {
+     [serverName: string]: CategoryStatus; // e.g., 'github'
+  };
+  overrides?: {
+    [toolId: string]: ToolStatus; // toolId can be standard (e.g., 'readFile') or MCP (e.g., 'mcp_github_create_issue')
+  };
+}
+
+// Structure for individual tool status info returned to UI
+export interface ToolInfo {
+  id: string; // e.g., 'readFile', 'mcp_github_create_issue'
+  name: string; // e.g., 'readFile', 'github: create_issue' (display name)
+  description?: string;
+  status: ToolStatus; // The configured status (could be 'inherited')
+  resolvedStatus: CategoryStatus; // The final calculated status (Disabled, RequiresAuth, AlwaysAvailable)
+}
+
+// Structure for categorized tool status info returned to UI
+export interface ToolCategoryInfo {
+  id: string; // e.g., 'filesystem', 'vscode', 'github'
+  name: string; // e.g., 'Filesystem', 'VS Code', 'GitHub Server'
+  status: CategoryStatus;
+  tools: ToolInfo[];
+}
+
+// Type for the data returned by GetAllToolsStatusHandler and pushed via updateAllToolsStatus
+export type AllToolsStatusInfo = ToolCategoryInfo[];
+
+// --- End Tool Authorization ---
+
 // --- Request/Response Types for Webview <-> Extension Communication ---
 
 export type WebviewRequestType =
@@ -112,6 +162,7 @@ export type WebviewRequestType =
   | 'getMcpConfiguredStatus' // Keep for settings page init
   | 'getAllToolsStatus'      // Keep for settings page init
   | 'getCustomInstructions' // Keep for settings page init
+  | 'setToolAuthorization' // New handler type
   | 'getChatState'; // Request for initial chat sessions and last active ID
 
 export interface WebviewRequestMessage {
@@ -163,6 +214,26 @@ export interface WorkspaceChatState {
     lastActiveChatId: string | null; // ID of the last viewed chat in this workspace
     lastLocation?: string; // Last viewed route/path (e.g., '/index.html', '/chats', '/settings')
 }
+
+// --- Message Interfaces for Tool Authorization ---
+
+export interface GetAllToolsStatusRequest {
+  type: 'getAllToolsStatus';
+}
+
+// Make SetToolAuthorizationRequest compatible with request/response
+export interface SetToolAuthorizationRequest {
+  type: 'setToolAuthorization';
+  requestId: string; // Add requestId
+  payload: {
+    config: ToolAuthorizationConfig; // Send the whole config object to update
+  };
+}
+
+export interface UpdateAllToolsStatusPush {
+  type: 'updateAllToolsStatus';
+  payload: AllToolsStatusInfo; // Send the resolved, categorized status info
+}
 // --- Message Types (Webview -> Extension) ---
 
 export type WebviewMessageType =
@@ -192,6 +263,8 @@ export type WebviewMessageType =
   | 'unsubscribeFromMcpStatus' // MCP Pub/Sub
   | 'subscribeToProviderStatus' // Provider Status Pub/Sub
   | 'unsubscribeFromProviderStatus' // Provider Status Pub/Sub
+  | GetAllToolsStatusRequest // Added for Tool Auth
+  | SetToolAuthorizationRequest // Added for Tool Auth
   | WebviewRequestMessage; // Add request type
 
 // --- Message Types (Extension -> Webview) ---
@@ -206,63 +279,27 @@ export type ExtensionMessageType =
   | { type: 'showSettings' } // Keep for potential future use?
   | { type: 'mcpConfigReloaded' } // Signal backend reload
   | { type: 'updateMcpConfiguredStatus'; payload: McpConfiguredStatusPayload } // Keep for settings push updates
-  | { type: 'updateAllToolsStatus'; payload: AllToolsStatusPayload } // Keep for settings push updates
+  // | { type: 'updateAllToolsStatus'; payload: AllToolsStatusPayload } // Replaced by UpdateAllToolsStatusPush below
   | { type: 'updateCustomInstructions'; payload: { global?: string; project?: string; projectPath?: string | null } } // Keep for settings push updates
   | { type: 'updateDefaultConfig'; payload: DefaultChatConfig } // Keep for settings push updates
   | { type: 'pushUpdateProviderStatus'; payload: ProviderInfoAndStatus[] } // Add push update type for provider status
+  | UpdateAllToolsStatusPush // Added for Tool Auth
   | WebviewResponseMessage; // Add response type
 
 
-/**
- * Defines the possible authorization states for a tool category or an individual tool.
- */
-export enum ParentStatus {
-  Disabled = 'disabled', // Completely disables the category/server and its tools unless overridden.
-  RequiresAuthorization = 'requiresAuthorization', // Requires authorization for tools unless overridden.
-  AlwaysAllow = 'alwaysAllow', // Allows tools by default unless overridden.
-}
+// Removed old/duplicate definitions for ParentStatus, ToolStatus, ToolInfo, AllToolsStatusPayload, ToolAuthorizationConfig
+// The new definitions are placed after the Multi-Chat Types section.
 
-/**
- * Defines the possible authorization states for an individual tool, including inheriting from its parent.
- */
-export enum ToolStatus {
-  Disabled = 'disabled', // Explicitly disables this tool.
-  RequiresAuthorization = 'requiresAuthorization', // Explicitly requires authorization for this tool.
-  AlwaysAllow = 'alwaysAllow', // Explicitly allows this tool without authorization.
-  Inherit = 'inherit', // Inherits the status from its parent category/server (default).
-}
-
-// --- Settings Page Specific Types ---
+// --- Settings Page Specific Types (Payloads for Push/Response) ---
 
 // Payload for MCP server status updates/responses
 // Needs McpServerStatus, assume it's imported or defined above
-import { McpServerStatus } from '../ai/mcpManager'; // Add import if not already present
+import { McpServerStatus } from '../ai/mcpManager'; // Ensure this import is correct
 export interface McpConfiguredStatusPayload {
    [serverName: string]: McpServerStatus;
 }
 
-// Info about a single tool for display in settings
-export interface ToolInfo {
-    description?: string;
-    enabled: boolean; // Reflects the *configured* enabled state
-    type: 'standard' | 'mcp';
-    serverName?: string; // Only for MCP tools
-}
-
-// Payload for all tools status updates/responses
-export interface AllToolsStatusPayload {
-    [toolIdentifier: string]: ToolInfo; // Key is toolName or mcp_serverName_toolName
-}
-
-/**
- * Structure for tool authorization settings.
- */
-export interface ToolAuthorizationConfig {
-  categories: Record<string, ParentStatus>; // Status for standard tool categories
-  mcpServers: Record<string, ParentStatus>; // Status for MCP servers
-  tools: Record<string, ToolStatus>; // Specific status overrides for individual tools
-}
-
+// AllToolsStatusPayload is replaced by AllToolsStatusInfo defined earlier
 // --- Default Configuration ---
 
 // Structure for default chat configuration (global scope)

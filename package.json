@@ -54,186 +54,6 @@
           "default": true,
           "description": "Enable DeepSeek provider."
         },
-        "zencoder.tools.readFileTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'readFileTool' (reads file content, supports multiple files and encodings)."
-        },
-        "zencoder.tools.writeFileTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'writeFileTool' (writes/appends file content with encoding)."
-        },
-        "zencoder.tools.listFilesTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'listFilesTool' (lists directory contents with stats, supports recursion)."
-        },
-        "zencoder.tools.createFolderTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'createFolderTool' (creates directories)."
-        },
-        "zencoder.tools.getStatTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'getStatTool' (gets file/folder stats)."
-        },
-        "zencoder.tools.deleteFileTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'deleteFileTool' (deletes files, supports trash)."
-        },
-        "zencoder.tools.deleteFolderTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'deleteFolderTool' (deletes folders recursively, supports trash)."
-        },
-        "zencoder.tools.moveRenameTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'moveRenameTool' (moves/renames files/folders, supports overwrite)."
-        },
-        "zencoder.tools.copyFileTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'copyFileTool' (copies files, supports overwrite)."
-        },
-        "zencoder.tools.copyFolderTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'copyFolderTool' (copies folders recursively, supports overwrite)."
-        },
-        "zencoder.tools.fetchUrlTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'fetchUrlTool' (fetches content from a URL)."
-        },
-        "zencoder.tools.base64EncodeTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'base64EncodeTool' (encodes string to Base64)."
-        },
-        "zencoder.tools.base64DecodeTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'base64DecodeTool' (decodes Base64 to string)."
-        },
-        "zencoder.tools.md5HashTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'md5HashTool' (calculates MD5 hash)."
-        },
-        "zencoder.tools.sha256HashTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'sha256HashTool' (calculates SHA-256 hash)."
-        },
-        "zencoder.tools.uuidGenerateTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'uuidGenerateTool' (generates a v4 UUID)."
-        },
-        "zencoder.tools.jsonParseTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'jsonParseTool' (parses a JSON string)."
-        },
-        "zencoder.tools.jsonStringifyTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'jsonStringifyTool' (stringifies a JS object/array)."
-        },
-        "zencoder.tools.getOsInfoTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'getOsInfoTool' (gets OS information)."
-        },
-        "zencoder.tools.getCurrentTimeTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'getCurrentTimeTool' (gets current ISO time)."
-        },
-        "zencoder.tools.getTimezoneTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'getTimezoneTool' (gets system timezone)."
-        },
-        "zencoder.tools.getPublicIpTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'getPublicIpTool' (gets public IP address)."
-        },
-        "zencoder.tools.getOpenTabsTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'getOpenTabsTool' (lists open editor tabs)."
-        },
-        "zencoder.tools.getActiveTerminalsTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'getActiveTerminalsTool' (lists active terminals)."
-        },
-        "zencoder.tools.runCommandTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'runCommandTool' (runs command with options after confirmation)."
-        },
-        "zencoder.tools.getActiveEditorContextTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'getActiveEditorContextTool' (gets active editor path, language, selection)."
-        },
-        "zencoder.tools.replaceInActiveEditorTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'replaceInActiveEditorTool' (replaces selected text)."
-        },
-        "zencoder.tools.showInformationMessageTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'showInformationMessageTool' (shows an info notification)."
-        },
-        "zencoder.tools.showWarningMessageTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'showWarningMessageTool' (shows a warning notification)."
-        },
-        "zencoder.tools.showErrorMessageTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'showErrorMessageTool' (shows an error notification)."
-        },
-        "zencoder.tools.showInputBoxTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'showInputBoxTool' (prompts user for text input)."
-        },
-        "zencoder.tools.showQuickPickTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'showQuickPickTool' (shows a selection list to the user)."
-        },
-        "zencoder.tools.formatDocumentTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'formatDocumentTool' (formats the active document)."
-        },
-        "zencoder.tools.saveActiveFileTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'saveActiveFileTool' (saves the active file)."
-        },
-        "zencoder.tools.closeActiveFileTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'closeActiveFileTool' (closes the active file)."
-        },
-        "zencoder.tools.openFileTool.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable the 'openFileTool' (opens a specified file)."
-        },
         "zencoder.defaults.chatModelId": {
           "type": "string",
           "default": "anthropic:claude-3-5-sonnet-latest",
@@ -354,53 +174,49 @@
         "zencoder.toolAuthorization": {
           "type": "object",
           "scope": "window",
-          "description": "Configure authorization requirements for tool categories, MCP servers, and individual tools.",
-          "default": {
-            "categories": {},
-            "mcpServers": {},
-            "tools": {}
-          },
+          "markdownDescription": "Configure authorization requirements for tool categories, MCP servers, and individual tools. \n- `categories`: Set default status (`disabled`, `requiresAuthorization`, `alwaysAvailable`) for standard tool groups (e.g., `filesystem`, `vscode`, `utils`, `system`). Default is `alwaysAvailable`.\n- `mcpServers`: Set default status for tools provided by specific MCP servers (use server name as key). Default is `alwaysAvailable`.\n- `overrides`: Set specific status (`disabled`, `requiresAuthorization`, `alwaysAvailable`, `inherited`) for individual tools (use tool ID like `readFileTool` or `mcp_github_create_issue`). `inherited` uses the category/server status.",
+          "default": {},
           "properties": {
             "categories": {
               "type": "object",
-              "description": "Authorization status for standard tool categories (e.g., 'filesystem', 'vscode', 'utils', 'system').",
+              "description": "Authorization status for standard tool categories.",
               "additionalProperties": {
                 "type": "string",
                 "enum": [
                   "disabled",
                   "requiresAuthorization",
-                  "alwaysAllow"
+                  "alwaysAvailable"
                 ],
-                "description": "Status: 'disabled', 'requiresAuthorization', 'alwaysAllow'."
+                "description": "Status: 'disabled', 'requiresAuthorization', 'alwaysAvailable'."
               },
               "default": {}
             },
             "mcpServers": {
               "type": "object",
-              "description": "Authorization status for connected MCP servers (use server name as key).",
+              "description": "Authorization status for connected MCP servers.",
               "additionalProperties": {
                 "type": "string",
                 "enum": [
                   "disabled",
                   "requiresAuthorization",
-                  "alwaysAllow"
+                  "alwaysAvailable"
                 ],
-                "description": "Status: 'disabled', 'requiresAuthorization', 'alwaysAllow'."
+                "description": "Status: 'disabled', 'requiresAuthorization', 'alwaysAvailable'."
               },
               "default": {}
             },
-            "tools": {
+            "overrides": {
               "type": "object",
-              "description": "Specific authorization overrides for individual tools (use tool ID as key, e.g., 'readFileTool', 'mcp_github_create_issue').",
+              "description": "Specific authorization overrides for individual tools.",
               "additionalProperties": {
                 "type": "string",
                 "enum": [
                   "disabled",
                   "requiresAuthorization",
-                  "alwaysAllow",
-                  "inherit"
+                  "alwaysAvailable",
+                  "inherited"
                 ],
-                "description": "Status: 'disabled', 'requiresAuthorization', 'alwaysAllow', 'inherit' (default)."
+                "description": "Status: 'disabled', 'requiresAuthorization', 'alwaysAvailable', 'inherited' (default)."
               },
               "default": {}
             }

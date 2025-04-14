@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { EventEmitter } from 'events'; // Import EventEmitter
 import { CoreMessage, streamText, tool, NoSuchToolError, InvalidToolArgumentsError, ToolExecutionError, generateText, Tool, StepResult, ToolCallPart, ToolResultPart, StreamTextResult, ToolCall, ToolExecutionOptions, LanguageModel, Output, TextStreamPart, ToolSet, generateObject, wrapLanguageModel, extractReasoningMiddleware } from 'ai';
-import { structuredAiResponseSchema, StructuredAiResponse, ToolAuthorizationConfig, ParentStatus, ToolStatus, DefaultChatConfig } from '../common/types'; // Added DefaultChatConfig
+import { structuredAiResponseSchema, StructuredAiResponse, ToolAuthorizationConfig, CategoryStatus, ToolStatus, DefaultChatConfig, AllToolsStatusInfo, ToolCategoryInfo, ToolInfo } from '../common/types'; // Added DefaultChatConfig, Changed ParentStatus to CategoryStatus, Added new tool status types
 import { allTools as standardToolsMap, ToolName as StandardToolName } from '../tools'; // Use correct import name
 import { AiProvider, ModelDefinition } from './providers/providerInterface';
 import { AnthropicProvider } from './providers/anthropicProvider';
@@ -70,8 +70,8 @@ const STANDARD_TOOL_CATEGORIES: { [key in StandardToolName]?: string } = {
 };
 
 // Default status if not specified in config
-const DEFAULT_PARENT_STATUS = ParentStatus.AlwaysAllow;
-const DEFAULT_TOOL_STATUS = ToolStatus.Inherit;
+const DEFAULT_CATEGORY_STATUS = CategoryStatus.AlwaysAvailable; // Changed from ParentStatus
+const DEFAULT_TOOL_STATUS = ToolStatus.Inherited; // Changed from Inherit
 
 // Define ApiProviderKey based on provider IDs
 export type ApiProviderKey = AiService['allProviders'][number]['id'];
@@ -223,8 +223,8 @@ export class AiService {
         standardToolNames.forEach(toolName => {
             const toolDefinition = standardToolsMap[toolName];
             if (!toolDefinition) return;
-            const category = this._getStandardToolCategory(toolName);
-            const enabled = this._isToolEnabled(toolName, category, null, authConfig);
+            const categoryId = this._getStandardToolCategory(toolName);
+            const enabled = this._isToolEffectivelyEnabled(toolName, categoryId, null, authConfig); // Corrected method name
             if (enabled) {
                 finalTools[toolName] = toolDefinition;
             }
@@ -235,10 +235,10 @@ export class AiService {
         for (const [serverName, serverStatus] of Object.entries(mcpStatuses)) {
             if (serverStatus.isConnected && serverStatus.tools) {
                 for (const [mcpToolName, mcpToolDefinition] of Object.entries(serverStatus.tools)) {
-                    const unifiedIdentifier = `mcp_${serverName}_${mcpToolName}`;
-                    const enabled = this._isToolEnabled(unifiedIdentifier, serverName, serverName, authConfig);
+                    const toolId = `mcp_${serverName}_${mcpToolName}`;
+                    const enabled = this._isToolEffectivelyEnabled(toolId, serverName, serverName, authConfig); // Corrected method name
                     if (enabled) {
-                        finalTools[unifiedIdentifier] = mcpToolDefinition;
+                        finalTools[toolId] = mcpToolDefinition;
                     }
                 }
             }
@@ -398,7 +398,7 @@ export class AiService {
             const toolDefinition = standardToolsMap[toolName as StandardToolName];
             const description = toolDefinition.description;
             const category = this._getStandardToolCategory(toolName as StandardToolName);
-            const enabled = this._isToolEnabled(toolName, category, null, toolAuthConf);
+            const enabled = this._isToolEffectivelyEnabled(toolName, category, null, toolAuthConf); // Corrected method name
             allStatuses[toolName] = { description, enabled, type: 'standard' };
         }
 
@@ -411,7 +411,7 @@ export class AiService {
                     const mcpTool: any = serverStatus.tools[toolName]; // Use any as McpTool type isn't exported/available
                     const toolIdentifier = `mcp_${serverName}_${toolName}`;
                     const description = mcpTool.description;
-                    const enabled = this._isToolEnabled(toolIdentifier, serverName, serverName, toolAuthConf);
+                    const enabled = this._isToolEffectivelyEnabled(toolIdentifier, serverName, serverName, toolAuthConf); // Corrected method name
                     allStatuses[toolIdentifier] = { description, enabled, type: 'mcp', serverName };
                 }
             }
@@ -453,14 +453,113 @@ export class AiService {
         };
     }
 
+    /**
+     * Computes the resolved status for all tools, categorized for the UI.
+     * @returns A promise resolving to an array of ToolCategoryInfo.
+     */
+    public async getResolvedToolStatusInfo(): Promise<AllToolsStatusInfo> {
+        const authConfig = this._getToolAuthConfig();
+        const categories: { [id: string]: ToolCategoryInfo } = {};
+
+        // Helper to get or create a category
+        const getOrCreateCategory = (id: string, name: string, defaultStatus: CategoryStatus): ToolCategoryInfo => {
+            if (!categories[id]) {
+                const configuredStatus = (id.startsWith('mcp_')
+                    ? authConfig.mcpServers?.[id.substring(4)] // Extract server name
+                    : authConfig.categories?.[id]) ?? defaultStatus;
+
+                categories[id] = { id, name, status: configuredStatus, tools: [] };
+            }
+            // Ensure the status reflects the current config, even if category existed
+            categories[id].status = (id.startsWith('mcp_')
+                    ? authConfig.mcpServers?.[id.substring(4)]
+                    : authConfig.categories?.[id]) ?? defaultStatus;
+            return categories[id];
+        };
+
+        // 1. Process Standard Tools
+        const standardToolNames = Object.keys(standardToolsMap) as StandardToolName[];
+        for (const toolName of standardToolNames) {
+            const toolDefinition = standardToolsMap[toolName];
+            if (!toolDefinition) continue;
+
+            const categoryId = this._getStandardToolCategory(toolName); // e.g., 'filesystem'
+            const categoryName = categoryId.charAt(0).toUpperCase() + categoryId.slice(1); // e.g., 'Filesystem'
+            const category = getOrCreateCategory(categoryId, categoryName, DEFAULT_CATEGORY_STATUS);
+
+            const configuredStatus = authConfig.overrides?.[toolName] ?? DEFAULT_TOOL_STATUS;
+            const resolvedStatus = this._resolveToolStatus(configuredStatus, category.status);
+
+            category.tools.push({
+                id: toolName,
+                name: toolName, // Use the internal name for now
+                description: toolDefinition.description,
+                status: configuredStatus,
+                resolvedStatus: resolvedStatus,
+            });
+        }
+
+        // 2. Process MCP Tools
+        const mcpStatuses = this.getMcpStatuses();
+        for (const serverName in mcpStatuses) {
+            const serverStatus = mcpStatuses[serverName];
+            // Only add category if server is configured (even if not connected)
+            if (serverStatus.config) {
+                 const categoryId = `mcp_${serverName}`;
+                 const categoryName = `${serverName} (MCP)`; // Display name for MCP category
+                 const category = getOrCreateCategory(categoryId, categoryName, DEFAULT_CATEGORY_STATUS);
+
+                 if (serverStatus.isConnected && serverStatus.tools) {
+                     for (const mcpToolName in serverStatus.tools) {
+                         const mcpToolDefinition: any = serverStatus.tools[mcpToolName]; // Use any as type not available
+                         const toolId = `mcp_${serverName}_${mcpToolName}`;
+
+                         const configuredStatus = authConfig.overrides?.[toolId] ?? DEFAULT_TOOL_STATUS;
+                         const resolvedStatus = this._resolveToolStatus(configuredStatus, category.status);
+
+                         category.tools.push({
+                             id: toolId,
+                             name: `${serverName}: ${mcpToolName}`, // Display name like github: create_issue
+                             description: mcpToolDefinition.description,
+                             status: configuredStatus,
+                             resolvedStatus: resolvedStatus,
+                         });
+                     }
+                 }
+                 // Sort tools within the MCP category alphabetically by name
+                 category.tools.sort((a, b) => a.name.localeCompare(b.name));
+            }
+        }
+
+        // Sort standard categories' tools
+        Object.values(categories).forEach(cat => {
+            if (!cat.id.startsWith('mcp_')) {
+                cat.tools.sort((a, b) => a.name.localeCompare(b.name));
+            }
+        });
+
+
+        // Convert categories map to array and sort categories
+        const sortedCategories = Object.values(categories).sort((a, b) => {
+             // Prioritize standard categories, then sort alphabetically
+             const aIsMcp = a.id.startsWith('mcp_');
+             const bIsMcp = b.id.startsWith('mcp_');
+             if (aIsMcp && !bIsMcp) return 1;
+             if (!aIsMcp && bIsMcp) return -1;
+             return a.name.localeCompare(b.name);
+         });
+
+        return sortedCategories;
+    }
+
     // --- Helper Methods for Tool Authorization ---
 
     private _getToolAuthConfig(): ToolAuthorizationConfig {
         const config = vscode.workspace.getConfiguration('zencoder');
         return {
-            categories: config.get<Record<string, ParentStatus>>('toolAuthorization.categories') ?? {},
-            mcpServers: config.get<Record<string, ParentStatus>>('toolAuthorization.mcpServers') ?? {},
-            tools: config.get<Record<string, ToolStatus>>('toolAuthorization.tools') ?? {}
+            categories: config.get<Record<string, CategoryStatus>>('toolAuthorization.categories') ?? {}, // Changed ParentStatus to CategoryStatus
+            mcpServers: config.get<Record<string, CategoryStatus>>('toolAuthorization.mcpServers') ?? {}, // Changed ParentStatus to CategoryStatus
+            overrides: config.get<Record<string, ToolStatus>>('toolAuthorization.overrides') ?? {} // Changed tools to overrides
         };
     }
 
@@ -471,16 +570,47 @@ export class AiService {
         return 'utilities';
     }
 
-    private _isToolEnabled(toolIdentifier: string, categoryName: string, serverName: string | null, config: ToolAuthorizationConfig): boolean {
-        const toolOverride = config.tools[toolIdentifier];
-        if (toolOverride && toolOverride !== ToolStatus.Inherit) {
-            return toolOverride === ToolStatus.AlwaysAllow;
+    /**
+     * Determines if a tool is effectively enabled (not disabled) based on resolved status.
+     * The AI should only receive tools that return true here.
+     */
+    private _isToolEffectivelyEnabled(toolIdentifier: string, categoryName: string, serverName: string | null, config: ToolAuthorizationConfig): boolean {
+        const toolOverride = config.overrides?.[toolIdentifier];
+        let resolvedStatus: CategoryStatus;
+
+        if (toolOverride && toolOverride !== ToolStatus.Inherited) {
+            // Resolve based on override
+            resolvedStatus = this._resolveToolStatus(toolOverride, CategoryStatus.Disabled); // Pass dummy category status, it won't be used
+        } else {
+            // Resolve based on category
+            const categoryStatus: CategoryStatus = (serverName
+                ? config.mcpServers?.[serverName]
+                : config.categories?.[categoryName]) ?? DEFAULT_CATEGORY_STATUS;
+            resolvedStatus = categoryStatus;
         }
-        let parentStatus: ParentStatus | undefined = serverName
-            ? config.mcpServers[serverName]
-            : config.categories[categoryName];
-        if (parentStatus === undefined) parentStatus = DEFAULT_PARENT_STATUS;
-        return parentStatus === ParentStatus.AlwaysAllow;
+
+        // A tool is considered enabled if its resolved status is not Disabled
+        return resolvedStatus !== CategoryStatus.Disabled;
+    }
+
+    /**
+     * Resolves the final status of a tool based on its override and its category's status.
+     */
+    private _resolveToolStatus(toolOverride: ToolStatus, categoryStatus: CategoryStatus): CategoryStatus {
+        if (toolOverride === ToolStatus.Inherited) {
+            return categoryStatus;
+        }
+        // Map specific tool override to final CategoryStatus
+        switch (toolOverride) {
+            case ToolStatus.AlwaysAvailable:
+                return CategoryStatus.AlwaysAvailable;
+            case ToolStatus.RequiresAuthorization:
+                return CategoryStatus.RequiresAuthorization;
+            case ToolStatus.Disabled:
+                return CategoryStatus.Disabled;
+            default: // Should not happen if types are correct
+                return categoryStatus;
+        }
     }
 
     // --- API Key Management ---
@@ -568,10 +698,11 @@ export class AiService {
     public async _notifyToolStatusChange(): Promise<void> {
         if (this._isToolStatusSubscribed) {
             try {
-                const latestStatus = await this.getAllToolsWithStatus();
+                // Call the new method to get categorized and resolved status
+                const latestStatusInfo = await this.getResolvedToolStatusInfo();
                 console.log('[AiService] Emitting toolsStatusChanged event.');
                 // Use a specific event name for tool status push
-                this.eventEmitter.emit('toolsStatusChanged', latestStatus);
+                this.eventEmitter.emit('toolsStatusChanged', latestStatusInfo); // Send new structure
             } catch (error) {
                 console.error('[AiService] Error fetching tool status for notification:', error);
             }

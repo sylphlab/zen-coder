@@ -8,8 +8,8 @@ import {
     SuggestedAction,
     UiMessage,
     UiImagePart,
-    AllToolsStatusPayload, // Add import
-    McpConfiguredStatusPayload, // Add import
+    AllToolsStatusInfo, // Changed from AllToolsStatusPayload
+    McpConfiguredStatusPayload, // Keep this, it was re-added to types.ts
     DefaultChatConfig, // Add comma here
     UiMessageContentPart,
 } from '../../../src/common/types'; // Corrected relative path
@@ -111,7 +111,7 @@ export const defaultConfigAtom = atom(async () => {
 // Async atom to fetch the status of all tools (standard + MCP)
 export const allToolsStatusAtom = atom(async () => {
     console.log("[Jotai Async] Fetching all tools status...");
-    const status = await requestData<AllToolsStatusPayload>('getAllToolsStatus');
+    const status = await requestData<AllToolsStatusInfo>('getAllToolsStatus'); // Changed type
     console.log("[Jotai Async] Received all tools status:", status);
     return status ?? {}; // Return empty object on null/undefined response
 });

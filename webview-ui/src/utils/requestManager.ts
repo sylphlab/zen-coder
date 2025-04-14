@@ -1,5 +1,5 @@
 import { postMessage, generateUniqueId } from '../app'; // Assuming generateUniqueId is exported from app
-import { WebviewRequestType, WebviewResponseMessage, LoadChatStatePayload, ProviderInfoAndStatus, AvailableModel, AllToolsStatusPayload, McpConfiguredStatusPayload } from '../../../src/common/types';
+import { WebviewRequestType, WebviewResponseMessage, LoadChatStatePayload, ProviderInfoAndStatus, AvailableModel, AllToolsStatusInfo, McpConfiguredStatusPayload } from '../../../src/common/types'; // Changed AllToolsStatusPayload to AllToolsStatusInfo
 import { getDefaultStore } from 'jotai';
 import {
     chatSessionsAtom,

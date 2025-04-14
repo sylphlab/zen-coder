@@ -12,9 +12,12 @@ import {
     AvailableModel,
     DefaultChatConfig,
     ProviderInfoAndStatus,
-    McpConfiguredStatusPayload,
-    AllToolsStatusPayload,
-    ToolInfo
+    McpConfiguredStatusPayload, // Keep this
+    AllToolsStatusInfo, // Changed from AllToolsStatusPayload
+    ToolInfo, // Keep this, but definition changed
+    ToolStatus, // Import new enum
+    CategoryStatus, // Import new enum
+    ToolCategoryInfo // Import new type
 } from '../../../src/common/types';
 // Import atoms from store
 import {
@@ -43,44 +46,7 @@ interface McpCombinedState {
 }
 // Removed stray closing brace
 
-// --- Tool Categorization Logic ---
-const categorizeTools = (tools: AllToolsStatusPayload): Record<string, AllToolsStatusPayload> => {
-    const categories: Record<string, AllToolsStatusPayload> = {
-        'Standard: Filesystem': {},
-        'Standard: VS Code': {},
-        'Standard: Utilities': {},
-        // MCP categories will be added dynamically
-    };
-
-    for (const [id, info] of Object.entries(tools)) { // Remove assertion, add type in loop if needed
-        if (info.type === 'standard') {
-            // Basic categorization based on name patterns (can be refined)
-            if (id.toLowerCase().includes('file') || id.toLowerCase().includes('dir') || id.toLowerCase().includes('path') || id.toLowerCase().includes('item')) {
-                 categories['Standard: Filesystem'][id] = info;
-            } else if (id.toLowerCase().includes('editor') || id.toLowerCase().includes('vscode') || id.toLowerCase().includes('tab') || id.toLowerCase().includes('terminal')) {
-                 categories['Standard: VS Code'][id] = info;
-            } else {
-                 categories['Standard: Utilities'][id] = info;
-            }
-        } else if (info.type === 'mcp' && info.serverName) {
-            const categoryName = `MCP: ${info.serverName}`;
-            if (!categories[categoryName]) {
-                categories[categoryName] = {};
-            }
-            categories[categoryName][id] = info;
-        }
-    }
-
-    // Remove empty standard categories
-    Object.keys(categories).forEach(catName => {
-        if (catName.startsWith('Standard:') && Object.keys(categories[catName]).length === 0) {
-            delete categories[catName];
-        }
-    });
-
-
-    return categories;
-};
+// Removed categorizeTools function as AllToolsStatusInfo is already categorized
 
 
 // Removed local defaultConfigAtom declaration
@@ -240,50 +206,35 @@ export function SettingPage(): JSX.Element { // Add return type
         // setMcpServers(prev => ({ ... }));
     };
 
-    // Handler for toggling ANY tool (standard or MCP)
-    const handleToolToggle = (toolIdentifier: string, enabled: boolean) => {
-        console.log(`Toggling tool ${toolIdentifier} to ${enabled}`);
+    // Handler for cycling through tool override status
+    const handleToolToggle = (toolIdentifier: string, currentStatus: ToolStatus) => {
+        const statusCycle: ToolStatus[] = [
+            ToolStatus.Inherited,
+            ToolStatus.AlwaysAvailable,
+            ToolStatus.RequiresAuthorization,
+            ToolStatus.Disabled,
+        ];
+        const currentIndex = statusCycle.indexOf(currentStatus);
+        const nextIndex = (currentIndex + 1) % statusCycle.length;
+        const newStatus = statusCycle[nextIndex];
+
+        console.log(`Setting tool ${toolIdentifier} override status to ${newStatus}`);
+        // TODO: Update backend handler 'setToolAuthorization' to accept individual tool overrides
+        // For now, sending a placeholder message structure. This needs backend changes.
         postMessage({
-            type: 'setToolEnabled', // Use the unified handler type
-            payload: { toolIdentifier, enabled }
-        });
-        // Remove optimistic UI update - Jotai atom will update on refetch/push
-        // setAllToolsStatus(prev => ({ ... })); // Keep comment
-        // The following lines were remnants of the optimistic update, remove them:
-        // [toolIdentifier]: { ...(prev[toolIdentifier] || { description: '', enabled: !enabled, type: 'standard' }), enabled }
-        // }));
-    };
-
-    // Handler for toggling all tools within a category
-    const handleCategoryToggle = (categoryTools: AllToolsStatusPayload, newState: boolean) => {
-        const updates: { toolIdentifier: string, enabled: boolean }[] = [];
-        const optimisticUpdates: AllToolsStatusPayload = {};
-
-        for (const [toolId, toolInfo] of Object.entries(categoryTools)) { // Remove assertion
-            // Only toggle if the state is actually changing
-            if (toolInfo.enabled !== newState) {
-                 updates.push({ toolIdentifier: toolId, enabled: newState });
-                 optimisticUpdates[toolId] = { ...toolInfo, enabled: newState };
-            } else {
-                 // Keep existing state if no change
-                 optimisticUpdates[toolId] = toolInfo;
+            type: 'setToolAuthorization', // Use the new type
+            payload: {
+                config: { // Send partial config update for this tool
+                    overrides: {
+                        [toolIdentifier]: newStatus
+                    }
+                }
             }
-        }
-
-        if (updates.length > 0) {
-            console.log(`Toggling ${updates.length} tools in category to ${newState}`);
-            // Send updates to backend (could potentially batch these in a new message type later)
-            updates.forEach(update => {
-                postMessage({
-                    type: 'setToolEnabled',
-                    payload: update
-                });
-            });
-
-            // Remove optimistic UI update - Jotai atom will update on refetch/push
-            // setAllToolsStatus(prev => { ... });
-        }
+        });
+        // Optimistic update removed - rely on Jotai atom update via push/refetch
     };
+
+    // Removed handleCategoryToggle function
 
     // Handler for the back button
     const handleBackClick = useCallback(() => {
@@ -405,59 +356,68 @@ export function SettingPage(): JSX.Element { // Add return type
     );
   };
 
-  // Helper to render a single tool item with a toggle
-  const renderToolItem = (toolIdentifier: string, toolInfo: ToolInfo) => {
-      const displayName = toolInfo.type === 'mcp' ? `${toolIdentifier.split('/')[1]}` : toolIdentifier; // Simpler display name
-      const isMcpTool = toolInfo.type === 'mcp';
-      const serverName = toolInfo.serverName;
-      // Use mcpServersLoadable to get server status
-      const mcpServersData = mcpServersLoadable.state === 'hasData' ? mcpServersLoadable.data : {};
-      const serverConnected = serverName ? mcpServersData?.[serverName]?.isConnected : false;
-      // MCP tool is only truly usable if its server is connected AND it's enabled via override
-      const effectivelyEnabled = toolInfo.enabled && (!isMcpTool || serverConnected);
-      const canToggle = true; // All tools can be toggled now
+    // Helper to render a single tool item with a status cycle button
+    const renderToolItem = (toolInfo: ToolInfo, categoryStatus: CategoryStatus) => {
+        const { id: toolId, name: displayName, description, status: configuredStatus, resolvedStatus } = toolInfo;
 
-      return (
-          <li key={toolIdentifier} class={`p-3 border rounded-lg shadow-sm flex items-center justify-between ${effectivelyEnabled ? 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 opacity-70'}`}>
-              <div>
-                  <p class={`font-semibold text-sm ${effectivelyEnabled ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
-                      {displayName}
-                      {isMcpTool && !serverConnected && <span class="text-xs text-yellow-600 dark:text-yellow-400 ml-2">(Server Disconnected)</span>}
-                  </p>
-                  {toolInfo.description && (
-                      <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">{toolInfo.description}</p>
-                  )}
-              </div>
-              <label class="flex items-center cursor-pointer">
-                  <input
-                      type="checkbox"
-                      class="sr-only peer" // Hide default checkbox
-                      checked={toolInfo.enabled} // Checkbox reflects the stored enabled state
-                      disabled={!canToggle}
-                      onChange={(e) => handleToolToggle(toolIdentifier, (e.target as HTMLInputElement).checked)}
-                  />
-                  {/* Custom toggle styling */}
-                  <div class={`relative w-11 h-6 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 ${canToggle ? 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 peer-checked:bg-blue-600' : 'bg-gray-400 cursor-not-allowed'}`}></div>
-              </label>
-          </li>
-      );
-  };
+        // Determine visual appearance based on resolved status
+        const isEffectivelyEnabled = resolvedStatus !== CategoryStatus.Disabled;
+        const isEffectivelyAlwaysAllow = resolvedStatus === CategoryStatus.AlwaysAvailable;
+        const requiresAuth = resolvedStatus === CategoryStatus.RequiresAuthorization;
 
-  // Categorize tools for rendering - use data from loadable atom
-  const categorizedTools = useMemo(() => {
-      if (allToolsStatusLoadable.state === 'hasData' && allToolsStatusLoadable.data) {
-          return categorizeTools(allToolsStatusLoadable.data);
-      }
-      return {}; // Return empty object while loading or on error
-  }, [allToolsStatusLoadable]);
+        // Determine button text/style based on configured status
+        let buttonText = '';
+        let buttonClass = 'px-2 py-1 text-xs rounded focus:outline-none focus:ring-2 focus:ring-offset-1 ';
+        switch (configuredStatus) {
+            case ToolStatus.Inherited:
+                buttonText = 'Inherit';
+                buttonClass += 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 focus:ring-gray-400';
+                break;
+            case ToolStatus.AlwaysAvailable:
+                buttonText = 'Always Allow';
+                buttonClass += 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-400';
+                break;
+            case ToolStatus.RequiresAuthorization:
+                buttonText = 'Requires Auth';
+                buttonClass += 'bg-yellow-500 text-black hover:bg-yellow-600 focus:ring-yellow-400';
+                break;
+            case ToolStatus.Disabled:
+                buttonText = 'Disabled';
+                buttonClass += 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-400';
+                break;
+        }
 
-  const categoryOrder = useMemo(() => [
-      'Standard: Filesystem',
-      'Standard: VS Code',
-      'Standard: Utilities',
-      // MCP categories will be appended dynamically based on categorizedTools keys
-      ...Object.keys(categorizedTools).filter(cat => cat.startsWith('MCP:'))
-  ], [categorizedTools]);
+        // Add tooltip explaining resolved status
+        let resolvedTooltip = `Resolved: ${resolvedStatus}`;
+        if (configuredStatus === ToolStatus.Inherited) {
+            resolvedTooltip += ` (Inherited from Category: ${categoryStatus})`;
+        }
+
+        return (
+            <li key={toolId} class={`p-3 border rounded-lg shadow-sm flex items-center justify-between ${isEffectivelyEnabled ? 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 opacity-70'}`}>
+                <div class="flex-grow mr-4">
+                    <p class={`font-semibold text-sm ${isEffectivelyEnabled ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                        {displayName}
+                        {requiresAuth && <span class="text-xs text-yellow-600 dark:text-yellow-400 ml-2">(Requires Auth)</span>}
+                    </p>
+                    {description && (
+                        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">{description}</p>
+                    )}
+                </div>
+                <button
+                    class={buttonClass}
+                    onClick={() => handleToolToggle(toolId, configuredStatus)}
+                    title={resolvedTooltip}
+                >
+                    {buttonText}
+                </button>
+            </li>
+        );
+    };
+
+  // No need for categorizedTools memo, data is already categorized
+
+  // Removed categoryOrder memo
 
 
   // Ensure the function explicitly returns JSX
@@ -581,46 +541,37 @@ export function SettingPage(): JSX.Element { // Add return type
           {/* Handle loading/error state for allToolsStatus */}
           {allToolsStatusLoadable.state === 'loading' && <p class="text-gray-500 dark:text-gray-400 italic">Loading available tools...</p>}
           {allToolsStatusLoadable.state === 'hasError' && <p class="text-red-500 dark:text-red-400 italic">Error loading tools status.</p>}
-          {allToolsStatusLoadable.state === 'hasData' && (
-              Object.keys(categorizedTools).length > 0 ? (
+          {allToolsStatusLoadable.state === 'hasData' && allToolsStatusLoadable.data && (
+              allToolsStatusLoadable.data.length > 0 ? (
                   <div class="space-y-6">
-                      {categoryOrder.map(categoryName => {
-                          const toolsInCategory = categorizedTools[categoryName];
-                          if (!toolsInCategory || Object.keys(toolsInCategory).length === 0) {
-                              return null; // Skip empty categories
-                          }
-
-                          // Add type assertion for Object.values result
-                          const allEnabled = Object.values(toolsInCategory as AllToolsStatusPayload).every((t: ToolInfo) => t.enabled);
-                          const noneEnabled = Object.values(toolsInCategory as AllToolsStatusPayload).every((t: ToolInfo) => !t.enabled);
-                          const isIndeterminate = !allEnabled && !noneEnabled;
-
-                          return (
-                              <div key={categoryName}>
-                                  <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-300 dark:border-gray-600">
-                                      <h4 class="text-lg font-medium text-gray-700 dark:text-gray-300">{categoryName}</h4>
-                                      <label class="flex items-center cursor-pointer" title={allEnabled ? "Disable all in category" : "Enable all in category"}>
-                                          <input
-                                              type="checkbox"
-                                              class="sr-only peer"
-                                              checked={allEnabled}
-                                              // Use ref for indeterminate state if needed, or rely on visual cue
-                                              // ref={el => el && (el.indeterminate = isIndeterminate)}
-                                              onChange={(e) => handleCategoryToggle(toolsInCategory, (e.target as HTMLInputElement).checked)}
-                                          />
-                                          <div class={`relative w-11 h-6 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 ${isIndeterminate ? 'bg-yellow-400' : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 peer-checked:bg-blue-600'}`}></div>
-                                          <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">Toggle All</span>
-                                      </label>
-                                  </div>
-                                  <ul class="space-y-2">
-                                      {Object.entries(toolsInCategory).map(([toolId, toolInfo]) => renderToolItem(toolId, toolInfo as ToolInfo))} // Keep assertion here
-                                  </ul>
+                      {/* Iterate over ToolCategoryInfo[] */}
+                      {allToolsStatusLoadable.data.map((category: ToolCategoryInfo) => (
+                          <div key={category.id}>
+                              <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-300 dark:border-gray-600">
+                                  <h4 class="text-lg font-medium text-gray-700 dark:text-gray-300">{category.name}</h4>
+                                  {/* Display Category Status */}
+                                  <span class={`text-sm px-2 py-0.5 rounded ${
+                                      category.status === CategoryStatus.AlwaysAvailable ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                      category.status === CategoryStatus.RequiresAuthorization ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                      'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                  }`}>
+                                      Category: {category.status}
+                                  </span>
+                                  {/* Category toggle removed */}
                               </div>
-                            );
-                         })}
+                              {category.tools.length > 0 ? (
+                                  <ul class="space-y-2">
+                                      {/* Iterate over ToolInfo[] */}
+                                      {category.tools.map((tool: ToolInfo) => renderToolItem(tool, category.status))}
+                                  </ul>
+                              ) : (
+                                  <p class="text-sm text-gray-500 dark:text-gray-400 italic">No tools in this category.</p>
+                              )}
+                          </div>
+                      ))}
                   </div>
               ) : (
-                  <p class="text-gray-500 dark:text-gray-400 italic">No tools found.</p> // Message when data is loaded but empty
+                  <p class="text-gray-500 dark:text-gray-400 italic">No tools found.</p>
               )
           )}
       </section>
@@ -688,7 +639,9 @@ export function SettingPage(): JSX.Element { // Add return type
                return Object.keys(mcpServersData).length > 0 ? (
                    <ul class="space-y-3">
                        {Object.entries(mcpServersData).map(([serverName, serverState]) => {
-                           const { config, enabled, isConnected, tools, lastError } = serverState; // Use full status
+                           // Ensure serverState is correctly typed as McpServerStatus
+                           const serverStatus = serverState as McpServerStatus;
+                           const { config, enabled, isConnected, tools, lastError } = serverStatus;
                            const configType = config.command ? 'Stdio' : (config.url ? 'SSE' : 'Unknown');
                            let statusText = '';
                            let statusColor = '';

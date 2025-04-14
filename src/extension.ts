@@ -12,7 +12,8 @@ import {
     WebviewRequestMessage,
     WebviewResponseMessage,
     WebviewRequestType,
-    ProviderInfoAndStatus // Import missing type
+    ProviderInfoAndStatus, // Import missing type
+    AllToolsStatusInfo // Import new type for event payload
 } from './common/types';
 import { getWebviewContent } from './webview/webviewContent';
 import { HistoryManager } from './historyManager';
@@ -29,7 +30,8 @@ import { SetApiKeyHandler } from './webview/handlers/SetApiKeyHandler';
 import { DeleteApiKeyHandler } from './webview/handlers/DeleteApiKeyHandler';
 import { ClearChatHistoryHandler } from './webview/handlers/ClearChatHistoryHandler';
 import { ExecuteToolActionHandler } from './webview/handlers/ExecuteToolActionHandler';
-import { SetToolEnabledHandler } from './webview/handlers/SetToolEnabledHandler';
+// Removed: import { SetToolEnabledHandler } from './webview/handlers/SetToolEnabledHandler';
+import { SetToolAuthorizationHandler } from './webview/handlers/SetToolAuthorizationHandler'; // Import new handler
 import { GetMcpConfiguredStatusHandler } from './webview/handlers/GetMcpConfiguredStatusHandler'; // Keep for settings push updates? Or make request? Keep for now.
 import { RetryMcpConnectionHandler } from './webview/handlers/RetryMcpConnectionHandler';
 import { StopGenerationHandler } from './webview/handlers/StopGenerationHandler';
@@ -174,7 +176,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             },
             getAllToolsStatus: async () => {
                 // Use the AiService instance
-                return this._aiService.getAllToolsWithStatus();
+                // Use the new method that returns categorized and resolved status
+                return this._aiService.getResolvedToolStatusInfo();
             },
             getCustomInstructions: async () => {
                 // Use the AiService instance to get combined instructions
@@ -207,7 +210,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new DeleteApiKeyHandler(this._aiService),
             new ClearChatHistoryHandler(),
             new ExecuteToolActionHandler(this._aiService),
-            new SetToolEnabledHandler(),
+            // Removed: new SetToolEnabledHandler(),
+            new SetToolAuthorizationHandler(), // Register new handler
             new GetMcpConfiguredStatusHandler(), // Keep for push updates?
             new RetryMcpConnectionHandler(),
             new StopGenerationHandler(this._aiService),
@@ -389,8 +393,14 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             });
         });
 
-        // TODO: Subscribe to Tool Status Changes from AiService/ToolManager
-        // this._aiService.eventEmitter.on('toolsStatusChanged', (status: AllToolsStatusPayload) => { ... });
+        // Subscribe to Tool Status Changes from AiService
+        this._aiService.eventEmitter.on('toolsStatusChanged', (statusInfo: AllToolsStatusInfo) => { // Use correct type
+            console.log('[Extension] Received toolsStatusChanged event from AiService.');
+            this.postMessageToWebview({
+                type: 'updateAllToolsStatus', // Use the correct push type
+                payload: statusInfo // Send the AllToolsStatusInfo payload
+            });
+        });
 
         // TODO: Subscribe to MCP Server Status Changes from McpManager
         // this._mcpManager.eventEmitter.on('serversStatusChanged', (status: McpConfiguredStatusPayload) => { ... });
