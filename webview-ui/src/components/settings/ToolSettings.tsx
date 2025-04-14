@@ -18,6 +18,9 @@ export function ToolSettings(): JSX.Element {
     const { mutate: setAuthMutate, loading: isSavingAuth } = useStore($setToolAuthorization); // Use mutation store
     const isLoading = allToolsStatus === null;
 
+    // Add a timestamp to differentiate render logs
+    console.log(`[ToolSettings Render ${Date.now()}] isLoading:`, isLoading, 'Received allToolsStatus:', JSON.stringify(allToolsStatus)?.substring(0, 300) + '...');
+
     const handleToolToggle = useCallback((toolIdentifier: string, currentStatus: ToolStatus) => {
         const statusCycle: ToolStatus[] = [
             ToolStatus.Inherited,
@@ -28,6 +31,7 @@ export function ToolSettings(): JSX.Element {
         const currentIndex = statusCycle.indexOf(currentStatus);
         const nextIndex = (currentIndex + 1) % statusCycle.length;
         const newStatus = statusCycle[nextIndex];
+        console.log(`[ToolSettings] handleToolToggle called for tool: ${toolIdentifier}, current status: ${currentStatus}, changing to: ${newStatus}`); // Added log
         const payload: { config: Partial<ToolAuthorizationConfig> } = {
             config: { overrides: { [toolIdentifier]: newStatus } }
         };
@@ -47,6 +51,7 @@ export function ToolSettings(): JSX.Element {
         const currentIndex = statusCycle.indexOf(currentStatus);
         const nextIndex = (currentIndex + 1) % statusCycle.length;
         const newStatus = statusCycle[nextIndex];
+        console.log(`[ToolSettings] handleCategoryStatusToggle called for category: ${categoryId}, current status: ${currentStatus}, changing to: ${newStatus}`); // Added log
         console.log(`Setting category/server ${categoryId} status to ${newStatus} via mutation store.`);
 
         const isMcp = categoryId.startsWith('mcp_');

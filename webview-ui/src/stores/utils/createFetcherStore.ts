@@ -74,7 +74,11 @@ export function createFetcherStore<T, TRawResponse = T>(
                 // Process the prepared 'dataToProcess'
                 const transformedUpdate = processFetchResponse(dataToProcess);
                 console.log(`[createFetcherStore ${topic}] Data after transformFetchResponse:`, JSON.stringify(transformedUpdate)); // Log transformed data
-                store.set(transformedUpdate); // Update store with transformed data
+                // Deep clone the data to ensure reference changes for reactivity
+                const clonedUpdate = transformedUpdate ? JSON.parse(JSON.stringify(transformedUpdate)) : null;
+                // Force reactivity by setting to null briefly before the actual update
+                store.set(null);
+                setTimeout(() => store.set(clonedUpdate), 0); // Update store with cloned transformed data in next tick
             }
         });
     } catch (error) {
@@ -91,7 +95,11 @@ export function createFetcherStore<T, TRawResponse = T>(
                  console.log(`[createFetcherStore ${topic}] Initial fetch data after transformFetchResponse:`, JSON.stringify(transformedData)); // Log transformed initial fetch data
                 // Only set data if not waiting for the first subscription update
                 if (!waitForSubscription) {
-                    store.set(transformedData);
+                     // Deep clone the data to ensure reference changes for reactivity
+                    const clonedData = transformedData ? JSON.parse(JSON.stringify(transformedData)) : null;
+                    // Force reactivity by setting to null briefly before the actual update
+                    store.set(null);
+                    setTimeout(() => store.set(clonedData), 0); // Update store with cloned transformed data in next tick
                 } else {
                     // If waiting, we might still log or store it temporarily if needed,
                     // but the main 'set' happens in the listen callback.

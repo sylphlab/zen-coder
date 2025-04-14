@@ -1,7 +1,8 @@
 # Project Progress
 
 ## What Works
-- **Fixed Settings Page Issues:** Corrected custom instruction input interference and restored the missing tool settings section.
+- **Fixed Settings Page Input:** Corrected custom instruction input interference.
+- **Restored Tool Settings Section:** Uncommented the component in the settings page.
 - **Frontend State Refactoring (Nanostores Complete):**
     - Migrated core state management from Jotai/custom hooks to Nanostores.
     - Implemented `createFetcherStore` and `createMutationStore` utilities.
@@ -42,7 +43,8 @@
 - Active chat ID is determined solely by the route parameter.
 
 ## Known Issues / TODOs
+- **Tool Toggles UI:** Tool toggle buttons don't visually update immediately after clicking, despite backend confirmation and notification. Added deep cloning in `createFetcherStore` as a potential fix for reactivity. Requires testing.
 - **Suggested Actions:** Currently use temporary local state in `ChatView`; needs proper Nanostore/PubSub implementation.
-- **Testing:** Major refactoring requires thorough manual testing, including verifying the settings page fixes.
+- **Testing:** Major refactoring requires thorough manual testing, including verifying the settings page fixes (input *and* toggle UI update).
 - **Image Upload:** Backend processing needs verification/completion.
 - **(Previous Known Issues Still Apply where relevant, e.g., filesystem test linter issue)**

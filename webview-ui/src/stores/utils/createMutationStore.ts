@@ -2,8 +2,8 @@ import { WritableAtom, map, MapStore } from 'nanostores';
 
 // --- Helper Types ---
 
-// Result of getOptimisticUpdate
-interface OptimisticUpdateResult<TDataState> {
+// Result of getOptimisticUpdate - Exported for use in store definitions
+export interface OptimisticUpdateResult<TDataState> {
   optimisticState: TDataState | null;
   revertState: TDataState | null;
   tempId?: string;
