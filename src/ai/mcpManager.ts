@@ -26,10 +26,11 @@ export class McpManager {
     private _activeMcpClients: Map<string, any> = new Map(); // { serverName: clientInstance }
     private _mcpServerTools: Map<string, ToolSet> = new Map(); // { serverName: ToolSet }
     private _mcpConnectionErrors: Map<string, string> = new Map(); // { serverName: errorMsg }
+    private _isWebviewSubscribed: boolean = false; // Track webview subscription status
 
     constructor(
         private context: vscode.ExtensionContext,
-        private postMessageCallback?: (message: any) => void // Optional callback for UI updates
+        private _postMessageCallback?: (message: any) => void // Renamed for clarity
     ) {
         // Initial load of MCP configs using imported function
         loadAndMergeMcpConfigs(context).then(configs => {
@@ -47,7 +48,7 @@ export class McpManager {
             this._mergedMcpConfigs = await loadAndMergeMcpConfigs(this.context); // Use imported function
             await this._initializeMcpClients(); // Await here to ensure re-init completes
             // Notify UI about the reload so it can refresh the status display
-            this.postMessageCallback?.({ type: 'mcpConfigReloaded' });
+            this._postMessageCallback?.({ type: 'mcpConfigReloaded' });
         };
         this._configWatchers = setupMcpConfigWatchers(context, reloadCallback);
         this.context.subscriptions.push(...this._configWatchers); // Add watchers to subscriptions
@@ -81,7 +82,7 @@ export class McpManager {
         await Promise.all(clientPromises);
         console.log(`[McpManager] MCP client initialization complete. Active clients: ${this._activeMcpClients.size}`);
         // Notify UI after initial connections attempt
-        this.postMessageCallback?.({ type: 'updateMcpConfiguredStatus', payload: this.getMcpServerConfiguredStatus() });
+        this._notifyWebviewOfStatusUpdate(); // Use helper to notify if subscribed
     }
 
     /**
@@ -250,7 +251,7 @@ export class McpManager {
 
         // Notify UI immediately after retry attempt
         console.log(`[McpManager] Retry attempt for ${serverName} finished. Success: ${success}. Notifying UI.`);
-        this.postMessageCallback?.({ type: 'updateMcpConfiguredStatus', payload: this.getMcpServerConfiguredStatus() });
+        this._notifyWebviewOfStatusUpdate(); // Use helper to notify if subscribed
     }
 
 
@@ -288,6 +289,28 @@ export class McpManager {
     public getMcpServerConfigs(): { [serverName: string]: McpServerConfig } {
         // Return a copy to prevent external modification of the cached object
         return { ...this._mergedMcpConfigs };
+    }
+
+    /**
+     * Sets the subscription status of the webview.
+     * @param isSubscribed Whether the webview is currently subscribed to updates.
+     */
+    public setWebviewSubscription(isSubscribed: boolean): void {
+        console.log(`[McpManager] Webview subscription status set to: ${isSubscribed}`);
+        this._isWebviewSubscribed = isSubscribed;
+    }
+
+    /**
+     * Helper method to send status updates to the webview, only if subscribed.
+     */
+    private _notifyWebviewOfStatusUpdate(): void {
+        if (this._isWebviewSubscribed && this._postMessageCallback) {
+            const status = this.getMcpServerConfiguredStatus();
+            console.log(`[McpManager] Notifying subscribed webview of MCP status update for ${Object.keys(status).length} servers.`);
+            this._postMessageCallback({ type: 'updateMcpConfiguredStatus', payload: status });
+        } else {
+            // console.log("[McpManager] Webview not subscribed, skipping MCP status update notification.");
+        }
     }
 
     // Dispose watchers on deactivation

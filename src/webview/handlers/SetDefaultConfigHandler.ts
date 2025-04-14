@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
 import { MessageHandler } from './MessageHandler';
 import { DefaultChatConfig } from '../../common/types'; // Import the type
+import { AiService } from '../../ai/aiService'; // Import AiService
 
 export class SetDefaultConfigHandler implements MessageHandler {
     public readonly messageType = 'setDefaultConfig';
 
-    public async handle(payload: any): Promise<void> {
+    // Add context parameter to access AiService
+    public async handle(payload: any, context: { aiService: AiService }): Promise<void> {
         if (!payload || typeof payload.config !== 'object' || payload.config === null) {
             console.warn('[SetDefaultConfigHandler] Received invalid payload:', payload);
             vscode.window.showErrorMessage('Failed to set default config: Invalid data received.');
@@ -37,6 +39,9 @@ export class SetDefaultConfigHandler implements MessageHandler {
 
             await Promise.all(updates);
             console.log('[SetDefaultConfigHandler] Successfully updated default config settings.');
+            // Optionally send a confirmation back to the webview, though the UI updates optimistically
+            // Notify subscribed webviews about the change
+            await context.aiService._notifyDefaultConfigChange();
             // Optionally send a confirmation back to the webview, though the UI updates optimistically
             // postMessage({ type: 'updateDefaultConfig', payload: newConfig }); // Example if needed
         } catch (error: any) {

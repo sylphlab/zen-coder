@@ -111,8 +111,8 @@ export type WebviewRequestType =
   | 'getDefaultConfig'
   | 'getMcpConfiguredStatus' // Keep for settings page init
   | 'getAllToolsStatus'      // Keep for settings page init
-  | 'getCustomInstructions'; // Keep for settings page init
-  // Add other requests as needed (e.g., maybe 'getChatState' instead of push?)
+  | 'getCustomInstructions' // Keep for settings page init
+  | 'getChatState'; // Request for initial chat sessions and last active ID
 
 export interface WebviewRequestMessage {
   type: 'requestData'; // Generic type for requests needing a response
@@ -188,6 +188,10 @@ export type WebviewMessageType =
   | 'openOrCreateProjectInstructionsFile'
   | 'setDefaultConfig'
   | 'logAction' // Generic logging/debugging
+  | 'subscribeToMcpStatus' // MCP Pub/Sub
+  | 'unsubscribeFromMcpStatus' // MCP Pub/Sub
+  | 'subscribeToProviderStatus' // Provider Status Pub/Sub
+  | 'unsubscribeFromProviderStatus' // Provider Status Pub/Sub
   | WebviewRequestMessage; // Add request type
 
 // --- Message Types (Extension -> Webview) ---

@@ -35,11 +35,8 @@ export class SetToolEnabledHandler implements MessageHandler {
            console.log(`[SetToolEnabledHandler] Updated tool '${toolIdentifier}' enabled status to ${enabled} in globalState.`);
            vscode.window.showInformationMessage(`Tool '${toolIdentifier}' ${enabled ? 'enabled' : 'disabled'}.`);
 
-
-            // Optional: Trigger a refresh of the tool list in the UI
-            // This would involve calling a method (perhaps added to HandlerContext or AiService)
-            // that re-runs the logic from 'settingsPageReady' to send the updated list.
-            // For now, we rely on optimistic UI updates in the frontend.
+            // Notify AiService to potentially push updates if subscribed
+            await context.aiService._notifyToolStatusChange();
 
         } catch (error: any) {
             console.error(`Failed to update setting for tool '${toolIdentifier}':`, error);

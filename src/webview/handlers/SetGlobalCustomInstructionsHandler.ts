@@ -17,6 +17,8 @@ export class SetGlobalCustomInstructionsHandler implements MessageHandler {
             await vscode.workspace.getConfiguration('zencoder.customInstructions').update('global', instructions, vscode.ConfigurationTarget.Global);
             console.log('[SetGlobalCustomInstructionsHandler] Global custom instructions updated successfully.');
             vscode.window.showInformationMessage('Global custom instructions saved.'); // Provide feedback
+            // Notify subscribed webviews about the change
+            await context.aiService._notifyCustomInstructionsChange();
         } catch (error: any) {
             console.error('[SetGlobalCustomInstructionsHandler] Error updating global custom instructions setting:', error);
             vscode.window.showErrorMessage(`Failed to save global custom instructions: ${error.message}`);

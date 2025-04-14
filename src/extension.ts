@@ -22,7 +22,7 @@ import { ModelResolver } from './ai/modelResolver';
 import { MessageHandler, HandlerContext } from './webview/handlers/MessageHandler';
 import { McpManager } from './ai/mcpManager'; // Import McpManager
 // Import necessary handlers (excluding those replaced by requests)
-import { WebviewReadyHandler } from './webview/handlers/WebviewReadyHandler';
+// Removed WebviewReadyHandler import
 import { SendMessageHandler } from './webview/handlers/SendMessageHandler';
 import { SetProviderEnabledHandler } from './webview/handlers/SetProviderEnabledHandler';
 import { SetApiKeyHandler } from './webview/handlers/SetApiKeyHandler';
@@ -45,6 +45,21 @@ import { UpdateChatConfigHandler } from './webview/handlers/UpdateChatConfigHand
 import { UpdateLastLocationHandler } from './webview/handlers/UpdateLastLocationHandler';
 import { SetDefaultConfigHandler } from './webview/handlers/SetDefaultConfigHandler';
 import { DeleteMessageHandler } from './webview/handlers/DeleteMessageHandler';
+import { GetChatStateHandler } from './webview/handlers/GetChatStateHandler';
+import { GetAvailableProvidersHandler } from './webview/handlers/GetAvailableProvidersHandler';
+import { GetProviderStatusHandler } from './webview/handlers/GetProviderStatusHandler';
+import { GetAllToolsStatusHandler } from './webview/handlers/GetAllToolsStatusHandler';
+import { GetMcpStatusHandler } from './webview/handlers/GetMcpStatusHandler';
+import { SubscribeToMcpStatusHandler } from './webview/handlers/SubscribeToMcpStatusHandler';
+import { UnsubscribeFromMcpStatusHandler } from './webview/handlers/UnsubscribeFromMcpStatusHandler';
+import { SubscribeToProviderStatusHandler } from './webview/handlers/SubscribeToProviderStatusHandler';
+import { UnsubscribeFromProviderStatusHandler } from './webview/handlers/UnsubscribeFromProviderStatusHandler';
+import { SubscribeToToolStatusHandler } from './webview/handlers/SubscribeToToolStatusHandler';
+import { UnsubscribeFromToolStatusHandler } from './webview/handlers/UnsubscribeFromToolStatusHandler';
+import { SubscribeToDefaultConfigHandler } from './webview/handlers/SubscribeToDefaultConfigHandler';
+import { UnsubscribeFromDefaultConfigHandler } from './webview/handlers/UnsubscribeFromDefaultConfigHandler';
+import { SubscribeToCustomInstructionsHandler } from './webview/handlers/SubscribeToCustomInstructionsHandler';
+import { UnsubscribeFromCustomInstructionsHandler } from './webview/handlers/UnsubscribeFromCustomInstructionsHandler';
 
 let aiServiceInstance: AiService | undefined = undefined;
 
@@ -165,6 +180,16 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                 // Use the AiService instance to get combined instructions
                 return this._aiService.getCombinedCustomInstructions();
             },
+            getChatState: async () => {
+                const allChats = this._historyManager.getAllChatSessions();
+                const lastActiveId = this._historyManager.getLastActiveChatId();
+                const lastLocation = this._historyManager.getLastLocation();
+                return {
+                    chats: allChats,
+                    lastActiveChatId: lastActiveId,
+                    lastLocation: lastLocation
+                };
+            },
         };
     }
 
@@ -175,7 +200,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             return;
         }
         const handlers: MessageHandler[] = [
-            new WebviewReadyHandler(),
+            // Removed WebviewReadyHandler registration
             new SendMessageHandler(this._streamProcessor),
             new SetProviderEnabledHandler(this._aiService),
             new SetApiKeyHandler(this._aiService),
@@ -196,6 +221,21 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new UpdateLastLocationHandler(),
             new SetDefaultConfigHandler(),
             new DeleteMessageHandler(this._historyManager, this.postMessageToWebview.bind(this)),
+            // MCP Pub/Sub Handlers
+            new SubscribeToMcpStatusHandler(),
+            new UnsubscribeFromMcpStatusHandler(),
+            // Provider Status Pub/Sub Handlers
+            new SubscribeToProviderStatusHandler(),
+            new UnsubscribeFromProviderStatusHandler(),
+            // Tool Status Pub/Sub Handlers
+            new SubscribeToToolStatusHandler(),
+            new UnsubscribeFromToolStatusHandler(),
+            // Default Config Pub/Sub Handlers
+            new SubscribeToDefaultConfigHandler(this._aiService),
+            new UnsubscribeFromDefaultConfigHandler(this._aiService),
+            // Custom Instructions Pub/Sub Handlers
+            new SubscribeToCustomInstructionsHandler(this._aiService),
+            new UnsubscribeFromCustomInstructionsHandler(this._aiService),
         ];
 
         handlers.forEach(handler => {

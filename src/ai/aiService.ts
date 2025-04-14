@@ -87,6 +87,10 @@ export class AiService {
     private readonly context: vscode.ExtensionContext;
     private readonly _providerStatusManager: ProviderStatusManager; // Rename to follow convention
     public readonly eventEmitter: EventEmitter; // Add EventEmitter instance
+    private _isProviderStatusSubscribed: boolean = false; // Track provider status subscription
+    private _isToolStatusSubscribed: boolean = false; // Track tool status subscription
+    private _isDefaultConfigSubscribed: boolean = false; // Track default config subscription
+    private _isCustomInstructionsSubscribed: boolean = false; // Track custom instructions subscription
 
     // Public getter for ProviderStatusManager
     public get providerStatusManager(): ProviderStatusManager {
@@ -123,6 +127,42 @@ export class AiService {
     public setPostMessageCallback(callback: (message: any) => void): void {
         this.postMessageCallback = callback;
         console.log('AiService: postMessage callback registered.');
+    }
+
+    /**
+     * Sets the subscription status for provider status updates.
+     * @param isSubscribed Whether the webview is currently subscribed.
+     */
+    public setProviderStatusSubscription(isSubscribed: boolean): void {
+        console.log(`[AiService] Provider status subscription set to: ${isSubscribed}`);
+        this._isProviderStatusSubscribed = isSubscribed;
+    }
+
+    /**
+     * Sets the subscription status for tool status updates.
+     * @param isSubscribed Whether the webview is currently subscribed.
+     */
+    public setToolStatusSubscription(isSubscribed: boolean): void {
+        console.log(`[AiService] Tool status subscription set to: ${isSubscribed}`);
+        this._isToolStatusSubscribed = isSubscribed;
+    }
+
+    /**
+     * Sets the subscription status for default config updates.
+     * @param isSubscribed Whether the webview is currently subscribed.
+     */
+    public setDefaultConfigSubscription(isSubscribed: boolean): void {
+        console.log(`[AiService] Default config subscription set to: ${isSubscribed}`);
+        this._isDefaultConfigSubscribed = isSubscribed;
+    }
+
+    /**
+     * Sets the subscription status for custom instructions updates.
+     * @param isSubscribed Whether the webview is currently subscribed.
+     */
+    public setCustomInstructionsSubscription(isSubscribed: boolean): void {
+        console.log(`[AiService] Custom instructions subscription set to: ${isSubscribed}`);
+        this._isCustomInstructionsSubscribed = isSubscribed;
     }
 
     private async _getProviderInstance(providerId: string | undefined, modelId: string | undefined): Promise<LanguageModel | null> {
@@ -400,6 +440,19 @@ export class AiService {
         return { global: globalInstructions, project: projectInstructions, projectPath: projectPath };
     }
 
+
+    public async getDefaultConfig(): Promise<DefaultChatConfig> {
+        // Reads the default config directly from VS Code settings
+        const config = vscode.workspace.getConfiguration('zencoder');
+        const defaultProviderId = config.get<string | null>('defaultChatConfig.defaultProviderId', null);
+        const defaultModelId = config.get<string | null>('defaultChatConfig.defaultModelId', null);
+        // Add other default config fields here if they exist
+        return {
+            defaultProviderId: defaultProviderId ?? undefined, // Use undefined if null
+            defaultModelId: defaultModelId ?? undefined, // Use undefined if null
+        };
+    }
+
     // --- Helper Methods for Tool Authorization ---
 
     private _getToolAuthConfig(): ToolAuthorizationConfig {
@@ -511,15 +564,67 @@ export class AiService {
         }
     }
 
+    // Notify tool status change (called by SetToolEnabledHandler)
+    public async _notifyToolStatusChange(): Promise<void> {
+        if (this._isToolStatusSubscribed) {
+            try {
+                const latestStatus = await this.getAllToolsWithStatus();
+                console.log('[AiService] Emitting toolsStatusChanged event.');
+                // Use a specific event name for tool status push
+                this.eventEmitter.emit('toolsStatusChanged', latestStatus);
+            } catch (error) {
+                console.error('[AiService] Error fetching tool status for notification:', error);
+            }
+        } else {
+             console.log('[AiService] Webview not subscribed to tool status, skipping event emission.');
+        }
+    }
+
     // --- Internal Notification Helper ---
     private async _notifyProviderStatusChange(): Promise<void> {
         try {
             // Use the injected ProviderStatusManager to get the latest status, passing necessary args
             const latestStatus = await this._providerStatusManager.getProviderStatus(this.allProviders, this.providerMap);
-            console.log('[AiService] Emitting providerStatusChanged event.');
-            this.eventEmitter.emit('providerStatusChanged', latestStatus);
+            if (this._isProviderStatusSubscribed) {
+                console.log('[AiService] Emitting providerStatusChanged event to subscribed webview.');
+                this.eventEmitter.emit('providerStatusChanged', latestStatus);
+            } else {
+                console.log('[AiService] Webview not subscribed to provider status, skipping event emission.');
+            }
         } catch (error) {
             console.error('[AiService] Error fetching provider status for notification:', error);
+        }
+    }
+
+    // Notify default config change (called by SetDefaultConfigHandler)
+    public async _notifyDefaultConfigChange(): Promise<void> {
+        if (this._isDefaultConfigSubscribed) {
+            try {
+                const latestConfig = await this.getDefaultConfig();
+                console.log('[AiService] Emitting defaultConfigChanged event.');
+                // Use a specific event name for default config push
+                this.eventEmitter.emit('defaultConfigChanged', latestConfig);
+            } catch (error) {
+                console.error('[AiService] Error fetching default config for notification:', error);
+            }
+        } else {
+             console.log('[AiService] Webview not subscribed to default config, skipping event emission.');
+        }
+    }
+
+    // Notify custom instructions change (called by SetGlobal/ProjectCustomInstructionsHandler)
+    public async _notifyCustomInstructionsChange(): Promise<void> {
+        if (this._isCustomInstructionsSubscribed) {
+            try {
+                const latestInstructions = await this.getCombinedCustomInstructions();
+                console.log('[AiService] Emitting customInstructionsChanged event.');
+                // Use a specific event name for custom instructions push
+                this.eventEmitter.emit('customInstructionsChanged', latestInstructions);
+            } catch (error) {
+                console.error('[AiService] Error fetching custom instructions for notification:', error);
+            }
+        } else {
+             console.log('[AiService] Webview not subscribed to custom instructions, skipping event emission.');
         }
     }
 } // End of AiService class

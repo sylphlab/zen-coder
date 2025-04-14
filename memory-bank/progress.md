@@ -1,11 +1,52 @@
 # Project Progress
 
 ## What Works
+- **Provider Status Pub/Sub:**
+    - Implemented explicit subscribe/unsubscribe mechanism for real-time Provider status updates.
+    - Frontend (`SettingPage`) now subscribes on mount and unsubscribes on unmount.
+    - Backend (`AiService`) tracks subscription status and only pushes status updates when subscribed.
+    - Created `SubscribeToProviderStatusHandler` and `UnsubscribeFromProviderStatusHandler`.
+    - Removed direct handling of `pushUpdateProviderStatus` in `main.tsx`.
+- **Tool Status Pub/Sub:**
+    - Implemented explicit subscribe/unsubscribe mechanism for real-time Tool status updates.
+    - Frontend (`SettingPage`) now subscribes on mount and unsubscribes on unmount.
+    - Backend (`AiService`) tracks subscription status (`_isToolStatusSubscribed`) and only pushes status updates (`_notifyToolStatusChange`) when subscribed.
+    - Created `SubscribeToToolStatusHandler` and `UnsubscribeFromToolStatusHandler`.
+    - Updated `SetToolEnabledHandler` to call `_notifyToolStatusChange`.
+    - Removed direct handling of `updateAllToolsStatus` in `main.tsx` (verified).
+- **Default Config Pub/Sub:**
+    - Implemented explicit subscribe/unsubscribe mechanism for real-time Default Config updates.
+    - Frontend (`SettingPage`) now subscribes on mount and unsubscribes on unmount.
+    - Backend (`AiService`) tracks subscription status (`_isDefaultConfigSubscribed`) and only pushes status updates (`_notifyDefaultConfigChange`) when subscribed.
+    - Created `SubscribeToDefaultConfigHandler` and `UnsubscribeFromDefaultConfigHandler`.
+    - Updated `SetDefaultConfigHandler` to call `_notifyDefaultConfigChange`.
+- **Custom Instructions Pub/Sub:**
+    - Implemented explicit subscribe/unsubscribe mechanism for real-time Custom Instructions updates.
+    - Frontend (`SettingPage`) now subscribes on mount, unsubscribes on unmount, and removed initial request.
+    - Backend (`AiService`) tracks subscription status (`_isCustomInstructionsSubscribed`) and only pushes status updates (`_notifyCustomInstructionsChange`) when subscribed.
+    - Created `SubscribeToCustomInstructionsHandler` and `UnsubscribeFromCustomInstructionsHandler`.
+    - Updated `SetGlobalCustomInstructionsHandler` and `SetProjectCustomInstructionsHandler` to call `_notifyCustomInstructionsChange`.
+- **App Loading & Message Handling:**
+    - Fixed `unknown or timed out request ID` error by centralizing all message handling (requests and pushes) into a single global listener in `main.tsx`.
+    - Removed `MessageHandlerComponent`.
+    - `main.tsx` listener now directly updates Jotai atoms using `store.set`.
+    - `requestManager.ts` simplified to only handle Promise resolution/rejection.
+- **MCP Status Pub/Sub:**
+    - Implemented explicit subscribe/unsubscribe mechanism for real-time MCP server status updates.
+    - Frontend (`SettingPage`) now subscribes on mount and unsubscribes on unmount.
+    - Backend (`McpManager`) tracks subscription status and only pushes updates when subscribed.
+    - Created `SubscribeToMcpStatusHandler` and `UnsubscribeFromMcpStatusHandler`.
+- **Initial Data Loading (Request/Response):**
+    - Removed `WebviewReadyHandler` push mechanism.
+    - Implemented Request/Response pattern using `requestData` utility.
+    - Created backend handlers (`GetChatStateHandler`, `GetAvailableProvidersHandler`, `GetProviderStatusHandler`, `GetAllToolsStatusHandler`, `GetMcpStatusHandler`) registered in `extension.ts`.
+    - Frontend (`main.tsx` listener) now requests initial data (chats, providers, statuses) on mount.
+    - `requestManager` resolves promises; Jotai async atoms handle their own state updates based on resolved data. `main.tsx` handles atom updates for push messages.
 - **Multi-Chat Backend Structure:**
     - `HistoryManager` refactored to manage multiple `ChatSession` objects (including history and config) stored in `workspaceState`.
     - `HistoryManager` includes methods for creating, deleting, updating, and retrieving chat sessions and the last active chat ID.
     - `HistoryManager` includes basic logic for determining effective chat configuration (merging defaults and chat-specific settings) and deriving `providerId` from a standardized `chatModelId` (`providerId:modelName`).
-    - Core backend services (`AiService`, `StreamProcessor`) and handlers (`SendMessageHandler`, `ClearChatHistoryHandler`, `WebviewReadyHandler`) updated to accept and use `chatId`.
+    - Core backend services (`AiService`, `StreamProcessor`) and handlers (`SendMessageHandler`, `ClearChatHistoryHandler`) updated to accept and use `chatId`.
     - New backend handlers (`SetActiveChatHandler`, `CreateChatHandler`, `DeleteChatHandler`) created and registered in `extension.ts` to manage chat sessions.
 - **Multi-Chat Frontend Structure:**
     - `app.tsx` state updated to manage `chatSessions` array and `activeChatId`.
@@ -42,7 +83,7 @@
 +    - Tool indices updated and related test errors fixed.
 - **Model Selector Refactoring:** Created reusable `ModelSelector.tsx` component, updated `SettingPage.tsx`, `HeaderControls.tsx`, and `app.tsx`. Improved model selection logic.
 - **Message Bubble Actions:** Added Copy/Delete buttons to messages in `MessagesArea.tsx`, implemented handlers in `app.tsx`, and added backend support (`DeleteMessageHandler`, `HistoryManager.deleteMessageFromHistory`).
-- **Unified Tool ID & Enablement:** Standardized MCP tool ID format (`mcp_serverName_toolName`) and unified enablement logic using `globalState` (`toolEnabledStatus`) across `aiService.ts`, `SetToolEnabledHandler.ts`, and `WebviewReadyHandler.ts`.
+- **Unified Tool ID & Enablement:** Standardized MCP tool ID format (`mcp_serverName_toolName`) and unified enablement logic using `globalState` (`toolEnabledStatus`) across `aiService.ts` and `SetToolEnabledHandler.ts`.
 - **Provider Selection Persistence:** Implemented saving/restoring of selected provider and model ID in `app.tsx`.
 - **Clear Chat Button:** Removed from `HeaderControls.tsx`.
 - **UI Stream Update (Attempt 3):** Applied stricter immutability pattern for state updates in `appendMessageChunk` handler (`app.tsx`).
@@ -108,6 +149,8 @@
 - **Testing:** Next major step.
 
 ## What's Left (Other Features/Enhancements)
+- **Testing:** Thoroughly test the new Request/Response data loading and Pub/Sub mechanisms.
+- **Implement True Pub/Sub (Complete for Settings):** MCP status, Provider status, Tool status, Default Config, and Custom Instructions now use Pub/Sub. Review remaining push updates (e.g., `mcpConfigReloaded`) for potential conversion.
 - Resume and complete image upload functionality.
 - Implement remaining VS Code tool enhancements (debugging tools: stop, step, breakpoints; enhance `runCommandTool`).
 - Test structured output and suggested actions thoroughly (Manual).
@@ -129,7 +172,7 @@
 ## Known Issues / TODOs
 - **Model Input Field (Fixed):** Resolved issue where users couldn't type into the model input field in `ModelSelector.tsx` by correcting the `useEffect` hook's dependencies.
 - **Model ID Strategy (Future):** Plan to refactor `AvailableModel` structure to `{ internal_id, provider_id, display_name, reference_id }` for clarity and robustness. (Recorded in activeContext)
-- **Communication Model (Future):** Plan to refactor communication between Extension Host and Webview to use a Pub/Sub pattern over `postMessage` instead of the current hybrid approach.
+- **Communication Model:** Initial data load uses Request/Response. MCP status, Provider status, Tool status, Default Config, and Custom Instructions use Pub/Sub. Chat streaming uses context-specific push. All message handling centralized in `main.tsx`. Remaining push updates (e.g., `mcpConfigReloaded`) need review.
 - **Testing:** Multi-chat functionality is largely untested.
 - **(Previous Known Issues Still Apply where relevant)**
 - **MCP Tool Schema Error:** Believed to be resolved by unifying tool ID format to `mcp_serverName_toolName`. Requires testing.

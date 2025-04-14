@@ -47,6 +47,9 @@ export class SetProjectCustomInstructionsHandler implements MessageHandler {
                 }
             });
 
+            // Notify subscribed webviews about the change
+            await context.aiService._notifyCustomInstructionsChange();
+
         } catch (error: any) {
             console.error(`[SetProjectCustomInstructionsHandler] Error writing project custom instructions file ${projectInstructionUri.fsPath}:`, error);
             vscode.window.showErrorMessage(`Failed to save project custom instructions: ${error.message}`);

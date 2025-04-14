@@ -1,11 +1,14 @@
 # Active Context
 
 ## Current Focus
-Debugging UI issues.
-- **Fixed Provider Selection Reset:** Identified and fixed the root cause: `app.tsx`'s `handleModelSelectorChange` callback had an incorrect signature (expecting one argument instead of two), causing it to misinterpret the `providerId` and `modelId` passed from `ModelSelector` and reset the selection to null. Corrected the signature and logic. Provider selection now persists correctly.
-- **Fixed Model Input Field:** Resolved issue where users couldn't type into the model input field. The `useEffect` hook in `ModelSelector.tsx` was incorrectly overwriting the `inputValue` state on every render related to model loading; it now only updates the input when the external `selectedProviderId` or `selectedModelId` props change.
-- **Discussed Model ID Strategy:** Agreed with user that the previous combined `provider:model` ID approach was problematic. Current approach uses separate `providerId` and `modelId`. Acknowledged user's suggestion for a more robust future data structure (`{ internal_id, provider_id, display_name, reference_id }`) and recorded it as a planned refactoring task.
-- **Discussed Communication Model:** Acknowledged user's valid points about the current hybrid push/pull communication model being complex and potentially "hacky". Agreed that a future refactor to a more standard Pub/Sub model over `postMessage` would be ideal.
+Refactoring initial data loading mechanism to use Request/Response instead of `WebviewReady` push.
+
+## Next Steps
+1.  **Testing (Manual):** Thoroughly test the new Request/Response data loading mechanism. Verify that all initial states (chats, providers, statuses) load correctly and UI updates accordingly.
+2.  **Implement True Pub/Sub:** Identify data that *needs* real-time updates (e.g., MCP connection status, maybe tool status changes) and implement a dedicated push mechanism (Pub/Sub) for those specific updates, keeping the initial load as Request/Response.
+3.  **Resume Image Upload:** Continue implementation and testing of image upload functionality.
+4.  **VS Code Tool Enhancements:** Implement remaining VS Code debugging tools and enhance `runCommandTool`.
+5.  **UI Refinements & Error Handling:** Continue improving UI and error handling.
 
 ## Next Steps
 1.  **Resume Image Upload:** Continue implementation and testing of image upload functionality (Backend logic seems ready, needs frontend testing/integration).
@@ -17,8 +20,44 @@ Debugging UI issues.
 4.  **UI Refinements:** Further improve UI styling and potentially add animations.
 5.  **Error Handling:** Review and improve error handling across the application.
 
-## Recent Changes (UI Debugging, TS Fixes, Tools)
-+ - **Fixed Model Input Field:** Modified `useEffect` hook in `ModelSelector.tsx` to only update `inputValue` when external `selectedProviderId` or `selectedModelId` props change, preventing interference with user typing.
+## Recent Changes (Fix App Load, MCP Pub/Sub, Initial Data Load Refactor, UI Debugging, TS Fixes, Tools)
++ - **Refactored Initial Data Loading:**
++     - Removed `WebviewReadyHandler` and its push-based logic.
++     - Created new request handlers (`GetChatStateHandler`, `GetAvailableProvidersHandler`, `GetProviderStatusHandler`, `GetAllToolsStatusHandler`, `GetMcpStatusHandler`) in `src/webview/handlers/`.
++     - Updated `extension.ts` to register new request handlers in `_initializeRequestHandlers` and remove `WebviewReadyHandler`.
++     - Updated `src/common/types.ts` to include `getChatState` in `WebviewRequestType`.
++     - Updated `webview-ui/src/components/MessageHandlerComponent.tsx` to send initial data requests on mount using `requestData`.
++     - Updated `webview-ui/src/utils/requestManager.ts` to store `requestType` and update relevant Jotai atoms (`chatSessionsAtom`, `activeChatIdAtom`) upon receiving responses for specific request types (`getChatState`). Removed incorrect attempts to set async/read-only atoms.
++     - Verified async atoms in `webview-ui/src/store/atoms.ts` use `requestData` for fetching.
++     - Deleted `src/webview/handlers/WebviewReadyHandler.ts` file.
++ - **Implemented MCP Status Pub/Sub:**
++     - Created `SubscribeToMcpStatusHandler` and `UnsubscribeFromMcpStatusHandler`.
++     - Updated `McpManager` to track webview subscription status (`_isWebviewSubscribed`, `setWebviewSubscription`) and only push status updates (`_notifyWebviewOfStatusUpdate`) when subscribed.
++     - Updated `extension.ts` to register the new Pub/Sub handlers.
++     - Updated `SettingPage.tsx` to send subscribe/unsubscribe messages in `useEffect`.
++     - Updated `common/types.ts` to include `subscribeToMcpStatus` and `unsubscribeFromMcpStatus` message types.
++ - **Fixed App Load Failure (Request/Response Timing):**
++     - Diagnosed `unknown or timed out request ID` error in `requestManager.ts` as likely timing issue.
++     - Centralized ALL message handling (requests and pushes) into a single global listener in `main.tsx`.
++     - Removed `MessageHandlerComponent.tsx`.
++     - Updated `main.tsx` listener to directly update Jotai atoms using `store.set`.
++     - Simplified `requestManager.ts`'s `handleResponse` to only resolve/reject promises.
++ - **Implemented Tool Status Pub/Sub:**
++     - Added `_isToolStatusSubscribed` and `setToolStatusSubscription` to `AiService`.
++     - Added `_notifyToolStatusChange` to `AiService` and called it from `SetToolEnabledHandler`.
++     - Created `SubscribeToToolStatusHandler` and `UnsubscribeFromToolStatusHandler`.
++     - Updated `extension.ts` to register new handlers.
++     - Updated `SettingPage.tsx` to send subscribe/unsubscribe messages.
++     - Updated `common/types.ts` with new message types.
++     - Removed direct handling of `updateAllToolsStatus` from `main.tsx` (already done).
++ - **Implemented Custom Instructions Pub/Sub:**
++     - Added `_isCustomInstructionsSubscribed` and `setCustomInstructionsSubscription` to `AiService`.
++     - Added `_notifyCustomInstructionsChange` to `AiService` and called it from `SetGlobalCustomInstructionsHandler` and `SetProjectCustomInstructionsHandler`.
++     - Created `SubscribeToCustomInstructionsHandler` and `UnsubscribeFromCustomInstructionsHandler`.
++     - Updated `extension.ts` to register new handlers.
++     - Updated `SettingPage.tsx` to send subscribe/unsubscribe messages and removed initial `getCustomInstructions` request.
++     - Updated `common/types.ts` with new message types.
+- **Fixed Model Input Field:** Modified `useEffect` hook in `ModelSelector.tsx` to only update `inputValue` when external `selectedProviderId` or `selectedModelId` props change, preventing interference with user typing.
 - **Fixed Gray Screen:** Resolved `Uncaught SyntaxError` in `InputArea.tsx` by correcting the import from `activeChatModelNameAtom` to `activeChatModelIdAtom`.
 - **Attempted Blank Page/Timeout Fix:** Moved response listener to `main.tsx`, added `<Suspense>`, fixed syntax errors in `app.tsx`, added `className` prop to `MessagesAreaProps` and `InputAreaProps`. Corrected atom usage (`modelId` vs `modelName`) in `atoms.ts`, `HeaderControls.tsx`, and `app.tsx`. Added debug logging. (Issue persists, but initial timeout seems resolved).
 - **Fixed TypeScript Errors:** Resolved multiple TS errors across handlers and services related to recent refactoring (e.g., `modelName` vs `modelId`, incorrect method calls, missing types).
@@ -313,7 +352,7 @@ Debugging UI issues.
 
 ## Active Decisions
 - **Model ID Handling:** Confirmed decision to use separate `providerId` and `modelId` for now, abandoning the problematic combined ID format. Planned future refactor to a more robust data structure (`{ internal_id, provider_id, display_name, reference_id }`).
-- **Communication Model:** Acknowledged limitations of current hybrid model. Planned future refactor towards a Pub/Sub pattern over `postMessage`.
+- **Communication Model:** Replaced initial data push via `WebviewReady` with a Request/Response model. Implemented explicit Pub/Sub (subscribe/unsubscribe) for MCP status, Provider status, Tool status, Default Config, and Custom Instructions updates. Chat message streaming remains a context-specific push. Review remaining push updates (e.g., `mcpConfigReloaded`) for potential conversion.
 - **MCP Architecture:** Shifted from UI/VSCode settings to dedicated JSON files (Global: `.../settings/mcp_settings.json`, Project: `.zen/mcp_servers.json`). All MCP client lifecycle management (init, retry, close), config handling, and tool fetching/caching is now handled by `McpManager`. `AiService` delegates MCP tasks. Settings UI displays status from `McpManager` and allows triggering retries.
 - **Image Upload:** Implemented UI and basic frontend logic. Backend needs updating (`SendMessageHandler`, `HistoryManager`, `AiService`).
 - **Markdown & Syntax Highlighting:** Implemented using `react-markdown` and `react-syntax-highlighter` (`vscDarkPlus` theme) in the frontend. Fixed initial webview loading issues by correcting root `tsconfig.json` references.

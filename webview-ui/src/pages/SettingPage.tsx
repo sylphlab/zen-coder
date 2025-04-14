@@ -159,15 +159,29 @@ export function SettingPage(): JSX.Element { // Add return type
       );
   }, [searchQuery, providerStatusLoadable]);
 
-   // Effect to fetch initial status and listen for updates
-   // Effect to fetch initial custom instructions and listen for updates
-   // Tool/MCP status is now handled by Jotai async atoms triggered by requestManager
+   // Effect to fetch initial custom instructions and subscribe/unsubscribe to MCP status
    useEffect(() => {
-       // Request initial custom instructions state
-       postMessage({ type: 'getCustomInstructions' }); // Assuming a handler exists for this
-       console.log('SettingsPage mounted, requested initial custom instructions');
+       // Subscribe to Custom Instructions updates (initial state pushed on subscribe)
+       console.log('[SettingsPage] Subscribing to Custom Instructions updates...');
+       postMessage({ type: 'subscribeToCustomInstructions' });
 
-       // Add message listener ONLY for custom instructions updates
+       // Subscribe to MCP status updates
+       console.log('[SettingsPage] Subscribing to MCP status updates...');
+       postMessage({ type: 'subscribeToMcpStatus' });
+
+       // Subscribe to Provider status updates
+       console.log('[SettingsPage] Subscribing to Provider status updates...');
+       postMessage({ type: 'subscribeToProviderStatus' });
+
+       // Subscribe to Tool status updates
+       console.log('[SettingsPage] Subscribing to Tool status updates...');
+       postMessage({ type: 'subscribeToToolStatus' });
+
+       // Subscribe to Default Config updates
+       console.log('[SettingsPage] Subscribing to Default Config updates...');
+       postMessage({ type: 'subscribeToDefaultConfig' });
+
+       // Add message listener ONLY for custom instructions updates and MCP reloads
        const handleMessage = (event: MessageEvent) => {
            const message = event.data;
            switch (message.type) {
@@ -177,20 +191,32 @@ export function SettingPage(): JSX.Element { // Add return type
                    setProjectInstructions(message.payload.project || '');
                    setProjectInstructionsPath(message.payload.projectPath || null);
                    break;
-               // No need to listen for tool/MCP status here anymore
                case 'mcpConfigReloaded': // Keep listening for backend reload signal
                    console.log('[SettingsPage] Received mcpConfigReloaded, Jotai atoms should refetch automatically.');
-                   // Optionally force refetch if needed, but requestManager should handle it
-                   // get(loadable(allToolsStatusAtom)); // Example, might not be needed
-                   // get(loadable(mcpServerStatusAtom)); // Example
+                   // Jotai async atoms should handle refetching automatically
                    break;
+               // MCP status updates are now handled by the mcpServerStatusAtom directly
+               // case 'updateMcpConfiguredStatus':
+               //     console.log('[SettingsPage] Received updateMcpConfiguredStatus:', message.payload);
+               //     // Update atom directly? No, atom should update via push/refetch
+               //     break;
            }
        };
 
        window.addEventListener('message', handleMessage);
 
-       // Cleanup listener on unmount
+       // Cleanup listener and unsubscribe on unmount
        return () => {
+           console.log('[SettingsPage] Unsubscribing from MCP status updates...');
+           postMessage({ type: 'unsubscribeFromMcpStatus' });
+           console.log('[SettingsPage] Unsubscribing from Provider status updates...');
+           postMessage({ type: 'unsubscribeFromProviderStatus' });
+           console.log('[SettingsPage] Unsubscribing from Tool status updates...');
+           postMessage({ type: 'unsubscribeFromToolStatus' });
+           console.log('[SettingsPage] Unsubscribing from Default Config updates...');
+           postMessage({ type: 'unsubscribeFromDefaultConfig' });
+           console.log('[SettingsPage] Unsubscribing from Custom Instructions updates...');
+           postMessage({ type: 'unsubscribeFromCustomInstructions' });
            window.removeEventListener('message', handleMessage);
        };
    }, []); // Empty dependency array
