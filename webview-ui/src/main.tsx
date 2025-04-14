@@ -1,25 +1,20 @@
 import { render } from 'preact';
 import { Suspense } from 'preact/compat';
-import { Provider, getDefaultStore } from 'jotai';
+// Removed Jotai imports
 import 'virtual:uno.css';
 import '@unocss/reset/tailwind.css';
 import './index.css';
 import { App } from './app.tsx';
-// Removed listener import
+// Removed communication and router imports - logic moved to router.ts
 
-const store = getDefaultStore();
-
-console.log("[main.tsx] Initializing application...");
-// Listener initialization moved to useLocationSync hook
+console.log("[main.tsx] Rendering application...");
 
 // --- Render App ---
-
+// Router initialization and communication listener setup will happen within the router store's onMount
 render(
-    <Provider store={store}>
-        {/* Suspense is needed for atoms that depend on getCommunicationService */}
-        <Suspense fallback={<div class="flex justify-center items-center h-screen">Loading...</div>}>
-            <App />
-        </Suspense>
-    </Provider>,
+    // Keep Suspense for potential future async components within App
+    <Suspense fallback={<div class="flex justify-center items-center h-screen">Loading...</div>}>
+        <App />
+    </Suspense>,
     document.getElementById('root')!
 );

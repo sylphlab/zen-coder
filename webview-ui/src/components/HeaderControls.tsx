@@ -1,49 +1,46 @@
 import { FunctionalComponent } from 'preact';
 import { useCallback } from 'preact/hooks';
-import { useLocation } from 'wouter';
-import { useAtomValue, useSetAtom } from 'jotai'; // Added useSetAtom
+// Removed: import { useLocation } from 'wouter';
+import { useAtomValue } from 'jotai'; // Keep for now, other atoms might still be used
+// Removed: import { useSetAtom } from 'jotai';
 import { JSX } from 'preact/jsx-runtime';
 import { AvailableModel } from '../../../src/common/types';
 import { ModelSelector } from './ModelSelector';
+import { router } from '../stores/router'; // Import Nanostores router
 import {
-    availableProvidersAtom,
-    activeChatProviderIdAtom,
-    activeChatModelIdAtom,
-    activeChatMessagesAtom,
-    updateLocationAtom // Import atom setter
+    availableProvidersAtom, // Keep for now
+    activeChatProviderIdAtom, // Keep for now
+    activeChatModelIdAtom, // Keep for now
+    activeChatMessagesAtom, // Keep for now
+    // Removed: updateLocationAtom
 } from '../store/atoms';
 
 interface HeaderControlsProps {
-    // Callbacks for navigation removed
     onModelChange: (providerId: string | null, modelId: string | null) => void;
 }
 
 export const HeaderControls: FunctionalComponent<HeaderControlsProps> = ({
     onModelChange
 }) => {
-    // --- Hooks ---
-    const [, setLocation] = useLocation();
-    const updateLocation = useSetAtom(updateLocationAtom); // Get atom setter
+    // Removed wouter/jotai location hooks
 
-    // --- Atoms ---
+    // --- Atoms (Keep for now, will be replaced later) ---
     const availableProviders = useAtomValue(availableProvidersAtom);
     const selectedProviderId = useAtomValue(activeChatProviderIdAtom);
     const selectedModelId = useAtomValue(activeChatModelIdAtom);
     const activeChatMessages = useAtomValue(activeChatMessagesAtom);
     const hasMessages = activeChatMessages.length > 0;
 
-    // --- Event Handlers (Internal Navigation + Backend Sync) ---
+    // --- Event Handlers (Use Nanostores router) ---
     const handleSettingsClick = useCallback(() => {
-        const newPath = '/settings';
-        setLocation(newPath);
-        updateLocation(newPath); // Sync backend
-    }, [setLocation, updateLocation]);
+        console.log('[HeaderControls] Navigating to /settings');
+        router.open('/settings'); // Use Nanostores router
+    }, []); // No dependencies needed
 
     const handleChatsClick = useCallback(() => {
-        const newPath = '/'; // Navigate to root (ChatListPage)
-        setLocation(newPath);
-        updateLocation(newPath); // Sync backend
-    }, [setLocation, updateLocation]);
+        console.log('[HeaderControls] Navigating to /');
+        router.open('/'); // Use Nanostores router
+    }, []); // No dependencies needed
 
     return (
         <div class="header-controls p-2 border-b border-gray-300 dark:border-gray-700 flex justify-between items-center">

@@ -1,7 +1,7 @@
 # Active Context
 
 ## Current Focus
-Refactoring frontend components (`app.tsx`, `ChatListPage`, `HeaderControls`, `SettingPage`) to simplify routing and state synchronization logic. Ensuring `locationAtom` is the single source of truth for navigation state.
+**MAJOR REFACTORING:** Switching frontend state management entirely from Jotai/Custom Hooks to **Nanostores**. Implementing fetch/subscribe logic *within* Nanostores atoms (`onMount`). Switching routing from `wouter` to `@nanostores/router`. Abandoning previous custom hook approach (`useSubscriptionWithInitialFetch`, `useChatSessions`, etc.).
 
 ## Next Steps
 1.  **Testing (Manual):** Thoroughly test the new Request/Response data loading mechanism. Verify that all initial states (chats, providers, statuses) load correctly and UI updates accordingly.
@@ -168,11 +168,30 @@ Refactoring frontend components (`app.tsx`, `ChatListPage`, `HeaderControls`, `S
 + - **Fixed Backend Handler Imports (TS2307):** Corrected import paths in all handlers within `src/webview/handlers/` to import from `./RequestHandler.ts` instead of the non-existent `./MessageHandler.ts`. Updated classes to implement `RequestHandler` and adjusted `handle` method signatures/return types for the Request/Response pattern. Fixed follow-up TS errors related to this change.
 + - **Fixed Webview Routing 404:** Corrected back button navigation in `SettingPage.tsx` to point to `/` instead of `/index.html`.
 + - **Cleaned `webview-ui/src/main.tsx`:** Removed unnecessary communication service initialization logic.
++ - **Refactored `useChatSessions` Hook:** Reimplemented `webview-ui/src/hooks/useChatSessions.ts` to fetch initial data, listen for updates (`chatSessionsUpdate`), manage its own state (`chatSessions`, `isLoading`), and correctly handle async cleanup. Removed dependency on `chatSessionsAtom`.
++ - **Updated `ChatListPage.tsx`:** Updated component to use the refactored `useChatSessions` hook, handle its loading state (`isSessionsLoading`), manage action loading state locally (`isActionLoading`), and remove dependencies on `chatSessionsAtom` and `isChatListLoadingAtom`.
++ - **Created Generic Hook:** Implemented `useSubscriptionWithInitialFetch.ts` for `subscribe -> fetch -> unsubscribe` pattern.
++ - **Refactored `useChatSessions`:** Updated `useChatSessions.ts` to use the new generic hook, handling the `{ sessions: ... }` payload structure.
++ - **Created `useProviderStatus` Hook:** Implemented `useProviderStatus.ts` using the generic hook, handling the `{ payload: ... }` structure for the fetch response.
++ - **Integrated `useProviderStatus` Hook:** Updated `ProviderSettings.tsx` to use the new hook and remove Jotai dependency for provider status.
++ - **Created `useDefaultConfig` Hook:** Implemented `useDefaultConfig.ts` using the generic hook, handling the `{ payload: ... }` structure.
++ - **(Previous hook refactoring steps are now obsolete due to strategy shift)**
++ - **Installed/Removed Dependencies:** Added `@nanostores/router`, `@nanostores/preact`. Removed `wouter`, `jotai`. (Attempted removal, `jotai/utils` might remain).
 
 ## Next Steps
-- **Current Task:** Implementing multi-chat functionality (see Next Steps above).
-- **Paused:** Image upload task (will resume after multi-chat).
-- **Future:** Implement remaining VS Code tool enhancements (`goToDefinition`, `findReferences`, `renameSymbol`, `getConfiguration`, debugging tools, `runCommandTool` exit code).
+- **Current Task:** Refactor routing to use `@nanostores/router`.
+    - Create `router.ts` store.
+    - Update `app.tsx` to use the Nanostores router component/logic.
+    - Update navigation calls in components (`HeaderControls`, `ChatListPage`, `SettingPage`).
+    - Remove `useLocationSync.ts` and related code. (DONE)
+- **Next Major Task:** Refactor state management to Nanostores atoms including fetch/listen logic in `onMount`.
+    - Create `chatStores.ts` with `chatSessionsStore` (with fetch/listen) and `activeChatIdStore`. (DONE)
+    - Create `providerStores.ts` with `providerStatusStore` (with fetch/listen) and `availableProvidersStore` (with fetch). (DONE)
+    - Integrate `chatStores` into components (`ChatListPage`, `ChatView`, `HeaderControls`).
+    - Integrate `providerStores` into components (`ProviderSettings`, `ModelSelector`).
+    - Continue creating/integrating stores for `defaultConfig`, `allToolsStatus`, `mcpStatus`, `customInstructions`.
+- **Paused:** Image upload task (will resume after Nanostores refactor).
+- **Future:** Implement remaining VS Code tool enhancements.
 - **Future:** Confirm `replaceInActiveEditorTool` insertion capability.
 - **Future:** Test structured output and suggested actions thoroughly.
 - **Future:** Test image upload functionality thoroughly across different providers.
@@ -217,16 +236,15 @@ Refactoring frontend components (`app.tsx`, `ChatListPage`, `HeaderControls`, `S
 - Activity Bar Entry Changed.
 
 ## Active Decisions
-- **Refactoring Strategy (Hooks > Atoms for Logic):** Realized initial attempts to encapsulate complex logic (async fetch, external listeners like wouter) directly within Jotai atom definitions (mimicking Riverpod providers) were flawed due to React Hook rules (hooks cannot be called inside atom definitions). The correct pattern is to use custom hooks (`use...`) to manage side effects, lifecycle, and interaction with external hooks/systems. These custom hooks can then consume/update simple state atoms/stores (like Nanostores) if shared state is needed.
-- **State Management Library Shift (Jotai -> Nanostores):** Based on the above realization and user preference, decided to shift state management (where applicable, starting with communication/location) from Jotai towards Nanostores, combined with custom hooks for logic encapsulation.
-- **Location Management Refactor (Complete):** Successfully refactored location state management. Removed `locationAtom`. Created a `useLocationSync` custom hook (`webview-ui/src/hooks/useLocationSync.ts`) that uses `wouter`'s `useLocation` as the state source, manages the communication listener lifecycle (`initializeListener`/`cleanupListener`), handles initial location fetch from the backend, persists location changes to the backend, and manages an `isLoading` state. `app.tsx` now simply calls this hook once.
-- **Communication Module Style (FP):** Refactored `webview-ui/src/utils/communication.ts` from a class-based service to a Functional Programming style module exporting individual functions (`initializeListener`, `cleanupListener`, `requestData`, `listen`, `fetchInitialLocationFP`, `persistLocationFP`). Removed associated Jotai/Nanostore wrappers for the service itself.
-- **Model ID Handling:** (Previous decision still valid) Confirmed decision to use separate `providerId` and `modelId`.
-- **Communication Model (Request/Response):** (Previous decision still valid) Strict Request/Response via `requestData`.
-- **Pub/Sub Model:** (Previous decision still valid) Backend pushes via `pushUpdate`, frontend uses `listen` function.
-- **Handler Architecture:** (Previous decision still valid) Unified backend handlers.
-- **Stream Processing:** (Previous decision still valid) `StreamProcessor` uses `pushUpdate`.
-- **MCP Architecture:** (Previous decision still valid) File-based config, `McpManager`.
+- **State Management:** **Nanostores** is the primary state management library. Fetching, subscriptions, and core logic reside *within* Nanostore atoms (using `onMount`). Components use `useStore` from `@nanostores/preact`. **Abandoning Jotai and custom hooks.**
+- **Routing:** Using **`@nanostores/router`**. Abandoning `wouter`. Location fetch/persistence logic integrated into `router.ts`'s `onMount`.
+- **Communication Module Style (FP):** (Decision still valid) `webview-ui/src/utils/communication.ts` remains a Functional Programming style module.
+- **Model ID Handling:** (Decision still valid) Use separate `providerId` and `modelId`.
+- **Communication Model (Request/Response):** (Decision still valid) Strict Request/Response via `requestData`.
+- **Pub/Sub Model:** (Decision still valid) Backend pushes via `pushUpdate`, frontend Nanostores atoms use `listen` within their lifecycle methods.
+- **Handler Architecture:** (Decision still valid) Unified backend handlers.
+- **Stream Processing:** (Decision still valid) `StreamProcessor` uses `pushUpdate`.
+- **MCP Architecture:** (Decision still valid) File-based config, `McpManager`.
 - **Image Upload:** (Status unchanged) UI implemented, backend needs update.
 - **Markdown & Syntax Highlighting:** (Status unchanged) Implemented.
 - **Suggested Actions Implementation:** (Status unchanged) Via JSON block append + parsing.

@@ -1,6 +1,6 @@
 import { useCallback } from 'preact/hooks'; // Removed useEffect, useRef
-import { useAtomValue } from 'jotai';
-import { loadable } from 'jotai/utils';
+// Removed Jotai imports
+import { useStore } from '@nanostores/react'; // Use Nanostores hook
 import { JSX } from 'preact/jsx-runtime';
 import { requestData } from '../../utils/communication'; // Import requestData
 import {
@@ -10,11 +10,11 @@ import {
     CategoryStatus,
     ToolCategoryInfo
 } from '../../../../src/common/types';
-import { allToolsStatusAtom } from '../../store/atoms';
+import { $allToolsStatus } from '../../stores/toolStores'; // Renamed import
 
 export function ToolSettings(): JSX.Element {
-    // Removed isSubscribedRef
-    const allToolsStatusLoadable = useAtomValue(loadable(allToolsStatusAtom));
+    const allToolsStatus = useStore($allToolsStatus); // Use renamed atom
+    const isLoading = allToolsStatus === null; // Derive loading state
 
     const handleToolToggle = useCallback((toolIdentifier: string, currentStatus: ToolStatus) => {
         const statusCycle: ToolStatus[] = [
@@ -125,12 +125,12 @@ export function ToolSettings(): JSX.Element {
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Toggle individual tools or entire categories on/off for the AI to use. MCP tools require their server to be connected.
             </p>
-            {allToolsStatusLoadable.state === 'loading' && <p class="text-gray-500 dark:text-gray-400 italic">Loading available tools...</p>}
-            {allToolsStatusLoadable.state === 'hasError' && <p class="text-red-500 dark:text-red-400 italic">Error loading tools status.</p>}
-            {allToolsStatusLoadable.state === 'hasData' && allToolsStatusLoadable.data && ( // Add null check
-                allToolsStatusLoadable.data.length > 0 ? (
+            {isLoading && <p class="text-gray-500 dark:text-gray-400 italic">Loading available tools...</p>}
+            {/* TODO: Add better error display */}
+            {!isLoading && allToolsStatus && ( // Check if not loading and data exists
+                allToolsStatus.length > 0 ? (
                     <div class="space-y-6">
-                        {allToolsStatusLoadable.data.map((category: ToolCategoryInfo) => (
+                        {allToolsStatus.map((category: ToolCategoryInfo) => (
                             <div key={category.id}>
                                 <div class="flex items-center justify-between mb-3 pb-2 border-b border-gray-300 dark:border-gray-600">
                                     <h4 class="text-lg font-medium text-gray-700 dark:text-gray-300">{category.name}</h4>

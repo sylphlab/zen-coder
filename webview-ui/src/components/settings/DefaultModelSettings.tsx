@@ -1,15 +1,15 @@
-import { useCallback } from 'preact/hooks'; // Removed useEffect, useRef
-import { useAtomValue } from 'jotai';
-import { loadable } from 'jotai/utils';
+import { useCallback } from 'preact/hooks';
+// Removed: import { useAtomValue } from 'jotai';
+// Removed: import { loadable } from 'jotai/utils';
 import { JSX } from 'preact/jsx-runtime';
 import { requestData } from '../../utils/communication'; // Import requestData
-// Removed unused postMessage import
 import { ModelSelector } from '../ModelSelector';
-import { defaultConfigAtom } from '../../store/atoms';
+import { useDefaultConfig } from '../../hooks/useDefaultConfig'; // Import the new hook
+// Removed: import { defaultConfigAtom } from '../../store/atoms';
 
 export function DefaultModelSettings(): JSX.Element {
-    // Removed isSubscribedRef
-    const defaultConfigLoadable = useAtomValue(loadable(defaultConfigAtom));
+    const defaultConfig = useDefaultConfig(); // Use the refactored hook
+    const isLoadingConfig = defaultConfig === null; // Derive loading state
 
     const handleDefaultChatModelChange = useCallback((newProviderId: string | null, newModelId: string | null) => {
         console.log(`[DefaultModelSettings] Setting default chat model via requestData: Provider=${newProviderId}, Model=${newModelId}`);
@@ -32,21 +32,20 @@ export function DefaultModelSettings(): JSX.Element {
             </p>
             <div class="space-y-4">
                 <div class="p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
-                    {defaultConfigLoadable.state === 'loading' && <p class="text-sm text-gray-500">Loading default config...</p>}
-                    {defaultConfigLoadable.state === 'hasError' && <p class="text-sm text-red-500">Error loading default config.</p>}
-                    {defaultConfigLoadable.state === 'hasData' && defaultConfigLoadable.data && (() => { // Add null check
-                        const defaultProviderId = defaultConfigLoadable.data?.defaultProviderId ?? null;
-                        const defaultModelId = defaultConfigLoadable.data?.defaultModelId ?? null;
-
-                        return (
-                            <ModelSelector
-                                labelPrefix="Default Chat"
-                                selectedProviderId={defaultProviderId}
-                                selectedModelId={defaultModelId}
-                                onModelChange={handleDefaultChatModelChange}
-                            />
-                        );
-                    })()}
+                    {isLoadingConfig && <p class="text-sm text-gray-500">Loading default config...</p>}
+                    {/* Render only when not loading and config exists */}
+                    {!isLoadingConfig && defaultConfig && (
+                        <ModelSelector
+                            labelPrefix="Default Chat"
+                            selectedProviderId={defaultConfig.defaultProviderId ?? null}
+                            selectedModelId={defaultConfig.defaultModelId ?? null}
+                            onModelChange={handleDefaultChatModelChange}
+                        />
+                    )}
+                    {/* Handle case where config is loaded but null/empty (optional) */}
+                    {!isLoadingConfig && !defaultConfig && (
+                        <p class="text-sm text-gray-500">No default configuration set.</p>
+                    )}
                 </div>
                 {/* TODO: Add selectors for defaultImageModelId and defaultOptimizeModelId later */}
             </div>

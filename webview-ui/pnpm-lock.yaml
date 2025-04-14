@@ -11,6 +11,12 @@ importers:
       '@nanostores/preact':
         specifier: ^1.0.0
         version: 1.0.0(nanostores@1.0.1)(preact@10.26.5)
+      '@nanostores/react':
+        specifier: ^1.0.0
+        version: 1.0.0(nanostores@1.0.1)(react@19.1.0)
+      '@nanostores/router':
+        specifier: ^1.0.0
+        version: 1.0.0(nanostores@1.0.1)
       '@types/react-syntax-highlighter':
         specifier: ^15.5.13
         version: 15.5.13
@@ -345,6 +351,19 @@ packages:
     peerDependencies:
       nanostores: ^0.9.0 || ^0.10.0 || ^0.11.0 || ^1.0.0
       preact: '>=10.0.0'
+
+  '@nanostores/react@1.0.0':
+    resolution: {integrity: sha512-eDduyNy+lbQJMg6XxZ/YssQqF6b4OXMFEZMYKPJCCmBevp1lg0g+4ZRi94qGHirMtsNfAWKNwsjOhC+q1gvC+A==}
+    engines: {node: ^20.0.0 || >=22.0.0}
+    peerDependencies:
+      nanostores: ^0.9.0 || ^0.10.0 || ^0.11.0 || ^1.0.0
+      react: '>=18.0.0'
+
+  '@nanostores/router@1.0.0':
+    resolution: {integrity: sha512-U1pT7u18Yk9yrir/im2sEo8bZcWWWMnOGFoqS2JOkN1vuAntUWNIeUC+8/Q6qPjgatIHGl9IEWB0U7+WdkjzMQ==}
+    engines: {node: ^20.0.0 || >=22.0.0}
+    peerDependencies:
+      nanostores: ^0.9.0 || ^0.10.0 || ^0.11.0 || ^1.0.0
 
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
@@ -1701,6 +1720,15 @@ snapshots:
     dependencies:
       nanostores: 1.0.1
       preact: 10.26.5
+
+  '@nanostores/react@1.0.0(nanostores@1.0.1)(react@19.1.0)':
+    dependencies:
+      nanostores: 1.0.1
+      react: 19.1.0
+
+  '@nanostores/router@1.0.0(nanostores@1.0.1)':
+    dependencies:
+      nanostores: 1.0.1
 
   '@polka/url@1.0.0-next.29': {}
 

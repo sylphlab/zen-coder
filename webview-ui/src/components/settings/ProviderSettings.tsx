@@ -1,15 +1,17 @@
-import { useState, useMemo, useCallback } from 'preact/hooks'; // Removed useEffect, useRef
-import { useAtomValue } from 'jotai';
-import { loadable } from 'jotai/utils';
+import { useState, useMemo, useCallback } from 'preact/hooks';
+// Removed: import { useAtomValue } from 'jotai';
+// Removed: import { loadable } from 'jotai/utils';
+import { useStore } from '@nanostores/react'; // Corrected import for React
 import { JSX } from 'preact/jsx-runtime';
 import { requestData } from '../../utils/communication'; // Import requestData
 import { ProviderInfoAndStatus } from '../../../../src/common/types';
-import { providerStatusAtom } from '../../store/atoms';
+import { $providerStatus } from '../../stores/providerStores'; // Renamed import
+// Removed: import { useProviderStatus } from '../../hooks/useProviderStatus';
 
 export function ProviderSettings(): JSX.Element {
-    const providerStatusLoadable = useAtomValue(loadable(providerStatusAtom));
+    const providerStatus = useStore($providerStatus); // Use renamed atom
+    const isLoadingProviders = providerStatus === null; // Derive loading from store value
     const [apiKeysInput, setApiKeysInput] = useState<{ [providerId: string]: string }>({});
-    // Removed isSubscribedRef
     const [searchQuery, setSearchQuery] = useState('');
 
     const handleApiKeyInputChange = (providerId: string, value: string) => {
@@ -63,20 +65,19 @@ export function ProviderSettings(): JSX.Element {
     }, []);
 
     const filteredProviders = useMemo(() => {
-        if (providerStatusLoadable.state !== 'hasData' || !providerStatusLoadable.data) return [];
-        const currentProviderStatus = providerStatusLoadable.data;
+        const currentProviderStatus = providerStatus ?? []; // Use providerStatus from hook, default to empty array
         if (!searchQuery) {
             return currentProviderStatus;
         }
         const lowerCaseQuery = searchQuery.toLowerCase();
-        return currentProviderStatus.filter(provider =>
+        // Add type annotation for provider parameter in filter
+        return currentProviderStatus.filter((provider: ProviderInfoAndStatus) =>
             provider.name.toLowerCase().includes(lowerCaseQuery) ||
             provider.id.toLowerCase().includes(lowerCaseQuery)
         );
-    }, [searchQuery, providerStatusLoadable]);
+    }, [searchQuery, providerStatus]); // Depend on providerStatus directly
 
-    // Removed subscription useEffect
-
+    // Add type annotation for providerInfo parameter
     const renderProviderSetting = (providerInfo: ProviderInfoAndStatus) => {
         const { id, name, apiKeyUrl, requiresApiKey, enabled, apiKeySet } = providerInfo;
         const apiKeyText = apiKeySet ? '(Key 已設定)' : '(Key 未設定)';
@@ -150,10 +151,10 @@ export function ProviderSettings(): JSX.Element {
                 />
             </div>
 
-            {providerStatusLoadable.state === 'loading' && <p class="text-gray-500 dark:text-gray-400">正在載入 Provider 狀態...</p>}
-            {providerStatusLoadable.state === 'hasError' && <p class="text-red-500 dark:text-red-400">載入 Provider 狀態時出錯。</p>}
-            {providerStatusLoadable.state === 'hasData' && providerStatusLoadable.data && ( // Add null check
-                providerStatusLoadable.data.length > 0 ? (
+            {isLoadingProviders && <p class="text-gray-500 dark:text-gray-400">正在載入 Provider 狀態...</p>}
+            {/* TODO: Add better error display if useProviderStatus provided error state */}
+            {!isLoadingProviders && providerStatus && ( // Check providerStatus directly
+                providerStatus.length > 0 ? (
                     <ul class="space-y-4">
                         {filteredProviders.length > 0 ? (
                             filteredProviders.map(providerInfo => renderProviderSetting(providerInfo))

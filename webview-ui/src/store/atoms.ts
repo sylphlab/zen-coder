@@ -26,29 +26,9 @@ type SelectedImage = {
 import { requestData, listen } from '../utils/communication'; // Import from new communication file
 
 // --- Core State Atoms ---
-// Atom to hold the list of chat sessions with fetch/listen logic
-export const chatSessionsAtom = atomWithDefault<ChatSession[] | null>(() => null); // Initialize with null
-chatSessionsAtom.onMount = (set) => {
-    console.log('[chatSessionsAtom] onMount: Subscribing and fetching initial data...');
-    // Subscribe to updates
-    const subscription = listen('chatSessionsUpdate', (data: { sessions: ChatSession[] } | null) => {
-        console.log('[chatSessionsAtom] Received update via listen callback.');
-        set(data?.sessions ?? []); // Update with new sessions list or empty array
-    });
-    // Initial fetch
-    requestData<{ sessions: ChatSession[] }>('getChatSessions') // Only fetch sessions
-        .then(response => set(response.sessions ?? []))
-        .catch(err => {
-            console.error("Error fetching initial chat sessions:", err);
-            set([]); // Set to empty array on error
-        });
-
-    // Return the dispose function for onUnmount
-    return () => {
-        console.log('[chatSessionsAtom] onUnmount: Disposing subscription.');
-        subscription.dispose();
-    };
-};
+// Atom to hold the list of chat sessions. Updated via listeners elsewhere (e.g., main.tsx or a dedicated handler).
+export const chatSessionsAtom = atom<ChatSession[] | null>(null); // Simple atom, initialized to null
+// Removed the onMount logic - fetching/subscription handled by useChatSessions hook.
 
 export const activeChatIdAtom = atom<string | null>(null); // Keep for initial redirect, set by initial getChatSessions response
 // --- Async Atoms for Initial/Fetched Data ---
@@ -76,7 +56,7 @@ providerStatusAtom.onMount = (set) => {
     // Return the dispose function for onUnmount
     return () => {
         console.log('[providerStatusAtom] onUnmount: Disposing subscription.');
-        subscription.dispose();
+        subscription().catch(err => console.error("[providerStatusAtom] Error disposing subscription:", err)); // Call async dispose
     };
 };
 
@@ -158,7 +138,7 @@ defaultConfigAtom.onMount = (set) => {
 
     return () => {
         console.log('[defaultConfigAtom] onUnmount: Disposing subscription.');
-        subscription.dispose();
+        subscription().catch(err => console.error("[defaultConfigAtom] Error disposing subscription:", err)); // Call async dispose
     };
 };
 export const refreshDefaultConfigAtom = atom(null, (_get, set) => {
@@ -186,7 +166,7 @@ allToolsStatusAtom.onMount = (set) => {
 
     return () => {
         console.log('[allToolsStatusAtom] onUnmount: Disposing subscription.');
-        subscription.dispose();
+        subscription().catch(err => console.error("[allToolsStatusAtom] Error disposing subscription:", err)); // Call async dispose
     };
 };
 export const refreshAllToolsStatusAtom = atom(null, (_get, set) => {
@@ -213,7 +193,7 @@ mcpServerStatusAtom.onMount = (set) => {
 
     return () => {
         console.log('[mcpServerStatusAtom] onUnmount: Disposing subscription.');
-        subscription.dispose();
+        subscription().catch(err => console.error("[mcpServerStatusAtom] Error disposing subscription:", err)); // Call async dispose
     };
 };
 export const refreshMcpServerStatusAtom = atom(null, (_get, set) => {

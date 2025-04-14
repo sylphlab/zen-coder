@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@nanostores/preact": "^1.0.0",
+    "@nanostores/react": "^1.0.0",
+    "@nanostores/router": "^1.0.0",
     "@types/react-syntax-highlighter": "^15.5.13",
     "gsap": "^3.12.7",
     "jotai": "^2.12.2",

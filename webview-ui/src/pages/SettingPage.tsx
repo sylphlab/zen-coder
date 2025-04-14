@@ -1,31 +1,28 @@
 import { useCallback, useRef } from 'preact/hooks';
-import { useLocation } from "wouter";
-import { useSetAtom } from 'jotai'; // Added useSetAtom
+// Removed: import { useLocation } from "wouter";
+// Removed: import { useSetAtom } from 'jotai';
 import { JSX } from 'preact/jsx-runtime';
 import { DefaultModelSettings } from '../components/settings/DefaultModelSettings';
 import { CustomInstructionsSettings } from '../components/settings/CustomInstructionsSettings';
 import { ProviderSettings } from '../components/settings/ProviderSettings';
 import { McpServerSettings } from '../components/settings/McpServerSettings';
-import { updateLocationAtom } from '../store/atoms'; // Import atom setter
+import { router } from '../stores/router'; // Import Nanostores router
+// Removed: import { updateLocationAtom } from '../store/atoms';
 
 export function SettingPage(): JSX.Element {
-   const [, setLocation] = useLocation();
-   const updateLocation = useSetAtom(updateLocationAtom); // Get atom setter
-   const isSubscribedRef = useRef(false);
+   // Removed wouter/jotai hooks
+   const isSubscribedRef = useRef(false); // Keep this for now, might relate to old subscription logic to be removed later
 
-   // Removed local state and handlers
+   // Removed local state and handlers (Assuming they are fully moved to sub-components)
    // These are now handled within their respective components.
 
    // Removed central subscription useEffect. Subscriptions are now handled in individual setting components.
 
-   // Removed the useEffect hook for custom instructions state sync.
-   // Handler for the back button (with backend sync)
+   // Handler for the back button (Use Nanostores router)
    const handleBackClick = useCallback(() => {
-       const newPath = '/'; // Navigate to root (ChatListPage)
-       setLocation(newPath);
-       updateLocation(newPath); // Sync backend
-   }, [setLocation, updateLocation]);
-   // Removed duplicate handleBackClick definition
+       console.log('[SettingPage] Navigating back to /');
+       router.open('/'); // Use Nanostores router
+   }, []); // No dependencies needed
 
    return (
        <div class="p-6 relative h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">

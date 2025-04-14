@@ -1,54 +1,43 @@
-// Removed unused imports: useEffect, useAtomValue, loadable
-import { Router, Route, useLocation, Switch } from "wouter";
+import { useStore } from '@nanostores/preact';
+import { ComponentChild } from 'preact'; // Import ComponentChild
 import './app.css';
 import { SettingPage } from './pages/SettingPage';
 import { ChatListPage } from './pages/ChatListPage';
-import { ChatView } from './components/ChatView.tsx';
-import { useLocationSync } from './hooks/useLocationSync.ts'; // Explicitly add .ts extension
-// Removed locationAtom import
+import { ChatView } from './components/ChatView';
+import { router } from './stores/router'; // Import the Nanostores router
+
+// Removed useLocationSync import
 
 // --- App Component ---
 export function App() {
-    // Initialize location synchronization logic and get loading state
-    const { isLoading } = useLocationSync();
+    // Get the current page object from the router store
+    const page = useStore(router);
 
-    // Get the current location directly from wouter for routing
-    const [location] = useLocation();
+    // TODO: Implement initial location fetching and setting for the nanostore router
+    // This might involve a useEffect in App or main.tsx calling requestData('getLastLocation')
+    // and then router.open(fetchedLocation). For now, it might default to '/' or be blank.
+    // const { isLoading } = useSomeInitialLocationLoadingLogic(); // Placeholder
+    // if (isLoading) { return <div class="flex justify-center items-center h-screen">Initializing Location...</div>; }
 
-    // Display loading indicator while the hook is fetching initial location
-    if (isLoading) {
-        return <div class="flex justify-center items-center h-screen">Initializing...</div>;
+
+    // Determine which component to render based on the route name
+    let CurrentPage: ComponentChild = null; // Use imported ComponentChild type
+    if (page?.route === 'home') {
+        CurrentPage = <ChatListPage />;
+    } else if (page?.route === 'chat' && page.params && page.params.chatId) { // Add check for page.params
+        // Pass chatId as a prop, key forces re-render on ID change
+        CurrentPage = <ChatView key={page.params.chatId} chatIdFromRoute={page.params.chatId} />;
+    } else if (page?.route === 'settings') {
+        CurrentPage = <SettingPage />;
+    } else {
+        // Fallback for unknown routes or initial state before routing resolves
+        CurrentPage = <div class="p-6 text-center text-red-500">404: Page Not Found or Initializing<br/>Path: {page?.path ?? 'Unknown'}</div>;
     }
 
-    // Once loading is complete, render the Router
     return (
-        <Router hook={useLocation}> {/* Ensure Router uses the hook */}
-            <div class="app-layout h-screen flex flex-col bg-gray-100 dark:bg-gray-850 text-gray-900 dark:text-gray-100">
-                {/* No main wrapper needed if Switch handles layout */}
-                {/* <main class="content-area flex-1 flex flex-col overflow-hidden"> */}
-                <Switch>
-                    {/* Chat View Route */}
-                    <Route path="/chat/:chatId">
-                            {(params) => <ChatView key={params.chatId} chatIdFromRoute={params.chatId} />}
-                        </Route>
-
-                        {/* Settings Route */}
-                        <Route path="/settings">
-                            <SettingPage />
-                        </Route>
-
-                    {/* Root Route (Chat List) */}
-                    <Route path="/">
-                        <ChatListPage />
-                    </Route>
-
-                    {/* Fallback Route (404) */}
-                    <Route>
-                        <div class="p-6 text-center text-red-500">404: Page Not Found<br/>Path: {location}</div>
-                    </Route>
-                </Switch>
-                {/* </main> */}
-            </div>
-        </Router>
+        <div class="app-layout h-screen flex flex-col bg-gray-100 dark:bg-gray-850 text-gray-900 dark:text-gray-100">
+            {/* Render the current page component */}
+            {CurrentPage}
+        </div>
     );
 }
