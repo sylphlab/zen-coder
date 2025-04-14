@@ -1,39 +1,24 @@
 import { render } from 'preact';
 import { Suspense } from 'preact/compat';
 import { Provider, getDefaultStore } from 'jotai'; // Import getDefaultStore
-import { handleResponse as handleCommunicationResponse } from './utils/communication'; // Import from communication.ts
+import { handleResponse as handleCommunicationResponse } from './utils/communication'; // Re-import handleResponse
 import {
     // Import ALL atoms that might be updated by messages
     chatSessionsAtom,
-    activeChatIdAtom,
     isStreamingAtom,
-    suggestedActionsMapAtom,
-    // providerStatusAtom, // Read-only async atom
-    refreshProviderStatusAtom, // Keep refresh trigger
-    // allToolsStatusAtom, // Don't import directly
-    refreshAllToolsStatusAtom, // Import refresh trigger
-    // mcpServerStatusAtom, // Don't import directly
-    refreshMcpServerStatusAtom, // Import refresh trigger
-    isChatListLoadingAtom,
-    // availableProvidersAtom, // Async
-    // defaultConfigAtom, // Don't import directly
-    refreshDefaultConfigAtom, // Import refresh trigger
-    refreshCustomInstructionsAtom, // Import refresh trigger for custom instructions
+    providerStatusAtom, // Import the actual atom
+    allToolsStatusAtom, // Import the actual atom
+    mcpServerStatusAtom, // Import the actual atom
+    defaultConfigAtom, // Import the actual atom
+    customInstructionsAtom, // Import the actual atom
 } from './store/atoms';
 import {
-    // Import ALL relevant payload types
-    LoadChatStatePayload,
-    StartAssistantMessagePayload,
-    AppendMessageChunkPayload,
-    UpdateSuggestedActionsPayload,
-    ProviderInfoAndStatus, // Needed for pushUpdateProviderStatus payload type hint
-    AllToolsStatusInfo, // Import type for payload
-    McpConfiguredStatusPayload, // Import type for payload
-    DefaultChatConfig, // Import type for payload
-    UiMessage, // Needed for appendMessageChunk logic
-    UiTextMessagePart, // Needed for appendMessageChunk logic
-    // CustomInstructionsPayload is defined inline in atoms.ts now
-} from '../../src/common/types';
+    ProviderInfoAndStatus,
+    ChatSession, // Add ChatSession import
+    AllToolsStatusInfo,
+    McpConfiguredStatusPayload,
+    DefaultChatConfig,
+} from '../../src/common/types'; // Corrected relative path
 import 'virtual:uno.css';
 import '@unocss/reset/tailwind.css';
 import './index.css';
@@ -42,8 +27,9 @@ import { App } from './app.tsx';
 
 const store = getDefaultStore(); // Get the default Jotai store instance
 
-console.log("[main.tsx] Setting up unified global message listener...");
+console.log("[main.tsx] Initializing application...");
 
+// Add a global listener to handle ALL messages from the extension host
 window.addEventListener('message', (event: MessageEvent) => {
     const message = event.data;
     // --- Basic Type Check ---
@@ -59,153 +45,66 @@ window.addEventListener('message', (event: MessageEvent) => {
             // Handle responses for requests initiated by requestData
             handleCommunicationResponse(message); // Use the handler from communication.ts
         } else {
-            // Handle all other push messages directly here by updating atoms
+            // Handle push messages (primarily Pub/Sub updates)
             switch (message.type) {
-                case 'loadChatState': // Still needed if backend pushes this after create/delete chat
-                    const loadPayload = message.payload as LoadChatStatePayload;
-                    store.set(chatSessionsAtom, loadPayload.chats ?? []);
-                    store.set(activeChatIdAtom, loadPayload.lastActiveChatId ?? null);
-                    store.set(isChatListLoadingAtom, false); // Reset loading state
-                    // TODO: Handle navigation based on lastLocation if needed
-                    break;
-
-                case 'startAssistantMessage':
-                    const startPayload = message.payload as StartAssistantMessagePayload;
-                    store.set(chatSessionsAtom, prevSessions => {
-                        const sessionIndex = prevSessions.findIndex(s => s.id === startPayload.chatId);
-                        if (sessionIndex === -1) return prevSessions;
-                        const newSessions = [...prevSessions];
-                        const sessionToUpdate = { ...newSessions[sessionIndex] }; // Clone session
-                        const newHistory = [...sessionToUpdate.history]; // Clone history
-                        // Add an empty assistant message frame
-                        newHistory.push({
-                            id: startPayload.messageId,
-                            role: 'assistant',
-                            content: [], // Start with empty content array
-                            timestamp: Date.now() // Add timestamp
-                        });
-                        sessionToUpdate.history = newHistory; // Assign new history
-                        sessionToUpdate.lastModified = Date.now(); // Update timestamp
-                        newSessions[sessionIndex] = sessionToUpdate; // Assign new session
-                        return newSessions;
-                    });
-                    store.set(isStreamingAtom, true);
-                    break;
-
-                case 'appendMessageChunk':
-                    const appendPayload = message.payload as AppendMessageChunkPayload;
-                    store.set(chatSessionsAtom, prevSessions => {
-                        const sessionIndex = prevSessions.findIndex(s => s.id === appendPayload.chatId);
-                        if (sessionIndex === -1) return prevSessions; // Chat not found
-
-                        const newSessions = [...prevSessions];
-                        const sessionToUpdate = { ...newSessions[sessionIndex] }; // Clone session
-                        const history = [...sessionToUpdate.history]; // Clone history
-                        const messageIndex = history.findIndex(m => m.id === appendPayload.messageId);
-
-                        if (messageIndex === -1) {
-                            console.warn(`[Global Listener] Message ID ${appendPayload.messageId} not found in chat ${appendPayload.chatId} for appendMessageChunk.`);
-                            return prevSessions; // Message not found
-                        }
-
-                        const messageToUpdate = { ...history[messageIndex] }; // Clone message
-                        // Ensure content is always an array
-                        if (!Array.isArray(messageToUpdate.content)) {
-                            console.warn(`[Global Listener] Message content for ${appendPayload.messageId} is not an array. Resetting.`);
-                            messageToUpdate.content = [];
-                        }
-
-                        let content = [...messageToUpdate.content]; // Clone content array
-
-                        // Find the last text part or create one if none exists/last part isn't text
-                        let lastTextPartIndex = -1;
-                        if (content.length > 0 && content[content.length - 1].type === 'text') {
-                            lastTextPartIndex = content.length - 1;
-                        }
-
-                        if (lastTextPartIndex !== -1) {
-                            // Append to existing text part, ensuring it's a text part
-                            const partToUpdate = { ...content[lastTextPartIndex] } as UiTextMessagePart; // Clone the part and assert type
-                            if (partToUpdate.type === 'text') {
-                                partToUpdate.text += appendPayload.textChunk;
-                                content[lastTextPartIndex] = partToUpdate; // Replace with cloned+updated part
+                case 'pushUpdate':
+                    const updatePayload = message.payload as { topic: string; data: any };
+                    console.log(`[Global Listener] Received pushUpdate for topic: ${updatePayload.topic}`);
+                    switch (updatePayload.topic) {
+                        case 'providerStatus':
+                            console.log('[Global Listener] Setting providerStatusAtom directly.');
+                            store.set(providerStatusAtom, updatePayload.data as ProviderInfoAndStatus[] | null);
+                            break;
+                        case 'mcpStatus':
+                            console.log('[Global Listener] Setting mcpServerStatusAtom directly.');
+                            store.set(mcpServerStatusAtom, updatePayload.data as McpConfiguredStatusPayload | null);
+                            break;
+                        case 'allToolsStatus':
+                            console.log('[Global Listener] Setting allToolsStatusAtom directly.');
+                            store.set(allToolsStatusAtom, updatePayload.data as AllToolsStatusInfo | null);
+                            break;
+                        case 'defaultConfig':
+                            console.log('[Global Listener] Setting defaultConfigAtom directly.');
+                            store.set(defaultConfigAtom, updatePayload.data as DefaultChatConfig | null);
+                            break;
+                        case 'customInstructions':
+                            console.log('[Global Listener] Setting customInstructionsAtom directly.');
+                            store.set(customInstructionsAtom, updatePayload.data as { global: string; project: string | null; projectPath: string | null } | null);
+                            break;
+                        case 'chatUpdate': // Handles updates to a specific chat session (e.g., history changes from streaming)
+                            console.log('[Global Listener] Setting chatSessionsAtom via chatUpdate.');
+                            const updatedSession = updatePayload.data as ChatSession;
+                            if (updatedSession?.id) {
+                                store.set(chatSessionsAtom, prevSessions => {
+                                    const index = prevSessions.findIndex(s => s.id === updatedSession.id);
+                                    if (index !== -1) {
+                                        const newSessions = [...prevSessions];
+                                        newSessions[index] = updatedSession;
+                                        return newSessions;
+                                    }
+                                    console.warn(`[Global Listener] Received chatUpdate for unknown session ID: ${updatedSession.id}`);
+                                    return prevSessions;
+                                });
                             } else {
-                                // Should not happen based on the check above, but as fallback:
-                                content.push({ type: 'text', text: appendPayload.textChunk });
+                                console.warn('[Global Listener] Received chatUpdate without valid session data.');
                             }
-                        } else {
-                            // Add new text part
-                            content.push({ type: 'text', text: appendPayload.textChunk });
-                        }
-
-                        messageToUpdate.content = content; // Assign the new content array
-                        history[messageIndex] = messageToUpdate; // Replace with cloned+updated message
-                        sessionToUpdate.history = history; // Assign the new history array
-                        sessionToUpdate.lastModified = Date.now(); // Update timestamp
-                        newSessions[sessionIndex] = sessionToUpdate; // Replace with cloned+updated session
-
-                        return newSessions;
-                    });
+                            break;
+                         case 'streamingStatusUpdate': // Handles streaming status updates
+                             console.log('[Global Listener] Setting isStreamingAtom directly.');
+                             store.set(isStreamingAtom, !!updatePayload.data); // Assuming data is boolean
+                             break;
+                        // Add future Pub/Sub topics here (e.g., 'chatListUpdated')
+                        default:
+                            console.warn(`[Global Listener] Unhandled pushUpdate topic: ${updatePayload.topic}`);
+                    }
                     break;
 
-                case 'streamFinished':
-                    store.set(isStreamingAtom, false);
-                    break;
-
-                case 'updateSuggestedActions':
-                    const suggestPayload = message.payload as UpdateSuggestedActionsPayload;
-                    store.set(suggestedActionsMapAtom, prevMap => ({
-                        ...prevMap,
-                        [suggestPayload.messageId]: suggestPayload.actions
-                    }));
-                    break;
-
-                // Removed case 'pushUpdateProviderStatus' - Updates handled by Jotai atom refetch/subscription
-
-                // Cases for updateMcpConfiguredStatus and updateAllToolsStatus are removed
-                // because their corresponding atoms are async and should update via requestManager/refetch
-
-                case 'mcpConfigReloaded':
-                    console.log('[Global Listener] Received mcpConfigReloaded, triggering atom refetch.');
-                    // Trigger refetch of atoms that depend on MCP config
-                    // store.set(refreshMcpStatusAtom); // Implement refresh atom if needed
-                    // store.set(refreshAllToolsStatusAtom); // Implement refresh atom if needed
-                    break;
-
-                case 'updateAllToolsStatus':
-                    // const toolsPayload = message.payload as AllToolsStatusInfo; // Payload not needed for refresh trigger
-                    console.log('[Global Listener] Updating allToolsStatusAtom via refresh trigger.');
-                    store.set(refreshAllToolsStatusAtom); // Trigger refresh
-                    break;
-
-                case 'updateMcpConfiguredStatus': // Handle MCP status push
-                    // const mcpPayload = message.payload as McpConfiguredStatusPayload; // Payload not needed for refresh trigger
-                    console.log('[Global Listener] Updating mcpServerStatusAtom via refresh trigger.');
-                    store.set(refreshMcpServerStatusAtom); // Trigger refresh
-                    break;
-
-                case 'updateDefaultConfig': // Handle Default Config push
-                    // const configPayload = message.payload as DefaultChatConfig; // Payload not needed for refresh trigger
-                    console.log('[Global Listener] Updating defaultConfigAtom via refresh trigger.');
-                    store.set(refreshDefaultConfigAtom); // Trigger refresh
-                    break;
-
-                case 'updateCustomInstructions': // Handle Custom Instructions push
-                    console.log('[Global Listener] Updating customInstructionsAtom via refresh trigger.');
-                    store.set(refreshCustomInstructionsAtom); // Trigger refresh
-                    break;
-
-                case 'pushUpdateProviderStatus': // Handle Provider Status push
-                    // const providerPayload = message.payload as ProviderInfoAndStatus[]; // Payload not needed for refresh trigger
-                    console.log('[Global Listener] Updating providerStatusAtom via refresh trigger.');
-                    // Instead of setting directly, trigger a refresh of the async atom
-                    store.set(refreshProviderStatusAtom);
-                    break;
-
-                // Add other message type handlers here...
+                // Removed specific streaming/state handlers:
+                // loadChatState, startAssistantMessage, appendMessageChunk, streamFinished, updateSuggestedActions, mcpConfigReloaded
+                // These should now be handled by backend logic pushing 'chatUpdate' or 'streamingStatusUpdate' via 'pushUpdate'.
 
                 default:
-                    // Keep logging unhandled types
+                    // Log other unhandled message types
                     console.warn(`[Global Listener] Unhandled push message type: ${message.type}`);
                     break;
             }

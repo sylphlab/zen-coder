@@ -159,7 +159,7 @@ export type WebviewRequestType =
   | 'getAvailableProviders' // For initial provider list
   | 'getModelsForProvider'
   | 'getDefaultConfig'
-  | 'getMcpConfiguredStatus' // Keep for settings page init
+  | 'getMcpStatus'           // Renamed from getMcpConfiguredStatus
   | 'getAllToolsStatus'      // Keep for settings page init
   | 'getCustomInstructions' // Keep for settings page init
   | 'setToolAuthorization' // New handler type

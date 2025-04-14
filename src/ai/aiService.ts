@@ -225,7 +225,7 @@ export class AiService {
         const standardToolNames = Object.keys(standardToolsMap) as StandardToolName[];
         standardToolNames.forEach(toolName => {
             const toolDefinition = standardToolsMap[toolName];
-            if (!toolDefinition) return;
+            if (!toolDefinition) {return;}
             const categoryId = this._getStandardToolCategory(toolName);
             const enabled = this._isToolEffectivelyEnabled(toolName, categoryId, null, authConfig); // Corrected method name
             if (enabled) {
@@ -267,7 +267,7 @@ export class AiService {
                 const fileContent = await vscode.workspace.fs.readFile(projectInstructionUri);
                 const projectInstructions = Buffer.from(fileContent).toString('utf8');
                 if (projectInstructions?.trim()) {
-                    if (combinedInstructions) combinedInstructions += '\n\n---\n\n';
+                    if (combinedInstructions) {combinedInstructions += '\n\n---\n\n';}
                     combinedInstructions += projectInstructions.trim();
                 }
             } catch (error: any) {
@@ -484,7 +484,7 @@ export class AiService {
         const standardToolNames = Object.keys(standardToolsMap) as StandardToolName[];
         for (const toolName of standardToolNames) {
             const toolDefinition = standardToolsMap[toolName];
-            if (!toolDefinition) continue;
+            if (!toolDefinition) {continue;}
 
             const categoryId = this._getStandardToolCategory(toolName); // e.g., 'filesystem'
             const categoryName = categoryId.charAt(0).toUpperCase() + categoryId.slice(1); // e.g., 'Filesystem'
@@ -547,8 +547,8 @@ export class AiService {
              // Prioritize standard categories, then sort alphabetically
              const aIsMcp = a.id.startsWith('mcp_');
              const bIsMcp = b.id.startsWith('mcp_');
-             if (aIsMcp && !bIsMcp) return 1;
-             if (!aIsMcp && bIsMcp) return -1;
+             if (aIsMcp && !bIsMcp) {return 1;}
+             if (!aIsMcp && bIsMcp) {return -1;}
              return a.name.localeCompare(b.name);
          });
 
@@ -568,8 +568,8 @@ export class AiService {
 
     private _getStandardToolCategory(toolName: StandardToolName): string {
         const lowerToolName = toolName.toLowerCase();
-        if (lowerToolName.includes('file') || lowerToolName.includes('dir') || lowerToolName.includes('path') || lowerToolName.includes('item')) return 'filesystem';
-        if (lowerToolName.includes('editor') || lowerToolName.includes('vscode') || lowerToolName.includes('tab') || lowerToolName.includes('terminal')) return 'vscode';
+        if (lowerToolName.includes('file') || lowerToolName.includes('dir') || lowerToolName.includes('path') || lowerToolName.includes('item')) {return 'filesystem';}
+        if (lowerToolName.includes('editor') || lowerToolName.includes('vscode') || lowerToolName.includes('tab') || lowerToolName.includes('terminal')) {return 'vscode';}
         return 'utilities';
     }
 
@@ -619,7 +619,7 @@ export class AiService {
     // --- API Key Management ---
     public async setApiKey(providerId: string, apiKey: string): Promise<void> {
         const provider = this.providerMap.get(providerId);
-        if (!provider) throw new Error(`Unknown provider ID '${providerId}'.`);
+        if (!provider) {throw new Error(`Unknown provider ID '${providerId}'.`);}
         if (!provider.requiresApiKey) {
              console.warn(`Attempted to set API key for provider '${providerId}' which does not require one.`);
              return;
@@ -637,7 +637,7 @@ export class AiService {
 
     public async deleteApiKey(providerId: string): Promise<void> {
          const provider = this.providerMap.get(providerId);
-         if (!provider) throw new Error(`Unknown provider ID '${providerId}'.`);
+         if (!provider) {throw new Error(`Unknown provider ID '${providerId}'.`);}
          if (!provider.requiresApiKey) {
               console.warn(`Attempted to delete API key for provider '${providerId}' which does not require one.`);
               return;
@@ -763,7 +763,7 @@ export class AiService {
      * Sends the current state for a specific topic to the webview upon initial subscription.
      */
     private async _pushInitialStateForTopic(topic: string): Promise<void> {
-        if (!this.postMessageCallback) return;
+        if (!this.postMessageCallback) {return;}
 
         try {
             let data: any;

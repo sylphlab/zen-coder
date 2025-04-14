@@ -48,7 +48,8 @@ export class StreamProcessor {
         // We are no longer using experimental_output, so this stream is not expected.
 
         console.log(`[StreamProcessor] All stream processing finished for message ID: ${assistantMessageId}.`);
-        this._postMessageCallback({ type: 'streamFinished' });
+        // Send final streaming status update
+        this._postMessageCallback({ type: 'pushUpdate', payload: { topic: 'streamingStatusUpdate', data: false } });
 
         // --- Post-Stream Parsing Removed ---
         // Final parsing and handling of potential <content> / <actions> tags
@@ -66,7 +67,7 @@ export class StreamProcessor {
     /**
      * Handles a single part from the AI stream.
      */
-    private async _handleStreamPart(part: any, chatId: string, assistantMessageId: string): Promise<void> { // Add chatId
+    private async _handleStreamPart(part: any, chatId: string, assistantMessageId: string): Promise<void> {
         // console.log("[StreamProcessor] Handling part:", part.type); // DEBUG
         switch (part.type) {
             case 'text-delta':
@@ -109,7 +110,7 @@ export class StreamProcessor {
                 console.log("[StreamProcessor] Stream Finished. Reason:", part.finishReason, "Usage:", part.usage);
                 break;
             case 'error':
-                this._handleError(part);
+                this._handleError(part, chatId); // Pass chatId
                 break; // Throwing error is handled in the main loop now
             default:
                 console.warn("[StreamProcessor] Unhandled stream part type:", part.type);
@@ -118,36 +119,48 @@ export class StreamProcessor {
 
     // --- Private Handlers for Specific Stream Part Types ---
 
-    private async _handleTextDelta(part: any, chatId: string, assistantMessageId: string): Promise<void> { // Add chatId
-        this._postMessageCallback({ type: 'appendMessageChunk', sender: 'assistant', textDelta: part.textDelta });
-        await this._historyManager.appendTextChunk(chatId, assistantMessageId, part.textDelta); // Pass chatId
+    private async _handleTextDelta(part: { textDelta: string }, chatId: string, assistantMessageId: string): Promise<void> {
+        await this._historyManager.appendTextChunk(chatId, assistantMessageId, part.textDelta);
+        // Get updated session and push
+        const updatedSession = await this._historyManager.getChatSession(chatId);
+        if (updatedSession) {
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: 'chatUpdate', data: updatedSession } });
+        }
     }
 
-    private async _handleToolCall(part: ToolCallPart, chatId: string, assistantMessageId: string): Promise<void> { // Add chatId
-        this._postMessageCallback({ type: 'addToolCall', payload: { toolCallId: part.toolCallId, toolName: part.toolName, args: part.args } });
-        await this._historyManager.addToolCall(chatId, assistantMessageId, part.toolCallId, part.toolName, part.args); // Pass chatId
+    private async _handleToolCall(part: ToolCallPart, chatId: string, assistantMessageId: string): Promise<void> {
+        await this._historyManager.addToolCall(chatId, assistantMessageId, part.toolCallId, part.toolName, part.args);
+        // Get updated session and push
+        const updatedSession = await this._historyManager.getChatSession(chatId);
+        if (updatedSession) {
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: 'chatUpdate', data: updatedSession } });
+        }
     }
 
     private _handleToolCallStreamingStart(part: { type: 'tool-call-streaming-start', toolCallId: string, toolName: string }): void {
         console.log(`[StreamProcessor] Tool call streaming start: ${part.toolName} (${part.toolCallId})`);
-        // Optional UI update: this._postMessageCallback({ type: 'toolCallStart', payload: { toolCallId: part.toolCallId, toolName: part.toolName } });
+        // TODO: Consider if a specific 'toolCallStart' pushUpdate topic is needed for UI feedback
     }
 
     private _handleToolCallDelta(part: { type: 'tool-call-delta', toolCallId: string, toolName: string, argsTextDelta: string }): void {
         // Optional UI update: console.log(`[StreamProcessor] Tool call delta: ${part.toolName} (${part.toolCallId}), Args Delta: ${part.argsTextDelta}`);
-        // Optional UI update: this._postMessageCallback({ type: 'toolCallDelta', payload: { toolCallId: part.toolCallId, argsTextDelta: part.argsTextDelta } });
+        // TODO: Consider if a specific 'toolCallDelta' pushUpdate topic is needed for UI feedback
     }
 
-    private async _handleToolResult(part: ToolResultPart, chatId: string): Promise<void> { // Add chatId
-        this._postMessageCallback({ type: 'toolStatusUpdate', toolCallId: part.toolCallId, status: 'complete', message: part.result, toolName: part.toolName });
-        await this._historyManager.updateToolStatus(chatId, part.toolCallId, 'complete', part.result); // Pass chatId
+    private async _handleToolResult(part: ToolResultPart, chatId: string): Promise<void> {
+        await this._historyManager.updateToolStatus(chatId, part.toolCallId, 'complete', part.result); // Use updateToolStatus
+        // Get updated session and push
+        const updatedSession = await this._historyManager.getChatSession(chatId);
+        if (updatedSession) {
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: 'chatUpdate', data: updatedSession } });
+        }
     }
 
     private _handleReasoning(part: { type: 'reasoning', textDelta: string }): void {
         console.log("[StreamProcessor] Reasoning Part Received:", part.textDelta);
-        const thinkingMessage = { type: 'appendThinkingChunk', sender: 'assistant', textDelta: part.textDelta };
-        console.log("[StreamProcessor] Posting thinking chunk to UI:", JSON.stringify(thinkingMessage));
-        this._postMessageCallback(thinkingMessage);
+        // TODO: Decide how to handle reasoning steps. Push via 'chatUpdate' with a special marker? Or a separate topic?
+        // For now, just log it.
+        console.log("[StreamProcessor] Reasoning:", part.textDelta);
         // Note: Reasoning steps are not saved to history by default.
     }
 
@@ -161,10 +174,12 @@ export class StreamProcessor {
         // Optional UI update: this._postMessageCallback({ type: 'addFile', file: part });
     }
 
-    private _handleError(part: { type: 'error', error: any }): void {
+    private _handleError(part: { type: 'error', error: any }, chatId: string): void { // Add chatId
         console.error("[StreamProcessor] Error part received in stream:", part.error);
-        this._postMessageCallback({ type: 'streamError', error: part.error });
-        // Throw error to stop processing in the main loop
+        // Send streaming status update to indicate failure/stop
+        this._postMessageCallback({ type: 'pushUpdate', payload: { topic: 'streamingStatusUpdate', data: false } });
+        // Optionally push an error message to the chat history via chatUpdate?
+        // For now, just log and stop the stream processing by throwing.
         throw new Error(`Stream error: ${part.error}`);
     }
 

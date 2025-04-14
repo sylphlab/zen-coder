@@ -1,18 +1,15 @@
 // webview-ui/src/store/atoms.ts
 import { atom } from 'jotai';
 import { atomWithDefault, atomFamily, loadable } from 'jotai/utils'; // Consolidated imports
-import { postMessage } from '../utils/communication'; // Import from communication.ts
 import {
     ChatSession,
     ProviderInfoAndStatus,
     AvailableModel,
     SuggestedAction,
     UiMessage,
-    UiImagePart,
     AllToolsStatusInfo, // Changed from AllToolsStatusPayload
     McpConfiguredStatusPayload, // Keep this, it was re-added to types.ts
     DefaultChatConfig,
-    UiMessageContentPart,
     // Removed CustomInstructionsPayload import
 } from '../../../src/common/types'; // Corrected relative path
 
@@ -59,7 +56,7 @@ providerStatusAtom.onMount = (set) => {
 // Expose a way to trigger the refresh from components/handlers
 export const refreshProviderStatusAtom = atom(
     null, // Read function is null
-    (get, set) => { // Write function
+    (_get, set) => { // Write function
         set(providerStatusRefreshAtom, c => c + 1); // Increment the refresh counter
     }
 );
@@ -76,7 +73,7 @@ export const availableProvidersAtom = atom(async () => {
 export const allModelsAtom = atom(async (get) => { // Export the atom directly
     // Original logic restored:
     const providersLoadable = get(loadable(availableProvidersAtom));
-    if (providersLoadable.state !== 'hasData' || !providersLoadable.data) return [];
+    if (providersLoadable.state !== 'hasData' || !providersLoadable.data) {return [];}
     const ids = providersLoadable.data.map(p => p.providerId);
     // Important: Use the loadable state of the family atom
     const modelPromises = ids.map(id => get(loadable(modelsForProviderAtomFamily(id))));
@@ -134,7 +131,7 @@ defaultConfigAtom.onMount = (set) => {
         subscription.dispose();
     };
 };
-export const refreshDefaultConfigAtom = atom(null, (get, set) => {
+export const refreshDefaultConfigAtom = atom(null, (_get, set) => {
     set(defaultConfigRefreshAtom, c => c + 1);
 });
 
@@ -158,7 +155,7 @@ allToolsStatusAtom.onMount = (set) => {
         subscription.dispose();
     };
 };
-export const refreshAllToolsStatusAtom = atom(null, (get, set) => {
+export const refreshAllToolsStatusAtom = atom(null, (_get, set) => {
     set(allToolsStatusRefreshAtom, c => c + 1);
 });
 
@@ -170,7 +167,7 @@ mcpServerStatusAtom.onMount = (set) => {
     console.log('[mcpServerStatusAtom] onMount: Subscribing and fetching initial data...');
     const subscription = listen('mcpStatus');
     // Initial fetch
-    requestData<{ payload: McpConfiguredStatusPayload }>('getMcpConfiguredStatus')
+    requestData<{ payload: McpConfiguredStatusPayload }>('getMcpStatus')
         .then(response => set(response.payload))
         .catch(err => {
             console.error("Error fetching initial MCP status:", err);
@@ -182,7 +179,7 @@ mcpServerStatusAtom.onMount = (set) => {
         subscription.dispose();
     };
 };
-export const refreshMcpServerStatusAtom = atom(null, (get, set) => {
+export const refreshMcpServerStatusAtom = atom(null, (_get, set) => {
     set(mcpServerStatusRefreshAtom, c => c + 1);
 });
 // --- Custom Instructions Atoms ---
@@ -208,7 +205,7 @@ customInstructionsAtom.onMount = (set) => {
         subscription.dispose();
     };
 };
-export const refreshCustomInstructionsAtom = atom(null, (get, set) => {
+export const refreshCustomInstructionsAtom = atom(null, (_get, set) => {
     set(customInstructionsRefreshAtom, c => c + 1);
 });
 
@@ -228,7 +225,7 @@ export const isChatListLoadingAtom = atom<boolean>(false); // Atom for chat list
 export const activeChatAtom = atom<ChatSession | null>((get) => {
     const sessions = get(chatSessionsAtom);
     const activeId = get(activeChatIdAtom);
-    if (!activeId) return null;
+    if (!activeId) {return null;}
     return sessions.find(session => session.id === activeId) ?? null;
 });
 

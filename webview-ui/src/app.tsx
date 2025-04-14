@@ -1,7 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'preact/hooks';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { Router, Route, useLocation, Switch, Redirect } from "wouter";
-import { JSX } from 'preact/jsx-runtime';
 import './app.css';
 import { SettingPage } from './pages/SettingPage';
 import { ChatListPage } from './pages/ChatListPage';
@@ -12,13 +11,10 @@ import { MessagesArea } from './components/MessagesArea';
 import { InputArea } from './components/InputArea';
 import { ConfirmationDialog } from './components/ConfirmationDialog';
 import {
-    AvailableModel,
     SuggestedAction as CommonSuggestedAction,
-    ChatSession,
     ChatConfig,
     UiMessageContentPart,
     UiMessage,
-    UiToolCallPart,
     UiTextMessagePart,
     UiImagePart
 } from '../../src/common/types';
@@ -31,13 +27,10 @@ import {
     inputValueAtom,
     selectedImagesAtom,
     suggestedActionsMapAtom,
-    activeChatAtom,
     activeChatMessagesAtom,
-    activeChatEffectiveConfigAtom,
     activeChatProviderIdAtom,
     activeChatModelIdAtom,
     activeChatCombinedModelIdAtom,
-    webviewLocationAtom,
     isChatListLoadingAtom
 } from './store/atoms';
 

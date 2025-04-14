@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'preact/hooks';
 import { JSX } from 'preact/jsx-runtime';
-import { generateUniqueId } from '../app'; // Import helper from app
+import { generateUniqueId } from '../utils/communication'; // Import helper from communication
 import { SelectedImage } from '../components/InputArea'; // Import SelectedImage from InputArea component
 
 /**

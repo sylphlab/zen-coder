@@ -1,16 +1,13 @@
-import { useEffect, useCallback, useRef } from 'preact/hooks'; // Removed unused useState, useMemo
-import { useAtomValue } from 'jotai'; // Removed unused useAtom, useSetAtom, atom
+import { useCallback, useRef } from 'preact/hooks'; // Removed unused useState, useMemo
 // Removed unused loadable import
 import { useLocation } from "wouter";
 import { JSX } from 'preact/jsx-runtime';
-import { postMessage } from '../utils/communication'; // Import from communication.ts
 // Removed unused type imports
 // Import only necessary components
 import { DefaultModelSettings } from '../components/settings/DefaultModelSettings';
 import { CustomInstructionsSettings } from '../components/settings/CustomInstructionsSettings';
 import { ProviderSettings } from '../components/settings/ProviderSettings';
 import { McpServerSettings } from '../components/settings/McpServerSettings';
-import { ToolSettings } from '../components/settings/ToolSettings';
 
 export function SettingPage(): JSX.Element {
    const [, setLocation] = useLocation();

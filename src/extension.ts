@@ -251,79 +251,101 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        // --- Handle Request Messages (requestData, subscribe, unsubscribe) ---
+        // --- Unified Message Handling ---
+        let handler: RequestHandler | MessageHandler | undefined;
+        let handlerType: string = message.type;
+        let isRequest = false;
+        let requestId: string | undefined = undefined;
+        let handlerPayload: any; // Variable to hold the correct payload for the handle method
+        let isRequestHandler = false; // Flag to know which map the handler came from
+
+        // Determine if it's a request needing a response (requestData, subscribe, unsubscribe)
         if (message.type === 'requestData' || message.type === 'subscribe' || message.type === 'unsubscribe') {
-            const requestMessage = message as WebviewRequestMessage;
-            const handlerType = message.type === 'requestData' ? requestMessage.requestType : message.type;
-            const handler = this._requestHandlers.get(handlerType);
+            isRequest = true;
+            requestId = message.requestId;
+            handlerType = message.type === 'requestData' ? message.requestType : message.type;
+            handler = this._requestHandlers.get(handlerType);
+            handlerPayload = message.payload; // RequestHandlers expect payload
+            isRequestHandler = !!handler; // Mark if found in requestHandlers
+        } else {
+            // Check standard message handlers first (fire-and-forget)
+            handler = this._messageHandlers.get(handlerType);
+            if (handler) {
+                handlerPayload = message; // MessageHandlers expect the whole message
+                isRequestHandler = false;
+            } else {
+                // Check request handlers (for actions potentially sent via postMessage)
+                handler = this._requestHandlers.get(handlerType);
+                if (handler) {
+                    // Found a RequestHandler triggered by postMessage.
+                    handlerPayload = message.payload; // Assume it still expects payload
+                    isRequestHandler = true;
+                    // Treat as fire-and-forget (isRequest remains false)
+                }
+            }
+        }
+
+        // Check if webview is available before proceeding
+        if (!this._view?.webview) {
+            console.error(`[Extension] Cannot handle ${isRequest ? 'request' : 'message'} type ${handlerType}: Webview is not available.`);
+            // Cannot send response if webview is gone.
+            return;
+        }
+
+        // Execute the handler if found
+        if (handler) {
+            const context: HandlerContext = {
+                webview: this._view.webview,
+                aiService: this._aiService,
+                historyManager: this._historyManager,
+                providerStatusManager: this._aiService.providerStatusManager,
+                modelResolver: this._modelResolver,
+                mcpManager: this._mcpManager,
+                postMessage: this.postMessageToWebview.bind(this),
+                extensionContext: this._context
+            };
+
             let responsePayload: any = null;
             let responseError: string | undefined = undefined;
 
-            if (!this._view?.webview) { // Check webview availability first
-                console.error("[Extension] Cannot handle request: Webview is not available.");
-                responseError = "Webview is not available to handle the request.";
-            } else if (handler) {
-                const context: HandlerContext = {
-                    webview: this._view.webview, // Safe to access after check
-                    aiService: this._aiService,
-                    historyManager: this._historyManager,
-                    providerStatusManager: this._aiService.providerStatusManager,
-                    modelResolver: this._modelResolver,
-                    mcpManager: this._mcpManager,
-                    postMessage: this.postMessageToWebview.bind(this),
-                    extensionContext: this._context
-                };
-                try {
-                    console.log(`[Extension] Handling request: ${handlerType}, ID: ${requestMessage.requestId}`);
-                    responsePayload = await handler.handle(requestMessage.payload, context);
-                    console.log(`[Extension] Request successful: ${handlerType}, ID: ${requestMessage.requestId}`);
-                } catch (error: any) {
-                    console.error(`[Extension] Error handling request ${handlerType} (ID: ${requestMessage.requestId}):`, error);
-                    responseError = error.message || 'An unknown error occurred';
+            try {
+                console.log(`[Extension] Handling ${isRequest ? 'request' : 'message'}: ${handlerType}${isRequest ? `, ID: ${requestId}` : ''}`);
+                // Pass the correctly determined payload
+                responsePayload = await handler.handle(handlerPayload, context);
+                if (isRequest) {
+                    console.log(`[Extension] Request successful: ${handlerType}, ID: ${requestId}`);
                 }
-            } else {
-                console.error(`[Extension] No handler found for request type: ${handlerType}`);
-                responseError = `No handler found for request type: ${handlerType}`;
+            } catch (error: any) {
+                console.error(`[Extension] Error handling ${isRequest ? 'request' : 'message'} ${handlerType}${isRequest ? ` (ID: ${requestId})` : ''}:`, error);
+                responseError = error.message || 'An unknown error occurred';
+                if (!isRequest) { // Show error notification for fire-and-forget messages that fail
+                     vscode.window.showErrorMessage(`Error processing action ${handlerType}: ${responseError}`);
+                }
             }
 
-            // Send response back only if webview was available
-            if (this._view?.webview) {
+            // Send response back ONLY if it was a request that needs a response
+            if (isRequest && requestId) {
+                const responseMessage: WebviewResponseMessage = {
+                    type: 'responseData',
+                    requestId: requestId,
+                    payload: responsePayload,
+                    error: responseError,
+                };
+                this.postMessageToWebview(responseMessage);
+            }
+        } else {
+            // Handler not found
+            console.warn(`[Extension] No handler registered for ${isRequest ? 'request' : 'message'} type: ${handlerType}`);
+            // Send error response if it was a request
+            if (isRequest && requestId) {
                  const responseMessage: WebviewResponseMessage = {
                      type: 'responseData',
-                     requestId: requestMessage.requestId,
-                     payload: responsePayload,
-                     error: responseError,
+                     requestId: requestId,
+                     payload: null,
+                     error: `No handler found for request type: ${handlerType}`,
                  };
                  this.postMessageToWebview(responseMessage);
             }
-            return; // Stop processing after handling request
-        }
-
-        // --- Handle Standard Messages (Fire-and-forget) ---
-        const messageHandler = this._messageHandlers.get(message.type);
-        if (messageHandler) {
-             if (!this._view?.webview) { // Check webview availability
-                 console.error("[Extension] Cannot handle message: Webview is not available.");
-                 return;
-             }
-             const context: HandlerContext = {
-                 webview: this._view.webview, // Safe to access after check
-                 aiService: this._aiService,
-                 historyManager: this._historyManager,
-                 providerStatusManager: this._aiService.providerStatusManager,
-                 modelResolver: this._modelResolver,
-                 mcpManager: this._mcpManager,
-                 postMessage: this.postMessageToWebview.bind(this),
-                 extensionContext: this._context
-             };
-             try {
-                 await messageHandler.handle(message, context);
-             } catch (error: any) {
-                 console.error(`Error executing message handler for type ${message.type}:`, error);
-                 vscode.window.showErrorMessage(`An internal error occurred: ${error.message}`);
-             }
-        } else {
-             console.warn(`[Extension] No handler registered for message type: ${message.type}`);
         }
     }
 
