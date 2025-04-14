@@ -12,8 +12,8 @@ import {
     WebviewRequestMessage,
     WebviewResponseMessage,
     WebviewRequestType,
-    ProviderInfoAndStatus, // Import missing type
-    AllToolsStatusInfo // Import new type for event payload
+    ProviderInfoAndStatus,
+    AllToolsStatusInfo
 } from './common/types';
 import { getWebviewContent } from './webview/webviewContent';
 import { HistoryManager } from './historyManager';
@@ -21,8 +21,8 @@ import { StreamProcessor } from './streamProcessor';
 import { ProviderStatusManager } from './ai/providerStatusManager';
 import { ModelResolver } from './ai/modelResolver';
 import { RequestHandler, HandlerContext } from './webview/handlers/RequestHandler';
-import { MessageHandler } from './webview/handlers/MessageHandler';
-import { McpManager } from './ai/mcpManager'; // Import McpManager
+// MessageHandler interface is no longer needed
+import { McpManager } from './ai/mcpManager';
 // Import necessary handlers
 import { SendMessageHandler } from './webview/handlers/SendMessageHandler';
 import { SetProviderEnabledHandler } from './webview/handlers/SetProviderEnabledHandler';
@@ -117,8 +117,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     private readonly _modelResolver: ModelResolver;
     private _streamProcessor?: StreamProcessor;
     private readonly _mcpManager: McpManager;
-    private readonly _messageHandlers: Map<string, MessageHandler>;
-    private readonly _requestHandlers: Map<string, RequestHandler>;
+    private readonly _handlers: Map<string, RequestHandler>; // Unified handler map
 
     constructor(
         context: vscode.ExtensionContext,
@@ -131,8 +130,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._aiService = aiService;
         this._historyManager = historyManager;
         this._modelResolver = new ModelResolver(context, aiService.providerStatusManager, aiService);
-        this._messageHandlers = new Map();
-        this._requestHandlers = new Map();
+        this._handlers = new Map(); // Initialize the unified map
         this._mcpManager = new McpManager(context, this.postMessageToWebview.bind(this));
         console.log("ZenCoderChatViewProvider constructed.");
     }
@@ -143,8 +141,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             console.error("Cannot register handlers: StreamProcessor not initialized.");
             return;
         }
-        // Register Request Handlers
-        const requestHandlers: RequestHandler[] = [
+        // Register All Handlers (Unified)
+        const allHandlers: RequestHandler[] = [ // Use RequestHandler interface for all
             // Data Fetching
             new GetChatStateHandler(),
             new GetAvailableProvidersHandler(),
@@ -175,31 +173,20 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             // Other Actions
             new OpenOrCreateProjectInstructionsFileHandler(),
             new UpdateLastLocationHandler(),
-        ];
-
-        requestHandlers.forEach(handler => {
-            if (this._requestHandlers.has(handler.requestType)) {
-                console.warn(`RequestHandler already registered for type: ${handler.requestType}. Overwriting.`);
-            }
-            this._requestHandlers.set(handler.requestType, handler);
-        });
-        console.log(`Registered ${this._requestHandlers.size} request handlers.`);
-
-        // Register Standard Message Handlers (Fire-and-forget)
-        const messageHandlers: MessageHandler[] = [
+            // Actions (Previously Message Handlers - now implement RequestHandler)
             new SendMessageHandler(this._streamProcessor),
-            new StopGenerationHandler(this._aiService), // Needs AiService injected
-            new ExecuteToolActionHandler(),
-            // Add any other purely fire-and-forget handlers here
+            new StopGenerationHandler(this._aiService), // requestType added in handler file
+            new ExecuteToolActionHandler(), // requestType added in handler file
         ];
 
-        messageHandlers.forEach(handler => {
-            if (this._messageHandlers.has(handler.messageType)) {
-                console.warn(`MessageHandler already registered for type: ${handler.messageType}. Overwriting.`);
+        allHandlers.forEach(handler => {
+            // No need to check for requestType existence, TypeScript handles it via interface
+            if (this._handlers.has(handler.requestType)) {
+                console.warn(`Handler already registered for type: ${handler.requestType}. Overwriting.`);
             }
-            this._messageHandlers.set(handler.messageType, handler);
+            this._handlers.set(handler.requestType, handler);
         });
-        console.log(`Registered ${this._messageHandlers.size} standard message handlers.`);
+        console.log(`Registered ${this._handlers.size} handlers.`);
     }
 
     // --- Resolve Webview View ---
@@ -246,56 +233,61 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
 
     // --- Message Handling Logic ---
     private async _handleWebviewMessage(message: any): Promise<void> {
-        if (!message || !message.type) {
-            console.warn("[Extension] Received invalid message structure:", message);
-            return;
-        }
+        // --- Strict Unified Request Handling ---
+        const requestId: string | undefined = message.requestId;
+        let handler: RequestHandler | undefined;
+        let handlerType: string | undefined;
+        let handlerPayload: any = message.payload;
+        let responsePayload: any = null;
+        let responseError: string | undefined = undefined;
 
-        // --- Unified Message Handling ---
-        let handler: RequestHandler | MessageHandler | undefined;
-        let handlerType: string = message.type;
-        let isRequest = false;
-        let requestId: string | undefined = undefined;
-        let handlerPayload: any; // Variable to hold the correct payload for the handle method
-        let isRequestHandler = false; // Flag to know which map the handler came from
-
-        // Determine if it's a request needing a response (requestData, subscribe, unsubscribe)
-        if (message.type === 'requestData' || message.type === 'subscribe' || message.type === 'unsubscribe') {
-            isRequest = true;
-            requestId = message.requestId;
-            handlerType = message.type === 'requestData' ? message.requestType : message.type;
-            handler = this._requestHandlers.get(handlerType);
-            handlerPayload = message.payload; // RequestHandlers expect payload
-            isRequestHandler = !!handler; // Mark if found in requestHandlers
-        } else {
-            // Check standard message handlers first (fire-and-forget)
-            handler = this._messageHandlers.get(handlerType);
-            if (handler) {
-                handlerPayload = message; // MessageHandlers expect the whole message
-                isRequestHandler = false;
-            } else {
-                // Check request handlers (for actions potentially sent via postMessage)
-                handler = this._requestHandlers.get(handlerType);
-                if (handler) {
-                    // Found a RequestHandler triggered by postMessage.
-                    handlerPayload = message.payload; // Assume it still expects payload
-                    isRequestHandler = true;
-                    // Treat as fire-and-forget (isRequest remains false)
-                }
-            }
-        }
-
-        // Check if webview is available before proceeding
+        // 1. Check if webview is available
         if (!this._view?.webview) {
-            console.error(`[Extension] Cannot handle ${isRequest ? 'request' : 'message'} type ${handlerType}: Webview is not available.`);
-            // Cannot send response if webview is gone.
+            console.error("[Extension] Cannot handle message: Webview is not available.");
+            return; // Cannot proceed or respond
+        }
+
+        // 2. Validate basic message structure and MANDATORY requestId
+        if (!message || typeof message.type !== 'string') {
+            console.error("[Extension] Received invalid message structure (missing type):", message);
+            // Cannot respond without requestId
+            return;
+        }
+        if (requestId === undefined) {
+            console.error("[Extension] Received message without mandatory requestId. Discarding:", message);
+            // Cannot respond without requestId
             return;
         }
 
-        // Execute the handler if found
-        if (handler) {
+        // 3. Determine the Handler Type
+        if (message.type === 'requestData') {
+            if (typeof message.requestType !== 'string') {
+                responseError = "Invalid 'requestData' message: missing 'requestType'.";
+                handlerType = undefined; // Mark as invalid
+            } else {
+                handlerType = message.requestType;
+            }
+        } else {
+            // All other valid messages should have their type directly as the handler type
+            handlerType = message.type;
+        }
+
+        // 4. Find the Handler (only if handlerType is valid)
+        if (handlerType) {
+            handler = this._handlers.get(handlerType);
+            if (!handler) {
+                responseError = `No handler found for message type: ${handlerType}`;
+                console.warn(`[Extension] ${responseError}`);
+            }
+        } else if (!responseError) { // If handlerType was undefined and no previous error
+             responseError = "Invalid message: Missing handler type.";
+             console.error(`[Extension] ${responseError}`);
+        }
+
+        // 5. Execute the Handler (only if found and no error yet)
+        if (handler && !responseError) {
             const context: HandlerContext = {
-                webview: this._view.webview,
+                webview: this._view.webview, // Safe access after check above
                 aiService: this._aiService,
                 historyManager: this._historyManager,
                 providerStatusManager: this._aiService.providerStatusManager,
@@ -305,49 +297,29 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                 extensionContext: this._context
             };
 
-            let responsePayload: any = null;
-            let responseError: string | undefined = undefined;
-
             try {
-                console.log(`[Extension] Handling ${isRequest ? 'request' : 'message'}: ${handlerType}${isRequest ? `, ID: ${requestId}` : ''}`);
-                // Pass the correctly determined payload
+                console.log(`[Extension] Handling request: ${handlerType}, ID: ${requestId}`); // handlerType is guaranteed string here
                 responsePayload = await handler.handle(handlerPayload, context);
-                if (isRequest) {
-                    console.log(`[Extension] Request successful: ${handlerType}, ID: ${requestId}`);
-                }
+                console.log(`[Extension] Request successful: ${handlerType}, ID: ${requestId}`);
             } catch (error: any) {
-                console.error(`[Extension] Error handling ${isRequest ? 'request' : 'message'} ${handlerType}${isRequest ? ` (ID: ${requestId})` : ''}:`, error);
-                responseError = error.message || 'An unknown error occurred';
-                if (!isRequest) { // Show error notification for fire-and-forget messages that fail
-                     vscode.window.showErrorMessage(`Error processing action ${handlerType}: ${responseError}`);
-                }
-            }
-
-            // Send response back ONLY if it was a request that needs a response
-            if (isRequest && requestId) {
-                const responseMessage: WebviewResponseMessage = {
-                    type: 'responseData',
-                    requestId: requestId,
-                    payload: responsePayload,
-                    error: responseError,
-                };
-                this.postMessageToWebview(responseMessage);
-            }
-        } else {
-            // Handler not found
-            console.warn(`[Extension] No handler registered for ${isRequest ? 'request' : 'message'} type: ${handlerType}`);
-            // Send error response if it was a request
-            if (isRequest && requestId) {
-                 const responseMessage: WebviewResponseMessage = {
-                     type: 'responseData',
-                     requestId: requestId,
-                     payload: null,
-                     error: `No handler found for request type: ${handlerType}`,
-                 };
-                 this.postMessageToWebview(responseMessage);
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error(`[Extension] Error handling request ${handlerType} (ID: ${requestId}):`, errorMessage);
+                responseError = errorMessage;
+                responsePayload = null; // Ensure payload is null on error
             }
         }
+        // If handler was not found or handlerType was invalid, responseError is already set.
+
+        // 6. ALWAYS Send Response (since requestId is mandatory)
+        const responseMessage: WebviewResponseMessage = {
+            type: 'responseData',
+            requestId: requestId, // requestId is guaranteed to be defined here
+            payload: responsePayload,
+            error: responseError,
+        };
+        this.postMessageToWebview(responseMessage);
     }
+
 
     // --- Post Message Helper ---
     public postMessageToWebview(message: ExtensionMessageType) {
@@ -365,8 +337,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._aiService.eventEmitter.on('providerStatusChanged', (status: ProviderInfoAndStatus[]) => {
             console.log('[Extension] Received providerStatusChanged event from AiService.');
             this.postMessageToWebview({
-                type: 'pushUpdateProviderStatus',
-                payload: status
+                type: 'pushUpdate', // Changed to pushUpdate
+                payload: { topic: 'providerStatus', data: status } // Added topic and data
             });
         });
 
@@ -374,13 +346,25 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._aiService.eventEmitter.on('toolsStatusChanged', (statusInfo: AllToolsStatusInfo) => {
             console.log('[Extension] Received toolsStatusChanged event from AiService.');
             this.postMessageToWebview({
-                type: 'updateAllToolsStatus',
-                payload: statusInfo
+                type: 'pushUpdate', // Changed to pushUpdate
+                payload: { topic: 'allToolsStatus', data: statusInfo } // Added topic and data
             });
         });
 
         // TODO: Subscribe to MCP Server Status Changes from McpManager
-        // this._mcpManager.eventEmitter.on('serversStatusChanged', (status: McpConfiguredStatusPayload) => { ... });
+        // this._mcpManager.eventEmitter.on('serversStatusChanged', (status: McpConfiguredStatusPayload) => {
+        //     this.postMessageToWebview({
+        //         type: 'pushUpdate',
+        //         payload: { topic: 'mcpStatus', data: status }
+        //     });
+        // });
+
+        // TODO: Subscribe to Default Config Changes from AiService/ConfigWatcher
+        // this._aiService.eventEmitter.on('defaultConfigChanged', (config: DefaultChatConfig) => { ... });
+
+        // TODO: Subscribe to Custom Instructions Changes from AiService/ConfigWatcher
+        // this._aiService.eventEmitter.on('customInstructionsChanged', (instructions: { global: string; project: string | null; projectPath: string | null }) => { ... });
+
 
         console.log('[Extension] Subscribed to backend service events.');
     }

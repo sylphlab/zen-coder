@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { MessageHandler } from './MessageHandler';
-import { HandlerContext } from './RequestHandler'; // Import HandlerContext from RequestHandler
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Use RequestHandler
+// HandlerContext is imported from RequestHandler now
 import { AiService } from '../../ai/aiService'; // Need AiService to access tools eventually
 import { allTools, ToolName } from '../../tools'; // Import available tools
 
@@ -8,8 +8,8 @@ import { allTools, ToolName } from '../../tools'; // Import available tools
 // Currently, AiService handles tool execution internally when called by the AI SDK.
 // We need to refactor or expose a way to call a specific tool's execute method directly.
 
-export class ExecuteToolActionHandler implements MessageHandler {
-    readonly messageType = 'executeToolAction'; // Add messageType property
+export class ExecuteToolActionHandler implements RequestHandler { // Implement RequestHandler
+    readonly requestType = 'executeToolAction'; // Change to requestType
     // Removed constructor and _aiService property. Access via context if needed.
 
     async handle(message: any, context: HandlerContext): Promise<void> { // Change parameter type

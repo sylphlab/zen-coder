@@ -293,20 +293,20 @@ export type WebviewMessageType =
 // --- Message Types (Extension -> Webview) ---
 
 export type ExtensionMessageType =
-  | { type: 'loadChatState'; payload: { chats: ChatSession[]; lastActiveChatId: string | null; lastLocation?: string } } // Initial full state push
-  | { type: 'startAssistantMessage'; payload: { chatId: string; messageId: string } }
-  | { type: 'appendMessageChunk'; payload: { chatId: string; messageId: string; contentChunk: any } } // TODO: Type contentChunk more strictly if possible
-  | { type: 'updateToolCall'; payload: { chatId: string; messageId: string; toolCallId: string; status: UiToolCallPart['status']; result?: any; progress?: string } }
-  | { type: 'addSuggestedActions'; payload: { chatId: string; messageId: string; actions: SuggestedAction[] } }
-  | { type: 'streamFinished'; payload: { chatId: string; messageId: string } }
+  | { type: 'loadChatState'; payload: { chats: ChatSession[]; lastActiveChatId: string | null; lastLocation?: string } } // Initial full state push (TODO: Refactor?)
+  | { type: 'startAssistantMessage'; payload: { chatId: string; messageId: string } } // TODO: Refactor to pushUpdate?
+  | { type: 'appendMessageChunk'; payload: { chatId: string; messageId: string; contentChunk: any } } // TODO: Refactor to pushUpdate? Type contentChunk more strictly.
+  | { type: 'updateToolCall'; payload: { chatId: string; messageId: string; toolCallId: string; status: UiToolCallPart['status']; result?: any; progress?: string } } // TODO: Refactor to pushUpdate?
+  | { type: 'addSuggestedActions'; payload: { chatId: string; messageId: string; actions: SuggestedAction[] } } // TODO: Refactor to pushUpdate?
+  | { type: 'streamFinished'; payload: { chatId: string; messageId: string } } // TODO: Refactor to pushUpdate?
   | { type: 'showSettings' } // Keep for potential future use?
-  | { type: 'mcpConfigReloaded' } // Signal backend reload
-  | { type: 'updateMcpConfiguredStatus'; payload: McpConfiguredStatusPayload } // Keep for settings push updates
-  // | { type: 'updateAllToolsStatus'; payload: AllToolsStatusPayload } // Replaced by UpdateAllToolsStatusPush below
-  | { type: 'updateCustomInstructions'; payload: { global?: string; project?: string; projectPath?: string | null } } // Keep for settings push updates
-  | { type: 'updateDefaultConfig'; payload: DefaultChatConfig } // Keep for settings push updates
-  | { type: 'pushUpdateProviderStatus'; payload: ProviderInfoAndStatus[] } // Add push update type for provider status
-  | UpdateAllToolsStatusPush // Added for Tool Auth
+  // | { type: 'mcpConfigReloaded' } // Removed, use pushUpdate topic
+  // | { type: 'updateMcpConfiguredStatus'; payload: McpConfiguredStatusPayload } // Removed, use pushUpdate topic
+  // | { type: 'updateCustomInstructions'; payload: { global?: string; project?: string; projectPath?: string | null } } // Removed, use pushUpdate topic
+  // | { type: 'updateDefaultConfig'; payload: DefaultChatConfig } // Removed, use pushUpdate topic
+  // | { type: 'pushUpdateProviderStatus'; payload: ProviderInfoAndStatus[] } // Removed, use pushUpdate topic
+  // | UpdateAllToolsStatusPush // Removed, use pushUpdate topic
+  | { type: 'pushUpdate'; payload: { topic: string; data: any } } // Unified Pub/Sub update message
   | WebviewResponseMessage; // Add response type
 
 

@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { CoreMessage, Tool, StreamTextResult } from 'ai'; // Import necessary types
-import { MessageHandler, HandlerContext } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Implement RequestHandler
 import { StreamProcessor } from '../../streamProcessor'; // Import StreamProcessor
 import { UiMessageContentPart } from '../../common/types'; // Import shared type from common
 
-export class SendMessageHandler implements MessageHandler {
-    public readonly messageType = 'sendMessage';
+export class SendMessageHandler implements RequestHandler { // Implement RequestHandler
+    public readonly requestType = 'sendMessage'; // Change to requestType
     private _streamProcessor: StreamProcessor; // Requires StreamProcessor instance
 
     // We need to pass the StreamProcessor instance during construction or via context

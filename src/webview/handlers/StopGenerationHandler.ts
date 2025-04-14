@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
-import { MessageHandler } from './MessageHandler';
+import { RequestHandler, HandlerContext } from './RequestHandler'; // Use RequestHandler
 import { AiService } from '../../ai/aiService'; // Adjust path as needed
-import { HandlerContext } from './MessageHandler'; // Import HandlerContext
+// HandlerContext is imported from RequestHandler now
 
-export class StopGenerationHandler implements MessageHandler {
-    public readonly messageType = 'stopGeneration'; // Use messageType instead of command
+export class StopGenerationHandler implements RequestHandler { // Implement RequestHandler
+    public readonly requestType = 'stopGeneration'; // Change to requestType
 
     // Constructor remains the same, AiService is injected elsewhere (likely in extension.ts)
     constructor(private aiService: AiService) {}
