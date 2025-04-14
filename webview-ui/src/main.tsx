@@ -5,10 +5,12 @@ import 'virtual:uno.css';
 import '@unocss/reset/tailwind.css';
 import './index.css';
 import { App } from './app.tsx';
+// Removed listener import
 
 const store = getDefaultStore();
 
 console.log("[main.tsx] Initializing application...");
+// Listener initialization moved to useLocationSync hook
 
 // --- Render App ---
 

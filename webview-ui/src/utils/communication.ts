@@ -1,52 +1,131 @@
-// Removed imports from ../app
-import { WebviewResponseMessage, ActionRequestType, WebviewRequestMessage } from '../../../src/common/types'; // Removed WebviewRequestType
+import { WebviewResponseMessage, WebviewRequestMessage } from '../../../src/common/types';
 
 // --- VS Code API Helper ---
 // @ts-ignore
 const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
-// Removed old postMessage function. All FE -> BE communication MUST use requestData.
-// const postMessage = ... (removed)
 
 // --- Helper Functions ---
-export const generateUniqueId = () => `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const generateUniqueId = () => `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-// --- Request/Response Logic ---
-
+// --- Module State (Closure) ---
 interface PendingRequest {
     resolve: (value: any) => void;
     reject: (reason?: any) => void;
     timeoutId: number;
-    // Removed requestType as it's not needed in the simplified handleResponse
 }
-
 const pendingRequests = new Map<string, PendingRequest>();
-const REQUEST_TIMEOUT = 15000; // 15 seconds timeout
+const activeSubscriptions = new Map<string, { topic: string; callback: (data: any) => void }>();
+let isListenerInitialized = false;
+const REQUEST_TIMEOUT = 15000; // 15 seconds
 
-// Array of known action request types (mirroring ActionRequestType in common/types.ts)
-const ACTION_REQUEST_TYPES: string[] = [
-    'setApiKey', 'deleteApiKey', 'setProviderEnabled', 'setDefaultConfig',
-    'setGlobalCustomInstructions', 'setProjectCustomInstructions', 'openOrCreateProjectInstructionsFile',
-    'setToolAuthorization', 'retryMcpConnection', 'setActiveChat', 'createChat',
-    'deleteChat', 'updateChatConfig', 'clearChatHistory', 'deleteMessage',
-    'updateLastLocation', 'executeToolAction', 'stopGeneration', 'sendMessage' // Added sendMessage
-];
+// --- Core Functions ---
 
 /**
- * Sends a request to the extension host and returns a promise that resolves/rejects
- * when the corresponding response is received or times out.
- * @param requestType The type of data/action being requested.
- * @param payload Optional payload for the request.
- * @returns A promise that resolves with the response payload or rejects with an error.
+ * Handles incoming messages from the extension host.
  */
-// Define a union type for all possible request types including actions, subscribe/unsubscribe
-// Define a union type for all possible request types (data fetching, actions, pub/sub management)
-// Define a union type for all possible request types (actions, pub/sub management)
-// Data fetching types are now just strings passed as requestType in WebviewRequestMessage
-type RequestTypeParam = ActionRequestType | 'subscribe' | 'unsubscribe' | string; // Use string for data fetching types
+const handleIncomingMessage = (event: MessageEvent): void => {
+    const message = event.data as WebviewResponseMessage;
 
-export function requestData<T = any>(requestType: RequestTypeParam, payload?: any): Promise<T> {
-    // ALL messages sent to backend are now of type 'requestData'
-    const messageType = 'requestData';
+    if (!message || typeof message.type !== 'string') {
+        console.warn("[Communication FP Listener] Received message without valid type:", message);
+        return;
+    }
+
+    if (message.type === 'responseData') {
+        handleResponse(message);
+    } else if (message.type === 'pushUpdate') {
+        notifySubscribers(message.payload?.topic, message.payload?.data);
+    } else {
+        console.warn(`[Communication FP Listener] Unhandled message type: ${message.type}`);
+    }
+};
+
+/**
+ * Handles incoming response messages.
+ */
+const handleResponse = (message: WebviewResponseMessage): void => {
+    if (!message.requestId) return;
+
+    const { requestId, payload, error } = message;
+    const pending = pendingRequests.get(requestId);
+
+    if (pending) {
+        console.log(`[Communication FP] Received response for ID: ${requestId}`, error ? { error } : { payload });
+        clearTimeout(pending.timeoutId);
+        pendingRequests.delete(requestId);
+
+        if (error) {
+            pending.reject(new Error(error));
+        } else {
+            pending.resolve(payload);
+        }
+    } else {
+        console.warn(`[Communication FP] Received response for unknown/timed out request ID: ${requestId}`);
+    }
+};
+
+/**
+ * Notifies subscribers for a given topic.
+ */
+const notifySubscribers = (topic?: string, data?: any): void => {
+     if (!topic) return;
+     console.log(`[Communication FP] Notifying subscribers for topic: ${topic}`);
+     activeSubscriptions.forEach((sub) => {
+         if (sub.topic === topic) {
+             try {
+                 sub.callback(data);
+             } catch (error) {
+                 console.error(`[Communication FP] Error in subscription callback for topic ${topic}:`, error);
+             }
+         }
+     });
+ };
+
+
+// --- Exported API ---
+
+/**
+ * Initializes the global message listener. Should only be called once.
+ */
+export function initializeListener(): void {
+    if (isListenerInitialized) {
+        console.warn("[Communication FP] initializeListener called more than once.");
+        return;
+    }
+    isListenerInitialized = true;
+    console.log("[Communication FP] Initializing global message listener.");
+    window.addEventListener('message', handleIncomingMessage);
+    console.log("[Communication FP] Global message listener initialized.");
+}
+
+/**
+ * Cleans up the global message listener.
+ */
+export function cleanupListener(): void {
+    if (!isListenerInitialized) {
+        return;
+    }
+    console.log("[Communication FP] Cleaning up global message listener.");
+    window.removeEventListener('message', handleIncomingMessage);
+    isListenerInitialized = false;
+    pendingRequests.forEach((req, id) => {
+        clearTimeout(req.timeoutId);
+        req.reject(new Error(`Communication listener cleaned up while request ${id} was pending.`));
+    });
+    pendingRequests.clear();
+    activeSubscriptions.clear();
+    console.log("[Communication FP] Global message listener cleaned up.");
+}
+
+/**
+ * Sends a request to the extension host.
+ */
+export function requestData<T = any>(requestType: string, payload?: any): Promise<T> {
+    // Ensure listener is initialized lazily if not already
+    if (!isListenerInitialized) {
+         console.warn("[Communication FP] requestData called before initializeListener. Initializing lazily.");
+         initializeListener();
+    }
 
     return new Promise((resolve, reject) => {
         const requestId = generateUniqueId();
@@ -60,19 +139,17 @@ export function requestData<T = any>(requestType: RequestTypeParam, payload?: an
         pendingRequests.set(requestId, { resolve, reject, timeoutId });
 
         const messageToSend: WebviewRequestMessage = {
-            type: messageType, // Always 'requestData'
+            type: 'requestData',
             requestId,
-            requestType: requestType, // The actual operation type
+            requestType,
             payload
         };
 
-        console.log(`[Communication] Sending requestData: ${requestType}, ID: ${requestId}`, payload);
+        console.log(`[Communication FP] Sending requestData: ${requestType}, ID: ${requestId}`, payload);
         if (vscode) {
             vscode.postMessage(messageToSend);
         } else {
-            console.log("VS Code API not available, message not sent:", messageToSend);
-            // Mock responses or reject promise for development outside VS Code
-            // For now, let it timeout or reject immediately
+            console.warn("VS Code API not available, simulating rejection for:", messageToSend);
             pendingRequests.delete(requestId);
             clearTimeout(timeoutId);
             reject(new Error("VS Code API not available"));
@@ -81,105 +158,91 @@ export function requestData<T = any>(requestType: RequestTypeParam, payload?: an
 }
 
 /**
- * Handles incoming response messages from the extension host.
- * Finds the corresponding pending request and resolves/rejects its promise.
- * @param message The response message received from the extension.
+ * Creates a subscription to a topic pushed from the backend.
+ * Returns a dispose function to unsubscribe.
  */
-export function handleResponse(message: WebviewResponseMessage): void {
-    // Responses can be 'responseData' (for requestData) or potentially specific ack types for subscribe/unsubscribe
-    if (!message.requestId) {
-        return; // Ignore messages without a request ID
+export function listen(topic: string, callback: (data: any) => void): () => Promise<void> {
+     // Ensure listener is initialized lazily
+    if (!isListenerInitialized) {
+         console.warn("[Communication FP] listen called before initializeListener. Initializing lazily.");
+         initializeListener();
     }
 
-    const { requestId, payload, error, type } = message;
-    const pending = pendingRequests.get(requestId);
-
-    if (pending) {
-        console.log(`[Communication] Received response for ID: ${requestId} (Type: ${type})`, error ? { error } : { payload });
-        clearTimeout(pending.timeoutId);
-        pendingRequests.delete(requestId);
-
-        if (error) {
-            pending.reject(new Error(error));
-        } else {
-            // Resolve the original promise with the payload
-            pending.resolve(payload);
-        }
-    } else {
-        console.warn(`[Communication] Received response for unknown or timed out request ID: ${requestId}. Type: ${type}, Error: ${error ?? 'No error provided'}. Payload:`, payload);
-    }
-}
-
-// --- Pub/Sub Abstraction ---
-
-interface Subscription {
-    dispose: () => Promise<void>; // Make dispose async as it calls requestData
-}
-
-/**
- * Creates a subscription to a specific topic and sets up a listener for 'pushUpdate' messages.
- * @param topic The topic to subscribe to (e.g., 'providerStatus').
- * @param callback The function to call when a 'pushUpdate' for this topic is received.
- * @returns A Subscription object with a dispose method.
- */
-export function listen(topic: string, callback: (data: any) => void): Subscription {
     const subscriptionId = generateUniqueId();
-    let isDisposed = false;
+    activeSubscriptions.set(subscriptionId, { topic, callback });
+    console.log(`[Communication FP] Added internal subscription for topic: ${topic} (ID: ${subscriptionId})`);
 
-    // Internal listener for 'pushUpdate' messages
-    const messageListener = (event: MessageEvent) => {
-        const message = event.data;
-        if (message?.type === 'pushUpdate' && message.payload?.topic === topic && !isDisposed) {
-            console.log(`[Listen - ${topic}] Received pushUpdate:`, message.payload.data);
-            try {
-                callback(message.payload.data);
-            } catch (error) {
-                console.error(`[Listen - ${topic}] Error in callback:`, error);
-            }
-        }
-    };
+    let isSubscribedToServer = false;
+    let isDisposedLocally = false;
 
-    window.addEventListener('message', messageListener);
-    console.log(`[Communication] Added listener for topic: ${topic}`);
-
-    console.log(`[Communication] Attempting to subscribe to topic: ${topic} (ID: ${subscriptionId})`);
-    // Use requestData for subscribe, handle potential errors
+    console.log(`[Communication FP] Requesting backend subscription for topic: ${topic} (ID: ${subscriptionId})`);
     requestData('subscribe', { topic, subscriptionId })
         .then(() => {
-            if (!isDisposed) {
-                 console.log(`[Communication] Successfully subscribed to topic: ${topic} (ID: ${subscriptionId})`);
+            if (!isDisposedLocally) {
+                isSubscribedToServer = true;
+                console.log(`[Communication FP] Backend subscription successful for topic: ${topic} (ID: ${subscriptionId})`);
             } else {
-                 console.log(`[Communication] Subscription ${subscriptionId} was disposed before acknowledgement.`);
-                 // If disposed before ack, immediately try to unsubscribe
-                 requestData('unsubscribe', { subscriptionId }).catch(err => console.error(`[Communication] Error during immediate unsubscribe for ${subscriptionId}:`, err));
-                 window.removeEventListener('message', messageListener); // Clean up listener if disposed early
+                console.log(`[Communication FP] Subscription ${subscriptionId} was disposed locally before backend ack.`);
+                requestData('unsubscribe', { subscriptionId }).catch(err => console.warn(`[Communication FP] Error during immediate backend unsubscribe for ${subscriptionId}:`, err));
             }
         })
         .catch(error => {
-            console.error(`[Communication] Failed to subscribe to topic: ${topic} (ID: ${subscriptionId})`, error);
-            isDisposed = true; // Mark as disposed on subscription failure
-            window.removeEventListener('message', messageListener); // Clean up listener on failure
+            console.error(`[Communication FP] Backend subscription failed for topic: ${topic} (ID: ${subscriptionId})`, error);
+            isDisposedLocally = true;
+            activeSubscriptions.delete(subscriptionId);
         });
 
     const dispose = async (): Promise<void> => {
-        if (isDisposed) {
-            console.warn(`[Communication] Subscription ${subscriptionId} already disposed.`);
+        if (isDisposedLocally) {
+            console.warn(`[Communication FP] Subscription ${subscriptionId} already disposed locally.`);
             return;
         }
-        isDisposed = true;
-        console.log(`[Communication] Disposing subscription and listener for topic: ${topic} (ID: ${subscriptionId})`);
-        window.removeEventListener('message', messageListener); // Remove the specific listener
-        try {
-            await requestData('unsubscribe', { subscriptionId });
-            console.log(`[Communication] Successfully unsubscribed from topic: ${topic} (ID: ${subscriptionId})`);
-        } catch (error) {
-            // Log as warning instead of error, as backend might have already cleaned up or never received the subscribe
-            console.warn(`[Communication] Failed to unsubscribe from topic: ${topic} (ID: ${subscriptionId}). This might be expected if the subscription was never fully established or already cleaned up. Error:`, error);
+        isDisposedLocally = true;
+        console.log(`[Communication FP] Disposing local subscription for topic: ${topic} (ID: ${subscriptionId})`);
+        activeSubscriptions.delete(subscriptionId);
+
+        if (isSubscribedToServer) {
+            console.log(`[Communication FP] Requesting backend unsubscription for topic: ${topic} (ID: ${subscriptionId})`);
+            try {
+                await requestData('unsubscribe', { subscriptionId });
+                console.log(`[Communication FP] Backend unsubscription successful for topic: ${topic} (ID: ${subscriptionId})`);
+            } catch (error) {
+                console.warn(`[Communication FP] Backend unsubscription failed for ${subscriptionId}. Error:`, error);
+            }
+        } else {
+            console.log(`[Communication FP] Skipping backend unsubscription for ${subscriptionId} as initial subscription likely failed or was disposed early.`);
         }
     };
 
-    return { dispose };
+    return dispose;
 }
 
-// Optional: Add cleanup logic if needed
-// window.addEventListener('unload', () => { ... });
+// --- Location Specific Communication Functions ---
+
+/**
+ * Fetches the initial location from the backend.
+ * Returns the fetched location string or '/' on error/null.
+ */
+export async function fetchInitialLocationFP(): Promise<string> {
+    console.log("[Communication FP] Fetching initial location...");
+    try {
+        // Use requestData from this module
+        const res = await requestData<{ location: string | null }>('getLastLocation');
+        const backendLocation = res?.location || '/';
+        console.log(`[Communication FP] Initial location fetched: ${backendLocation}`);
+        return backendLocation;
+    } catch (e: unknown) {
+        console.error("[Communication FP] Error fetching initial location:", e);
+        return '/'; // Fallback on error
+    }
+}
+
+/**
+ * Persists the given location to the backend (fire-and-forget).
+ */
+export function persistLocationFP(locationToPersist: string): void {
+    console.log(`[Communication FP] Persisting location: ${locationToPersist}`);
+    // Use requestData from this module
+    requestData('updateLastLocation', { location: locationToPersist })
+        .catch((e: unknown) => console.error("[Communication FP] Failed to update backend location:", e));
+}
