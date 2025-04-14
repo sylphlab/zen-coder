@@ -43,7 +43,8 @@ export const ChatListPage: FunctionalComponent = () => {
         console.log("[ChatListPage] Calling createMutate...");
         try {
             const newSession = await createMutate();
-            if (newSession) {
+            console.log("[ChatListPage] createMutate returned:", newSession); // <-- Add log here
+            if (newSession && newSession.id) { // Add check for newSession.id
                 router.open(`/chat/${newSession.id}`);
             }
         } catch (error) {

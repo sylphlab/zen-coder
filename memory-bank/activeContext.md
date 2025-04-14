@@ -4,15 +4,17 @@
 **Nanostores Refactoring:** Completing the switch from Jotai/Custom Hooks to Nanostores for frontend state management. Removing obsolete Jotai atoms and ensuring UI components rely on local state or Nanostore derived state passed via props.
 
 ## Next Steps
-1.  **Compliance Review:** Review `docs/general_guidelines.md` (SHA: `7eff9c8fe6876e567f2270c09c60d35f7beb47f1`) and apply relevant standards to the project codebase and structure.
-2.  **Testing (Manual):** Thoroughly test the completed refactoring:
-    *   Verify UI interactions (input, streaming indicator, image selection, suggested actions) work correctly without Jotai atoms.
+1.  **Testing (Manual):** Thoroughly test the recent fixes:
+    *   **Verify Chat Creation & Navigation:** Confirm that creating new chats works and automatically navigates to the new chat page.
+    *   **Verify Provider Dropdown:** Confirm that the AI provider dropdown is now populated correctly.
+    *   Verify UI interactions (input, streaming indicator, image selection, suggested actions) work correctly.
     *   Confirm chat switching and data loading remain functional.
-    *   Check for any regressions introduced during the refactoring.
+          *   Check for any regressions introduced by the recent fixes.
 2.  **Implement Pub/Sub for Suggested Actions:** Replace the temporary local state for `suggestedActionsMap` in `ChatView.tsx` with a proper Nanostore atom that listens to backend pushes for suggested actions updates.
 3.  **Resume Image Upload:** Continue implementation and testing of image upload functionality.
-4.  **VS Code Tool Enhancements:** Implement remaining VS Code debugging tools and enhance `runCommandTool`.
-5.  **UI Refinements & Error Handling:** Continue improving UI and error handling.
+4.  **Compliance Review:** Review `docs/general_guidelines.md` (SHA: `7eff9c8fe6876e567f2270c09c60d35f7beb47f1`) and apply relevant standards to the project codebase and structure.
+5.  **VS Code Tool Enhancements:** Implement remaining VS Code debugging tools and enhance `runCommandTool`.
+6.  **UI Refinements & Error Handling:** Continue improving UI and error handling.
 
 ## Recent Changes (Jotai Removal, Bug Fixes)
 + - **Removed Obsolete Jotai Atoms & Refactored UI State:**
@@ -30,6 +32,11 @@
 + - **Refactored Initial Data Loading:** (Obsolete due to Nanostores migration)
 + - **Implemented Pub/Sub (Various):** MCP Status, Tool Status, Custom Instructions, Provider Status, Default Config.
 + - **Fixed App Load Failure (Request/Response Timing):** Centralized message handling.
++ - **Fixed Chat Creation Error (Data Transformation):** Modified `createFetcherStore.ts` (then refactored `providerStores.ts` to use basic atom/onMount) to correctly handle both initial fetch (raw array) and push updates (`{payload: array}`) for `$providerStatus`.
++ - **Fixed Chat Creation Navigation (Attempt 1):** Modified `CreateChatHandler.ts` to return the full `ChatSession` object.
++ - **Fixed Missing Providers Dropdown:** Added logs, identified data format mismatch between initial fetch and push update for `$providerStatus`, corrected store logic in `providerStores.ts`. Added checks in `ModelSelector.tsx`. Refactored `$providerStatus` to use basic atom/onMount. Corrected `processData` logic in `providerStores.ts`.
++ - **Fixed Provider Selection Reset:** Corrected return type and value in `UpdateChatConfigHandler.ts` to match frontend expectations (`{ config: ... }`).
++ - **Fixed Chat Creation Navigation (Attempt 2 - Timing):** Modified `ChatPage.tsx` `useEffect` to check for session existence only after `$chatSessions` is loaded (not null) and depend on `sessions`.
 - **Fixed Model Input Field:** Modified `useEffect` hook in `ModelSelector.tsx`.
 - **Fixed Gray Screen:** Resolved import error in `InputArea.tsx`.
 - **Attempted Blank Page/Timeout Fix:** Various adjustments (superseded).

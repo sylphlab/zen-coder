@@ -788,8 +788,10 @@ export class AiService {
                     console.warn(`[AiService] Unknown topic for initial state push: ${topic}`);
                     return;
             }
+            // Wrap data according to expected frontend structure if needed
+            const dataToSend = (topic === 'providerStatus') ? { payload: data } : data;
             console.log(`[AiService] Pushing initial state for topic ${topic}`);
-            this.postMessageCallback({ type: 'pushUpdate', payload: { topic, data } });
+            this.postMessageCallback({ type: 'pushUpdate', payload: { topic, data: dataToSend } });
         } catch (error) {
             console.error(`[AiService] Error pushing initial state for topic ${topic}:`, error);
         }
@@ -803,8 +805,9 @@ export class AiService {
         if (this._hasSubscription(topic)) {
             try {
                 const latestStatus = await this._providerStatusManager.getProviderStatus(this.allProviders, this.providerMap);
+                const dataToSend = { payload: latestStatus }; // Wrap in payload object
                 console.log('[AiService] Pushing providerStatus update.');
-                this.postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: latestStatus } });
+                this.postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: dataToSend } });
             } catch (error) {
                 console.error('[AiService] Error fetching provider status for notification:', error);
             }

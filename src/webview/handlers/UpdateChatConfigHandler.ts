@@ -7,10 +7,16 @@ interface UpdateChatConfigPayload {
     config: Partial<ChatConfig>; // Allow partial updates
 }
 
+// Define the expected return type for the frontend
+interface UpdateChatConfigResult {
+    config: ChatConfig;
+}
+
 export class UpdateChatConfigHandler implements RequestHandler {
     public readonly requestType = 'updateChatConfig';
 
-    public async handle(payload: UpdateChatConfigPayload, context: HandlerContext): Promise<{ success: boolean }> {
+    // Correct the return type in the method signature
+    public async handle(payload: UpdateChatConfigPayload, context: HandlerContext): Promise<UpdateChatConfigResult> {
         const { chatId, config } = payload;
 
         if (!chatId || typeof chatId !== 'string' || !config || typeof config !== 'object') {
@@ -49,8 +55,17 @@ export class UpdateChatConfigHandler implements RequestHandler {
                 console.log(`[UpdateChatConfigHandler] Config updated for chat ${chatId} and ${topic} pushed.`);
             } else {
                  console.warn(`[UpdateChatConfigHandler] Could not find session ${chatId} after update to push.`);
+                 // Even if push fails, the update was successful in the backend
             }
-            return { success: true };
+            // Return the updated config as expected by the frontend mutation store
+            if (!updatedSession?.config) {
+                 // This case should ideally not happen if updateChatSession worked,
+                 // but handle defensively.
+                 console.error(`[UpdateChatConfigHandler] Config not found for session ${chatId} after update.`);
+                 throw new Error('Config not found after update.');
+             }
+             // Correctly return the object matching UpdateChatConfigResult
+            return { config: updatedSession.config }; // Ensure this matches the Promise<UpdateChatConfigResult> signature
         } catch (error: any) {
             console.error(`[UpdateChatConfigHandler] Error updating config for chat ${chatId}:`, error);
             vscode.window.showErrorMessage(`Failed to update chat config: ${error.message}`);

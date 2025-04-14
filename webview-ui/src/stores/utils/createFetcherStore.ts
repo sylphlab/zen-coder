@@ -53,10 +53,18 @@ export function createFetcherStore<T, TRawResponse = T>(
 
     // 1. Subscribe to updates
     try {
-        unsubscribe = listen(topic, (updateData: T | null) => {
-            if (isMounted) {
-                console.log(`[createFetcherStore ${topic}] Received update via listen.`);
-                store.set(updateData ?? initialData); // Update store, fallback to initialData
+        // NOTE: The type here is potentially TRawResponse if the backend pushes the raw structure
+        // The 'listen' callback receives the *entire* pushUpdate message payload: { topic: string, data: T | TRawResponse | null }
+        unsubscribe = listen(topic, (messagePayload: { topic: string, data: TRawResponse | T | null }) => {
+            if (isMounted && messagePayload && messagePayload.topic === topic) {
+                console.log(`[createFetcherStore ${topic}] Received update via listen. Full messagePayload:`, JSON.stringify(messagePayload)); // Log raw message
+                // Extract the 'data' part of the message before processing
+                const updateData = messagePayload.data;
+                 console.log(`[createFetcherStore ${topic}] Extracted updateData:`, JSON.stringify(updateData)); // Log extracted data
+                // Process the extracted 'data' using the same logic as fetch response
+                const transformedUpdate = processFetchResponse(updateData as TRawResponse | null | undefined);
+                console.log(`[createFetcherStore ${topic}] Data after transformFetchResponse:`, JSON.stringify(transformedUpdate)); // Log transformed data
+                store.set(transformedUpdate); // Update store with transformed data
                 // If waitForSubscription was true, this is the first time setting non-null data
             }
         });
@@ -69,8 +77,9 @@ export function createFetcherStore<T, TRawResponse = T>(
     requestData<TRawResponse>(fetchRequestType)
         .then(responseData => {
             if (isMounted) {
-                console.log(`[createFetcherStore ${topic}] Received initial fetch data.`);
+                console.log(`[createFetcherStore ${topic}] Received initial fetch data. Raw responseData:`, JSON.stringify(responseData)); // Log raw initial fetch data
                 const transformedData = processFetchResponse(responseData);
+                 console.log(`[createFetcherStore ${topic}] Initial fetch data after transformFetchResponse:`, JSON.stringify(transformedData)); // Log transformed initial fetch data
                 // Only set data if not waiting for the first subscription update
                 if (!waitForSubscription) {
                     store.set(transformedData);

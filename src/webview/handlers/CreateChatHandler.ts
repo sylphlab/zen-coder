@@ -3,8 +3,8 @@ import { ChatSession } from '../../common/types'; // Import ChatSession
 export class CreateChatHandler implements RequestHandler {
     public readonly requestType = 'createChat'; // Change messageType to requestType
 
-    // Return the new chat session ID or throw an error
-    public async handle(payload: any, context: HandlerContext): Promise<{ newChatId: string }> {
+    // Return the new chat session object or throw an error
+    public async handle(payload: any, context: HandlerContext): Promise<ChatSession> {
         console.log("[CreateChatHandler] Handling createChat message...");
         try {
             // Create the new chat session (HistoryManager handles saving and setting it active)
@@ -24,7 +24,8 @@ export class CreateChatHandler implements RequestHandler {
             });
 
             console.log(`[CreateChatHandler] New chat created (ID: ${newChat.id}) and chatSessionsUpdate pushed.`);
-            return { newChatId: newChat.id };
+            // Return the full chat session object
+            return newChat;
 
         } catch (error: any) {
             console.error("[CreateChatHandler] Error creating chat session:", error);

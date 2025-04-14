@@ -21,6 +21,7 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
 }) => {
     // --- State from Nanostores ---
     const allProvidersStatus = useStore($providerStatus); // Use the Nanostore for provider status
+    console.log('[ModelSelector Render] Direct read from store:', JSON.stringify($providerStatus.get())); // Log direct store read
 
     // --- Local State ---
     const [inputValue, setInputValue] = useState(''); // Input field value
@@ -40,17 +41,58 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
 
 
     // --- Derived Data from Nanostore ---
+    // Calculate uniqueProviders directly without useMemo to avoid potential timing issues
+    let uniqueProviders: { id: string; name: string }[] = [];
+    console.log("[ModelSelector] Calculating uniqueProviders directly. allProvidersStatus:", allProvidersStatus);
+    if (allProvidersStatus && Array.isArray(allProvidersStatus) && allProvidersStatus.length > 0) {
+        const providerMap = new Map<string, { id: string; name: string }>();
+        allProvidersStatus.forEach(provider => {
+            if (provider && provider.id && provider.name) {
+                if (!providerMap.has(provider.id)) {
+                    providerMap.set(provider.id, { id: provider.id, name: provider.name });
+                }
+            } else {
+                 console.warn("[ModelSelector] Skipping invalid provider object in allProvidersStatus:", provider);
+            }
+        });
+        uniqueProviders = Array.from(providerMap.values());
+    } else if (!allProvidersStatus) {
+         console.log("[ModelSelector] allProvidersStatus is null or undefined during direct calculation.");
+    } else if (!Array.isArray(allProvidersStatus)) {
+         console.error("[ModelSelector] unexpected allProvidersStatus type during direct calculation:", typeof allProvidersStatus, allProvidersStatus);
+    } else {
+         console.log("[ModelSelector] allProvidersStatus is an empty array during direct calculation.");
+    }
+    /* // Replaced with direct calculation above
     const uniqueProviders = useMemo(() => {
-        if (!allProvidersStatus) return [];
+        console.log("[ModelSelector] Recalculating uniqueProviders. allProvidersStatus:", allProvidersStatus); // Added log
+        if (!allProvidersStatus) {
+            console.log("[ModelSelector] allProvidersStatus is null or undefined.");
+            return [];
+        }
+        // Check 2: Is allProvidersStatus actually an array? (Previous bug source)
+        if (!Array.isArray(allProvidersStatus)) {
+             console.error("[ModelSelector] unexpected allProvidersStatus type:", typeof allProvidersStatus, allProvidersStatus);
+             return [];
+        }
+        if (allProvidersStatus.length === 0) {
+            console.log("[ModelSelector] allProvidersStatus is an empty array.");
+            return [];
+        }
         // Extract unique providers from the status list
         const providerMap = new Map<string, { id: string; name: string }>();
         allProvidersStatus.forEach(provider => {
-            if (!providerMap.has(provider.id)) {
-                providerMap.set(provider.id, { id: provider.id, name: provider.name });
+            if (provider && provider.id && provider.name) { // Add check for valid provider object
+                if (!providerMap.has(provider.id)) {
+                    providerMap.set(provider.id, { id: provider.id, name: provider.name });
+                }
+            } else {
+                 console.warn("[ModelSelector] Skipping invalid provider object in allProvidersStatus:", provider);
             }
         });
         return Array.from(providerMap.values());
     }, [allProvidersStatus]);
+    */ // End replaced block
 
     const modelsForSelectedProvider = useMemo(() => {
         if (!selectedProviderId || !allProvidersStatus) return [];

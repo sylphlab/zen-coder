@@ -22,7 +22,7 @@ export const $chatSessions = createFetcherStore<ChatSession[], ChatSessionsPaylo
     initialData: [], // Start with an empty array before the first fetch
     // Transform the raw { sessions: [...] } payload into just the array
     transformFetchResponse: (payload) => payload?.sessions ?? [],
-  } // Added missing closing brace and parenthesis
+  }
 );
 
 // Removed activeChatIdAtom definition and related comments.
@@ -72,7 +72,10 @@ export const $createChat = createMutationStore< // Export the store directly
       tempId: tempId
     };
   },
+  // Correct signature: (result, currentState, tempId?)
   applyMutationResult: (newSession: CreateChatResult, currentState: ChatSession[] | null, tempId?: string) => {
+    // This function now immediately updates the store with the final session data from the backend.
+    console.log(`[$createChat applyMutationResult] Applying result for tempId ${tempId}. New session:`, newSession);
     return (currentState ?? []).map((session: ChatSession) =>
       session.id === tempId ? newSession : session
     );
@@ -92,8 +95,6 @@ export const $deleteChat = createMutationStore< // Export the store directly
   targetAtom: $chatSessions, // Renamed targetAtom
   performMutation: async (chatId: DeleteChatPayload) => {
     await requestData<void>('deleteChat', { chatId });
-    // Logic to handle active chat ID reset was removed as the atom is gone.
-    // Components should react to changes in $chatSessions or route parameters.
     return { deletedId: chatId };
   },
   getOptimisticUpdate: (chatId: DeleteChatPayload, currentState: ChatSession[] | null) => {
@@ -159,6 +160,7 @@ export const $sendMessage = createMutationStore<
       revertState: currentState,
     };
   },
+  // No applyMutationResult needed for sendMessage as updates come via stream
 });
 
 
@@ -194,6 +196,7 @@ export const $deleteMessage = createMutationStore<
         };
     },
     applyMutationResult: (result: DeleteMessageResult, currentState: ChatSession[] | null) => {
+        // This confirms the deletion, the optimistic update should already be correct
         return (currentState ?? []).map(session => {
             if (session.id === result.chatId) {
                  return {
@@ -231,6 +234,7 @@ export const $clearChatHistory = createMutationStore<
         return { optimisticState: updatedSessions, revertState: currentState };
     },
     applyMutationResult: (result: ClearHistoryResult, currentState: ChatSession[] | null) => {
+         // Confirms the clear, optimistic update is likely correct
         return (currentState ?? []).map(session => {
             if (session.id === result.chatId) {
                  return { ...session, history: [] };
@@ -249,6 +253,7 @@ export const $executeToolAction = createMutationStore<
     performMutation: async (payload: ExecuteToolActionPayload) => {
         return await requestData<ExecuteToolActionResult>('executeToolAction', payload);
     },
+    // No optimistic update needed
 });
 
 // Stop Generation
@@ -259,22 +264,31 @@ export const $stopGeneration = createMutationStore<
     performMutation: async () => {
         await requestData<void>('stopGeneration');
     },
+    // No optimistic update needed
 });
 
 // Update Chat Config
 type UpdateChatConfigPayload = { chatId: string; config: Partial<ChatConfig> };
-type UpdateChatConfigResult = { chatId: string; newConfig: ChatConfig };
+// The backend handler returns { config: ChatConfig }
+type BackendUpdateChatConfigResult = { config: ChatConfig };
+// We need chatId in applyMutationResult, so we modify the result type from performMutation
+type PerformUpdateChatConfigResult = BackendUpdateChatConfigResult & { chatId: string };
+
 export const $updateChatConfig = createMutationStore<
-    typeof $chatSessions,
-    ChatSession[],
-    UpdateChatConfigPayload,
-    UpdateChatConfigResult
+    typeof $chatSessions,           // Target Atom
+    ChatSession[],                  // Target Atom's state type
+    UpdateChatConfigPayload,        // Type passed to mutate function
+    PerformUpdateChatConfigResult   // Type returned by performMutation (includes chatId)
 >({
     targetAtom: $chatSessions,
-    performMutation: async (payload: UpdateChatConfigPayload) => {
-        const result = await requestData<{ config: ChatConfig }>('updateChatConfig', payload);
-        if (!result || !result.config) throw new Error('Update chat config failed: Invalid response from backend.');
-        return { chatId: payload.chatId, newConfig: result.config };
+    performMutation: async (payload: UpdateChatConfigPayload): Promise<PerformUpdateChatConfigResult> => {
+        // Backend handler returns { config: ChatConfig }
+        const result = await requestData<BackendUpdateChatConfigResult>('updateChatConfig', payload);
+        if (!result || !result.config) {
+            throw new Error('Update chat config failed: Invalid response from backend.');
+        }
+        // Add chatId to the result object so applyMutationResult can use it
+        return { ...result, chatId: payload.chatId };
     },
     getOptimisticUpdate: (payload: UpdateChatConfigPayload, currentState: ChatSession[] | null) => {
         const { chatId, config: configUpdate } = payload;
@@ -282,7 +296,7 @@ export const $updateChatConfig = createMutationStore<
             if (session.id === chatId) {
                 return {
                     ...session,
-                    config: { ...session.config, ...configUpdate },
+                    config: { ...session.config, ...configUpdate }, // Apply optimistic update
                     lastModified: Date.now(),
                 };
             }
@@ -290,12 +304,21 @@ export const $updateChatConfig = createMutationStore<
         });
         return { optimisticState: updatedSessions, revertState: currentState };
     },
-    applyMutationResult: (result: UpdateChatConfigResult, currentState: ChatSession[] | null) => {
-        return (currentState ?? []).map(session => {
-            if (session.id === result.chatId) {
-                 return { ...session, config: result.newConfig };
-            }
-            return session;
-        });
+    // Correct signature: (result, currentState, tempId?) - tempId is not relevant here.
+    // The 'result' now contains { config: ..., chatId: ... } because we modified it in performMutation.
+    applyMutationResult: (result: PerformUpdateChatConfigResult, currentState: ChatSession[] | null, _tempId?: string) => {
+         if (!result || !result.chatId || !result.config) {
+             console.error("[$updateChatConfig applyMutationResult] Invalid result received from performMutation:", result);
+             // If result is invalid, trust the optimistic update for now. Backend push will provide final truth.
+             return currentState;
+         }
+         console.log(`[$updateChatConfig applyMutationResult] Applying result for chat ${result.chatId}. New config:`, result.config);
+         return (currentState ?? []).map(session => {
+             if (session.id === result.chatId) {
+                  // Update the config using the confirmed data from the backend result
+                  return { ...session, config: result.config, lastModified: Date.now() }; // Update lastModified too
+             }
+             return session;
+         });
     }
 });
