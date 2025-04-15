@@ -60,13 +60,15 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
 
 
     // --- Derived Data from Nanostore ---
-    // Calculate uniqueProviders directly without useMemo to avoid potential timing issues
+    // Calculate uniqueProviders directly, ensuring allProvidersStatus is an array
     let uniqueProviders: { id: string; name: string }[] = [];
-    console.log("[ModelSelector] Calculating uniqueProviders directly. allProvidersStatus:", allProvidersStatus);
-    if (allProvidersStatus && Array.isArray(allProvidersStatus) && allProvidersStatus.length > 0) {
+    console.log("[ModelSelector] Calculating uniqueProviders. allProvidersStatus:", allProvidersStatus);
+    // Check if allProvidersStatus is an array before processing
+    if (Array.isArray(allProvidersStatus)) { // Check if it's an array
         const providerMap = new Map<string, { id: string; name: string }>();
         allProvidersStatus.forEach(provider => {
-            if (provider && provider.id && provider.name) {
+            // Add extra validation for provider object and its properties
+            if (provider && typeof provider.id === 'string' && typeof provider.name === 'string') {
                 if (!providerMap.has(provider.id)) {
                     providerMap.set(provider.id, { id: provider.id, name: provider.name });
                 }
@@ -75,12 +77,9 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
             }
         });
         uniqueProviders = Array.from(providerMap.values());
-    } else if (!allProvidersStatus) {
-         console.log("[ModelSelector] allProvidersStatus is null or undefined during direct calculation.");
-    } else if (!Array.isArray(allProvidersStatus)) {
-         console.error("[ModelSelector] unexpected allProvidersStatus type during direct calculation:", typeof allProvidersStatus, allProvidersStatus);
     } else {
-         console.log("[ModelSelector] allProvidersStatus is an empty array during direct calculation.");
+        // Log why it's not an array (could be 'loading', 'error', null)
+        console.log("[ModelSelector] allProvidersStatus is not an array during uniqueProviders calculation:", allProvidersStatus);
     }
     /* // Replaced with direct calculation above
     const uniqueProviders = useMemo(() => {
@@ -222,7 +221,8 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     const datalistId = `models-datalist-${labelPrefix.toLowerCase().replace(/\s+/g, '-') || 'main'}`;
 
     // Loading/Error states derived from relevant stores
-    const providersLoading = allProvidersStatus === null; // Check if provider list is loading
+    const providersLoading = allProvidersStatus === 'loading'; // Correct loading check
+    const providersError = allProvidersStatus === 'error'; // Check for error state
     // Model loading/error states from the dedicated store, specific to the selected provider
     const modelsLoading = modelsState.loading;
     const modelsError = modelsState.error;
@@ -233,16 +233,20 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
             <label htmlFor={providerSelectId} class="text-sm font-medium mr-1">{providerLabel}:</label>
             <select
                 id={providerSelectId}
-                value={selectedProviderId ?? ''} // Use selectedProviderId prop
+                value={selectedProviderId ?? ''}
                 onChange={handleProviderSelect}
-                disabled={providersLoading} // Disable only while loading providers
+                disabled={providersLoading || providersError} // Disable if loading or error
                 class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm focus:ring-blue-500 focus:border-blue-500 outline-none"
             >
                 <option value="">-- Select Provider --</option>
-                {/* Removed loading/error options, handled by disabled state */}
-                {uniqueProviders.map(provider => (
+                {/* Explicitly handle loading/error states for options */}
+                {providersLoading && <option disabled>Loading Providers...</option>}
+                {providersError && <option disabled>Error loading providers</option>}
+                {!providersLoading && !providersError && Array.isArray(allProvidersStatus) && uniqueProviders.map(provider => (
                     <option key={provider.id} value={provider.id}>{provider.name}</option>
                 ))}
+                {/* Handle case where loading/error is false, but uniqueProviders is empty */}
+                {!providersLoading && !providersError && uniqueProviders.length === 0 && <option disabled>No Providers Available</option>}
             </select>
 
             <label htmlFor={modelInputId} class="text-sm font-medium ml-3 mr-1">{modelLabel}:</label>

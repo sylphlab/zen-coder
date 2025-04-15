@@ -1,25 +1,31 @@
-import { createRouter } from '@nanostores/router'; // Removed unused Router import
-import { onMount, atom } from 'nanostores'; // Added atom
+import { createRouter } from '@nanostores/router';
+import { onMount, atom } from 'nanostores';
 import { initializeListener, requestData } from '../utils/communication';
-import { createFetcherStore } from './utils/createFetcherStore';
+import { createStore, StandardStore } from './utils/createStore';
 import { createMutationStore } from './utils/createMutationStore';
 
 // --- Location Stores ---
 
-// Fetcher store for initial location
-export const $location = createFetcherStore<string | null, { location: string | null }>(
-    // No topic needed, just initial fetch
-    '', // Placeholder topic, won't be used for listening
-    'getLastLocation',
-    {
-        initialData: null, // Start as null until fetched
-        transformFetchResponse: (response) => {
+// Store for initial location using createStore (fetch only)
+export const $location: StandardStore<string> = createStore<
+    string,                 // TData: Store holds the location string
+    { location: string | null }, // TResponse: Raw response from backend
+    {}                      // PPayload: No payload for fetch
+    // No UUpdateData needed as there's no subscription
+>({
+    key: 'location',
+    fetch: {
+        requestType: 'getLastLocation',
+        transformResponse: (response) => {
             const location = response?.location;
             // Map '/index.html' (legacy or initial load?) to '/'
+            // Default to '/' if location is null or undefined
             return location === '/index.html' ? '/' : (location ?? '/');
-        },
-    }
-);
+        }
+    },
+    // NO subscribe configuration - this store only fetches initial state
+    initialData: '/', // Default to '/' before loading
+});
 
 // Mutation store to update last location
 type UpdateLocationPayload = { location: string };
@@ -34,79 +40,91 @@ export const $updateLastLocation = createMutationStore<
 
 
 // --- Router Definition ---
-// Define routes. The keys are route names, values are path patterns.
-// '/' (home) -> Chat List Page
-// '/chat/:chatId' -> Specific Chat Page
-// '/settings' -> Settings Page
-// Let TypeScript infer the specific route types
 export const router = createRouter({
   home: '/',
   chat: '/chat/:chatId',
   settings: '/settings'
 });
 
-let isLocationInitialized = atom(false); // Flag to prevent persisting initial route (use atom)
-let unlistenLocation: (() => void) | null = null; // Listener for the location store
-let unlistenRouter: (() => void) | null = null; // Listener for the router store
+let isLocationInitialized = atom(false);
+let unlistenLocation: (() => void) | null = null;
+let unlistenRouter: (() => void) | null = null;
 
 // Initialize communication and handle router logic on mount
 onMount(router, () => {
     console.log('[Nanostores router] onMount: Initializing.');
-    initializeListener(); // Initialize the global message listener
+    initializeListener();
 
-    let isFirstLocationSet = false; // Track if the router has been set from fetched location
+    let isFirstLocationSet = false;
 
-    // Listen to the location store to set the initial router path
+    // Listen to the location store ($location) to set the initial router path
     unlistenLocation = $location.subscribe(locationValue => {
-        if (locationValue !== null && !isFirstLocationSet) {
-            console.log(`[Nanostores router] Initial location store ready: ${locationValue}. Opening router.`);
-            isLocationInitialized.set(false); // Ensure initial open doesn't trigger persistence
-            router.open(locationValue);
-            isLocationInitialized.set(true); // Allow persistence after initial open
-            isFirstLocationSet = true; // Prevent setting it again
-            // Unsubscribe from location store once initialized
+        console.log(`[Nanostores router] $location updated:`, locationValue);
+        // CRITICAL FIX: Only open router if locationValue is a string AND NOT 'loading' or 'error'
+        if (typeof locationValue === 'string' && locationValue !== 'loading' && locationValue !== 'error' && !isFirstLocationSet) {
+            // ADDED EXTRA LOGGING HERE
+            console.log(`[Nanostores router] ---> CONDITION MET! locationValue="${locationValue}". Opening router.`);
+            isLocationInitialized.set(false); // Prevent persistence during this initial open
+            router.open(locationValue); // Open router to the fetched location
+            isLocationInitialized.set(true);
+            isFirstLocationSet = true;
+            // Unsubscribe from $location after setting initial route
             if (unlistenLocation) {
                 unlistenLocation();
                 unlistenLocation = null;
             }
+        } else if (locationValue === 'error' && !isFirstLocationSet) {
+            console.error('[Nanostores router] Failed to load initial location.');
+            isFirstLocationSet = true; // Prevent further attempts
+             if (unlistenLocation) {
+                unlistenLocation();
+                unlistenLocation = null;
+            }
+        } else {
+             // Log why the condition wasn't met (if not the first time)
+             if (isFirstLocationSet) {
+                 // console.log(`[Nanostores router] Condition NOT met: isFirstLocationSet=true`);
+             } else if (typeof locationValue !== 'string') {
+                 console.log(`[Nanostores router] Condition NOT met: locationValue is not a string (${locationValue})`);
+             } else if (locationValue === 'loading') {
+                 console.log(`[Nanostores router] Condition NOT met: locationValue is 'loading'`);
+             } else if (locationValue === 'error') {
+                 console.log(`[Nanostores router] Condition NOT met: locationValue is 'error'`);
+             }
         }
     });
 
     // Listen for router changes and persist using the mutation store
-    let previousPath: string | undefined = router.get()?.path;
-    const { mutate: updateLocationMutate } = $updateLastLocation.get(); // Get mutate function
+    let previousPath: string | undefined = undefined;
+    const { mutate: updateLocationMutate } = $updateLastLocation.get();
 
     unlistenRouter = router.listen(page => {
-        if (page && page.path !== previousPath && isLocationInitialized.get()) {
-            console.log(`[Nanostores router] Router changed to: ${page.path}. Persisting via mutation store.`);
-            updateLocationMutate({ location: page.path })
-                .catch(err => console.error(`[Nanostores router] Error persisting location ${page.path}:`, err));
-            previousPath = page.path;
-        } else if (page) {
-             // Update previousPath even if not persisting (e.g., initial set)
-             previousPath = page.path;
+        const currentPath = page?.path;
+        if (previousPath === undefined) {
+            previousPath = currentPath;
+        }
+
+        if (currentPath && currentPath !== previousPath && isLocationInitialized.get()) {
+            console.log(`[Nanostores router] Router changed to: ${currentPath}. Persisting via mutation store.`);
+            updateLocationMutate({ location: currentPath })
+                .catch(err => console.error(`[Nanostores router] Error persisting location ${currentPath}:`, err));
+            previousPath = currentPath;
+        } else if (currentPath && currentPath !== previousPath) {
+             previousPath = currentPath;
         }
     });
 
-    // Return cleanup function for the router listener
-    // We don't call cleanupListener() here as it might be needed by other stores/hooks
+    // Return cleanup function
     return () => {
         console.log('[Nanostores router] onUnmount: Cleaning up listeners.');
         if (unlistenRouter) {
             unlistenRouter();
             unlistenRouter = null;
         }
-         if (unlistenLocation) { // Also clean up location listener if it exists
+         if (unlistenLocation) { // Clean up $location listener if it still exists
              unlistenLocation();
              unlistenLocation = null;
          }
-        isLocationInitialized.set(false); // Reset flag on unmount using .set()
+        isLocationInitialized.set(false);
     };
 });
-
-
-// Example of how components might navigate (Keep for reference):
-// import { router } from './stores/router';
-// router.open('/settings'); // Navigate to settings
-// router.open('/chat/123'); // Navigate to specific chat
-// router.open('/'); // Navigate home (chat list)

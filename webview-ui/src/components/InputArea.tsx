@@ -51,6 +51,7 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
     className,
     currentModelId
 }) => {
+    console.log(`[InputArea Render] isStreaming=${isStreaming}, inputValue=${inputValue.length}, selectedImages=${selectedImages.length}`); // Add log
 
     return (
         <div class={`input-area p-2 border-t border-gray-300 dark:border-gray-700 flex flex-col ${className ?? ''}`}>

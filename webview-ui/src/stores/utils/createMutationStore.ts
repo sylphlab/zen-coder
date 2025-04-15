@@ -1,25 +1,32 @@
-import { WritableAtom, map, MapStore } from 'nanostores';
+import { WritableAtom, task, map, MapStore } from 'nanostores';
+// Import the new StandardStore type
+import { StandardStore } from './createStore';
 
 // --- Helper Types ---
 
 // Result of getOptimisticUpdate - Exported for use in store definitions
 export interface OptimisticUpdateResult<TDataState> {
-  optimisticState: TDataState | null;
-  revertState: TDataState | null;
+  optimisticState: TDataState | null; // Optimistic update should result in TData or null
+  revertState: TDataState | null | 'loading' | 'error'; // Revert state can be any previous valid state
   tempId?: string;
 }
 
+// The possible state types for the target StandardStore
+type TargetStoreState<TDataState> = TDataState | null | 'loading' | 'error';
+
 // Options for createMutationStore
 interface CreateMutationStoreOptions<
-  TTargetAtom extends WritableAtom<TDataState | null> | undefined,
+  // Update TTargetAtom constraint to use StandardStore
+  TTargetAtom extends StandardStore<TDataState> | undefined,
   TDataState,
   TPayload = void,
   TResult = void
 > {
   targetAtom?: TTargetAtom;
   performMutation: (payload: TPayload) => Promise<TResult>;
-  getOptimisticUpdate?: (payload: TPayload, currentDataState: TDataState | null) => OptimisticUpdateResult<TDataState>;
-  applyMutationResult?: (result: TResult, currentDataState: TDataState | null, tempId?: string) => TDataState | null;
+  // Update currentDataState type in callback signatures
+  getOptimisticUpdate?: (payload: TPayload, currentDataState: TargetStoreState<TDataState>) => OptimisticUpdateResult<TDataState>;
+  applyMutationResult?: (result: TResult, currentDataState: TargetStoreState<TDataState>, tempId?: string) => TDataState | null;
 }
 
 // Type for the function signature of the mutate action
@@ -41,7 +48,7 @@ export type MutationStore<TPayload = void, TResult = void> = MapStore<MutationSt
 /**
  * Creates a Nanostores map store that manages the state (`loading`, `error`)
  * and provides a `mutate` function for an asynchronous action, optionally
- * handling optimistic updates on a target data atom.
+ * handling optimistic updates on a target data atom (StandardStore).
  *
  * Usage in component:
  * ```jsx
@@ -59,22 +66,24 @@ export type MutationStore<TPayload = void, TResult = void> = MapStore<MutationSt
  * @returns A MapStore where the value is `{ loading, error, mutate }`.
  */
 export function createMutationStore<
-  TTargetAtom extends WritableAtom<TDataState | null> | undefined,
+  // Update TTargetAtom constraint
+  TTargetAtom extends StandardStore<TDataState> | undefined,
   TDataState,
   TPayload = void,
   TResult = void
 >(
   options: CreateMutationStoreOptions<TTargetAtom, TDataState, TPayload, TResult>
-): MutationStore<TPayload, TResult> { // Return type is the specific MapStore
+): MutationStore<TPayload, TResult> {
   const { targetAtom, performMutation, getOptimisticUpdate, applyMutationResult } = options;
 
   // Define the mutate function logic separately
-  // It will reference the store instance via closure after the store is created
   let storeInstance: MutationStore<TPayload, TResult>;
 
   const mutate: MutateFn<TPayload, TResult> = async (payload: TPayload): Promise<TResult> => {
-    let originalDataState: TDataState | null = null;
-    let revertDataState: TDataState | null = null;
+    // originalDataState now holds the full state including 'loading'/'error'
+    let originalDataState: TargetStoreState<TDataState> | null = null;
+    // revertDataState also needs to hold the full possible state range
+    let revertDataState: TargetStoreState<TDataState> | null = null;
     let tempId: string | undefined = undefined;
     let optimisticUpdateApplied = false;
 
@@ -85,10 +94,13 @@ export function createMutationStore<
 
     // Optimistic Update
     if (targetAtom && getOptimisticUpdate) {
-      originalDataState = targetAtom.get();
+      originalDataState = targetAtom.get(); // Get the full state ('loading', 'error', TData, null)
+      // Pass the full state to getOptimisticUpdate
       const updateInfo = getOptimisticUpdate(payload, originalDataState);
+      // revertState now correctly uses the full original state
       revertDataState = updateInfo.revertState;
       tempId = updateInfo.tempId;
+      // Optimistic update should result in TData or null, not 'loading'/'error'
       targetAtom.set(updateInfo.optimisticState);
       optimisticUpdateApplied = true;
       console.log(`[MutationStore] Applied optimistic update to target atom.`);
@@ -101,8 +113,11 @@ export function createMutationStore<
 
       // Apply Result to Target Atom
       if (targetAtom && applyMutationResult) {
+        // Get the potentially optimistically updated state
         const currentDataState = targetAtom.get();
+        // Pass the full current state to applyMutationResult
         const finalDataState = applyMutationResult(result, currentDataState, tempId);
+        // Final state should be TData or null
         targetAtom.set(finalDataState);
         console.log(`[MutationStore] Applied mutation result to target atom.`);
       } else if (optimisticUpdateApplied) {
@@ -123,6 +138,7 @@ export function createMutationStore<
       // Rollback Optimistic Update
       if (optimisticUpdateApplied && targetAtom) {
         console.log(`[MutationStore] Rolling back optimistic update on target atom.`);
+        // Rollback to the original full state (which might have been 'loading', 'error', etc.)
         targetAtom.set(revertDataState);
       }
 

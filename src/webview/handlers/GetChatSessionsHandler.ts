@@ -1,21 +1,25 @@
 import { RequestHandler, HandlerContext } from './RequestHandler';
-import { ChatSession } from '../../common/types'; // Import ChatSession directly
+import { ChatSession } from '../../common/types';
 
-// Define the payload type for this handler
-export interface GetChatSessionsPayload {
+// Define the response type containing the sessions array
+export interface GetChatSessionsResponse {
     sessions: ChatSession[];
 }
 
-export class GetChatSessionsHandler implements RequestHandler {
-    public readonly requestType = 'getChatSessions'; // Renamed requestType
+// Payload is empty for getting all sessions
+export interface GetChatSessionsPayload {}
+
+export class GetChatSessionsHandler implements RequestHandler<GetChatSessionsPayload, GetChatSessionsResponse> {
+    public readonly requestType = 'getChatSessions';
+    public static readonly requestType = 'getChatSessions'; // Keep static for registration consistency
 
     // Return the chat sessions payload or throw an error
-    public async handle(payload: any, context: HandlerContext): Promise<GetChatSessionsPayload> {
+    public async handle(_payload: GetChatSessionsPayload, context: HandlerContext): Promise<GetChatSessionsResponse> {
         console.log(`[${this.requestType}] Handling request...`);
         try {
             const allSessions = context.historyManager.getAllChatSessions();
             console.log(`[${this.requestType}] Returning ${allSessions.length} sessions.`);
-            // Return only the sessions list
+            // Return the correct response structure
             return {
                 sessions: allSessions
             };

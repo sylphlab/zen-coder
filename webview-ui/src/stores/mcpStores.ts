@@ -1,25 +1,38 @@
-import { createFetcherStore } from './utils/createFetcherStore';
+// Removed createFetcherStore import
 import { McpConfiguredStatusPayload } from '../../../src/common/types';
 import { requestData } from '../utils/communication';
+import { StandardStore, createStore } from './utils/createStore'; // Import createStore and StandardStore
+import { McpServerStatus } from '../../../src/ai/mcpManager';
+import { createMutationStore, OptimisticUpdateResult } from './utils/createMutationStore';
+
 
 /**
  * Store that fetches and subscribes to the status of configured MCP servers.
- * Holds `McpConfiguredStatusPayload | null`. Null indicates the initial loading state.
+ * Holds McpConfiguredStatusPayload | null | 'loading' | 'error'.
  */
-export const $mcpStatus = createFetcherStore<McpConfiguredStatusPayload | null>(
-  'mcpStatus',           // Topic to listen for updates
-  'getMcpStatus',        // Request type for initial fetch
-  {
-    initialData: null,    // Start with null
-    // Payload type is directly McpConfiguredStatusPayload | null, no transformation needed?
-    // If the backend wraps it like { payload: ... }, uncomment the transformer:
-    // transformFetchResponse: (response) => response?.payload ?? null,
-  }
-);
+export const $mcpStatus: StandardStore<McpConfiguredStatusPayload> = createStore<
+    McpConfiguredStatusPayload, // TData: The map of server statuses
+    McpConfiguredStatusPayload, // TResponse: Fetch response type
+    {},                         // PPayload: Fetch takes no payload
+    McpConfiguredStatusPayload  // UUpdateData: PubSub pushes the full map
+>({
+    key: 'mcpStatus',
+    fetch: {
+        requestType: 'getMcpStatus',
+        // No payload or transform needed
+    },
+    subscribe: {
+        topic: 'mcpStatus',
+        handleUpdate: (currentData, updateData) => {
+            // Update comes as the full McpConfiguredStatusPayload structure
+            return updateData ?? null;
+        }
+    },
+    initialData: null // Explicitly null, createStore handles 'loading'
+});
+
 
 // --- Mutation Stores for MCP Actions ---
-import { createMutationStore, OptimisticUpdateResult } from './utils/createMutationStore';
-import { McpServerStatus } from '../../../src/ai/mcpManager'; // Import McpServerStatus
 
 // Open Global MCP Config File
 export const $openGlobalMcpConfig = createMutationStore<
@@ -42,28 +55,30 @@ export const $openProjectMcpConfig = createMutationStore<
 });
 
 // Retry MCP Connection
-// Corrected payload type to use 'identifier'
 type RetryMcpConnectionPayload = { identifier: string };
 export const $retryMcpConnection = createMutationStore<
-  undefined, // Result type (no specific result needed)
-  McpConfiguredStatusPayload | null, // Type of the store being updated ($mcpStatus)
-  RetryMcpConnectionPayload, // Payload type for the mutation
-  void // Return type of performMutation
+  typeof $mcpStatus,               // Target atom type
+  McpConfiguredStatusPayload,      // TData matches StandardStore
+  RetryMcpConnectionPayload,       // Payload type
+  void                             // performMutation return type
 >({
+  targetAtom: $mcpStatus, // Target the new store
   performMutation: async (payload: RetryMcpConnectionPayload) => {
-    // Pass the payload with the 'identifier' key
     await requestData<void>('retryMcpConnection', { identifier: payload.identifier });
     // Actual state update will happen via $mcpStatus subscription push
   },
   getOptimisticUpdate: (
     payload: RetryMcpConnectionPayload,
-    currentDataState: McpConfiguredStatusPayload | null // Use the provided current state
-  ): OptimisticUpdateResult<McpConfiguredStatusPayload | null> => {
-    // Use 'identifier' from payload to find the server
-    if (!currentDataState || !currentDataState[payload.identifier]) {
-      // If no current state or server not found, don't apply optimistic update
-      return { optimisticState: currentDataState, revertState: currentDataState };
+    currentState: McpConfiguredStatusPayload | null | 'loading' | 'error'
+  ): OptimisticUpdateResult<McpConfiguredStatusPayload> => { // Return TData type
+    // Check if currentState is actually the data type
+    if (currentState === 'loading' || currentState === 'error' || currentState === null || !currentState[payload.identifier]) {
+       // Return placeholder empty object if cannot update
+       const placeholderState: McpConfiguredStatusPayload = {};
+       return { optimisticState: placeholderState, revertState: placeholderState };
     }
+    // Now TypeScript knows currentState is McpConfiguredStatusPayload
+    const currentDataState = currentState;
 
     // Create a deep copy for the optimistic state
     const optimisticState: McpConfiguredStatusPayload = JSON.parse(JSON.stringify(currentDataState));
@@ -76,8 +91,13 @@ export const $retryMcpConnection = createMutationStore<
 
     // Return the optimistic state and the original state for reverting
     return {
-      optimisticState: optimisticState,
-      revertState: currentDataState, // Revert back to the state before the optimistic update
+      optimisticState: optimisticState, // TData
+      revertState: currentDataState,    // TData
     };
+  },
+  applyMutationResult: (result: void, currentState: McpConfiguredStatusPayload | null | 'loading' | 'error') => {
+      // Type expected: TData | null = McpConfiguredStatusPayload | null
+      // Return the current state only if it's data, otherwise null.
+      return currentState !== 'loading' && currentState !== 'error' && currentState !== null ? currentState : null;
   }
 });

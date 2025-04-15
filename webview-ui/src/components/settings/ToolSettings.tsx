@@ -104,13 +104,17 @@ export function ToolSettings(): JSX.Element {
     const [retryingServerName, setRetryingServerName] = useState<string | null>(null);
     const [collapsedCategories, setCollapsedCategories] = useState<{ [key: string]: boolean }>({});
 
-    // Loading states
-    const isLoading = allToolsStatus === null;
-    const isMcpLoading = mcpServersData === null;
+    // Loading and error states from stores
+    const isLoading = allToolsStatus === 'loading';
+    const isToolsError = allToolsStatus === 'error';
+    const isMcpLoading = mcpServersData === 'loading';
+    const isMcpError = mcpServersData === 'error';
 
-    // Initialize collapsed state when data loads
+
+    // Initialize collapsed state when data loads (and is an array)
     useEffect(() => {
-        if (allToolsStatus && Object.keys(collapsedCategories).length === 0) {
+        // Only initialize if allToolsStatus is an array and collapsed state is empty
+        if (Array.isArray(allToolsStatus) && Object.keys(collapsedCategories).length === 0) {
             const initialCollapsedState = allToolsStatus.reduce((acc, category) => {
                 acc[category.id] = true; // Default all to collapsed
                 return acc;
@@ -160,10 +164,13 @@ export function ToolSettings(): JSX.Element {
     const renderCategory = (category: ToolCategoryInfo) => {
         const isMcpCategory = category.id.startsWith('mcp_');
         const serverIdentifier = isMcpCategory ? category.id.substring(4) : null;
-        const serverStatus: McpServerStatus | undefined = serverIdentifier && mcpServersData ? mcpServersData[serverIdentifier] as McpServerStatus : undefined;
+        // Safely access serverStatus only if mcpServersData is a valid object (and not loading/error/null)
+        const serverStatus: McpServerStatus | undefined = serverIdentifier && typeof mcpServersData === 'object' && mcpServersData !== null
+            ? mcpServersData[serverIdentifier] as McpServerStatus // Access using identifier
+            : undefined;
         const isCollapsed = collapsedCategories[category.id] ?? true;
 
-        // Determine MCP status text and color
+        // Determine MCP status text and color (use safely accessed serverStatus)
         let mcpStatusText = ''; let mcpStatusColor = 'text-gray-500 dark:text-gray-400'; let mcpShowRetryButton = false;
         const isThisServerRetrying = retryingServerName === serverIdentifier || serverStatus?.lastError === 'Retrying...';
 
@@ -238,9 +245,11 @@ export function ToolSettings(): JSX.Element {
 
             {/* Loading Status */}
             {(isLoading || isMcpLoading) && <p class="text-gray-500 dark:text-gray-400 italic">Loading tools and server status...</p>}
+            {(isToolsError || isMcpError) && <p class="text-red-500 dark:text-red-400 italic">Error loading tools or server status.</p>}
 
-            {/* Tool/Category List - Separated Sections */}
-            {!isLoading && !isMcpLoading && allToolsStatus && (
+
+            {/* Tool/Category List - Render only when BOTH tools and MCP data are loaded successfully */}
+            {!isLoading && !isToolsError && !isMcpLoading && !isMcpError && Array.isArray(allToolsStatus) && (
                 allToolsStatus.length > 0 ? (
                     <div class="space-y-6"> {/* Outer container for sections */}
                         {/* Standard Tools Section */}
@@ -248,6 +257,7 @@ export function ToolSettings(): JSX.Element {
                             <div>
                                 <h4 class="text-lg font-semibold mb-3 text-gray-600 dark:text-gray-400">Standard Tools</h4>
                                 <div class="space-y-4">
+                                    {/* Ensure filtering and mapping only on array */}
                                     {allToolsStatus.filter(cat => !cat.id.startsWith('mcp_')).map(renderCategory)}
                                 </div>
                             </div>
@@ -258,6 +268,7 @@ export function ToolSettings(): JSX.Element {
                             <div>
                                 <h4 class="text-lg font-semibold mt-6 mb-3 text-gray-600 dark:text-gray-400">MCP Servers & Tools</h4>
                                 <div class="space-y-4">
+                                    {/* Ensure filtering and mapping only on array */}
                                     {allToolsStatus.filter(cat => cat.id.startsWith('mcp_')).map(renderCategory)}
                                 </div>
                             </div>

@@ -1,66 +1,72 @@
 import { FunctionalComponent } from 'preact';
-import { useEffect } from 'preact/hooks'; // Import useEffect
+import { useEffect, useMemo } from 'preact/hooks';
 import { useStore } from '@nanostores/react';
-import { router } from '../stores/router'; // Import router to get params
-import { $chatSessions } from '../stores/chatStores'; // Import chat sessions store
-import { ChatView } from '../components/ChatView'; // Import the actual chat view component
+import { router } from '../stores/router';
+import { $chatSessions } from '../stores/chatStores';
+import { ChatView } from '../components/ChatView';
+// Removed $activeChatHistory import as ChatView handles its own loading
 
-// Define props if route params are passed as props (depends on router setup)
-// Assuming params are accessed via router.params for now
-interface ChatPageProps {
-  // chatId?: string; // If passed as prop
-}
-
-export const ChatPage: FunctionalComponent<ChatPageProps> = (props) => {
-  // Get chat ID from route parameters
+export const ChatPage: FunctionalComponent = () => {
+  // Get route params and store states
   const page = useStore(router);
+  const sessions = useStore($chatSessions); // sessions can be: ChatSession[] | null | 'loading' | 'error'
+
   const chatId = page?.route === 'chat' ? page.params.chatId : null;
+  const isLoadingSessions = sessions === 'loading'; // Correct loading check
+  const sessionsError = sessions === 'error'; // Check for error state
 
-  // Get chat sessions state
-  const sessions = useStore($chatSessions);
-  const isLoadingSessions = sessions === null;
-
-  // Find the current chat session
-  const currentChat = chatId && sessions ? sessions.find(s => s.id === chatId) : null;
-
-  // Redirect logic (might be better placed higher up, e.g., in App.tsx effect)
-  // This useEffect handles the case where the chatId becomes invalid AFTER initial load
-  // Redirect logic: Check ONLY when sessions have loaded and chatId is present.
-  useEffect(() => {
-    // isLoadingSessions is true initially (sessions is null)
-    // When sessions load (become an array), isLoadingSessions becomes false.
-    if (!isLoadingSessions && chatId) {
-      // Now we know sessions is an array (possibly empty)
-      const chatExists = sessions.some(s => s.id === chatId);
-      if (!chatExists) {
-        console.warn(`[ChatPage] Chat ${chatId} not found in loaded sessions. Redirecting to list.`);
-        router.open('/');
-      } else {
-           console.log(`[ChatPage] Chat ${chatId} found in loaded sessions.`);
+  // Derived state: Find current chat session *only* if sessions is an array
+  const currentChat = useMemo(() => {
+      // Only try to find if sessions is an array and we have a chatId
+      if (Array.isArray(sessions) && chatId) {
+          console.log(`[ChatPage deriveChat] Finding chat ${chatId} in ${sessions.length} sessions.`);
+          return sessions.find(s => s.id === chatId) ?? null;
       }
+      // Return null if loading, error, or no chatId
+      return null;
+  }, [sessions, chatId]);
+
+  // Redirect effect: Check after loading/error state is resolved.
+  useEffect(() => {
+    console.log(`[ChatPage Effect Redirect] Check Running. chatId=${chatId}, isLoading=${isLoadingSessions}, isError=${sessionsError}, currentChatFound=${!!currentChat}`);
+    // Redirect if:
+    // 1. Loading is complete AND there's no error.
+    // 2. We have a valid chat ID from the route.
+    // 3. The session for this ID was NOT found in the loaded sessions array.
+    if (chatId && !isLoadingSessions && !sessionsError && currentChat === null && Array.isArray(sessions)) {
+      console.log(`[ChatPage Effect Redirect] Sessions loaded without error, session ${chatId} not found. REDIRECTING.`);
+      router.open('/');
     }
-    // Dependency array: only re-run when chatId or the loading state changes, or when the sessions array itself changes instance.
-  }, [chatId, isLoadingSessions, sessions]); // Add sessions to dependency array
+  }, [isLoadingSessions, currentChat, chatId]); // Depend on sessions loading and derived chat
 
 
+  // Render Logic
   if (!chatId) {
-    // Should ideally not happen if routing is correct, but handle defensively
-    console.error("[ChatPage] No chatId found in route params.");
-    // Optionally redirect
-    // router.open('/');
-    return <div>Error: Chat ID missing.</div>;
+    console.error("[ChatPage] Render: No chatId found in route params. This shouldn't normally happen.");
+    return <div class="p-6 text-center text-red-500">Error: Invalid Chat Route - No Chat ID found.</div>;
   }
 
+  // Show loading indicator
   if (isLoadingSessions) {
-    return <div>Loading chat session...</div>; // Show loading state while sessions are fetched
+      console.log(`[ChatPage Render] Showing loading indicator.`);
+      return <div class="p-6 text-center text-gray-500 dark:text-gray-400">Loading chat session...</div>;
   }
 
-  if (!currentChat) {
-     // This state might be brief if redirection is quick, or shown if redirect fails
-     console.log(`[ChatPage] Chat ${chatId} not found, waiting for potential redirect...`);
-     return <div>Chat not found. Redirecting...</div>;
+  // Show error message
+  if (sessionsError) {
+      console.error(`[ChatPage Render] Showing error message.`);
+      return <div class="p-6 text-center text-red-500 dark:text-red-400">Error loading chat sessions. Please check console or try refreshing.</div>;
   }
 
-  // Render ChatView if session is found
-  return <ChatView chatIdFromRoute={chatId} />; // Pass chatId as chatIdFromRoute
+  // Show message if sessions loaded but the specific chat wasn't found (before redirect kicks in)
+  if (currentChat === null) {
+       console.log(`[ChatPage Render] Chat session ${chatId} not found after loading. Waiting for redirect or state update.`);
+       // Avoid showing an error immediately, wait for redirect effect
+       return <div class="p-6 text-center text-gray-500 dark:text-gray-400">Loading chat...</div>;
+   }
+
+  // All clear: sessions loaded without error, chat found -> render ChatView
+  console.log(`[ChatPage Render] Rendering ChatView for ${chatId}`);
+  // Pass the validated chatId to ChatView
+  return <ChatView chatIdFromRoute={chatId} />;
 };

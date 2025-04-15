@@ -1,16 +1,21 @@
 # Project Progress
 
 ## What Works
+- **Fixed Chat Loading/Redirect Issue:** Refactored `ChatPage.tsx` and `ChatView.tsx` to consolidate redirect logic in `ChatPage`. Ensures `ChatPage` waits for both `$chatSessions` and `$activeChatHistory` to load before checking if the target chat session exists and rendering `ChatView` or redirecting. `ChatView` now assumes it's rendered only with valid `chatId` and focuses solely on history loading.
+- **Fixed Reactivity Issue (Chat History):** Modified `HistoryManager.getHistory` to return a copy (`[...history]`) instead of a direct reference, ensuring Nanostore/Preact detect changes and trigger UI updates for incoming messages.
 - **Fixed Settings Page Input:** Corrected custom instruction input interference.
 - **Restored Tool Settings Section:** Uncommented the component in the settings page.
-- **Frontend State Refactoring (Nanostores Complete):**
+- **Frontend State Refactoring (Nanostores using `createStore`):**
     - Migrated core state management from Jotai/custom hooks to Nanostores.
-    - Implemented `createFetcherStore` and `createMutationStore` utilities.
-    - Created Nanostores for `$chatSessions`, `$defaultConfig`, `$providerStatus`, `$availableProviders`, `$allToolsStatus`, `$mcpStatus`, `$customInstructions`. Stores handle initial data fetching and backend push updates (`listen`).
-    - Replaced `wouter` with `@nanostores/router`, integrated location persistence.
-    - **Removed obsolete Jotai atoms:** Deleted `webview-ui/src/store/atoms.ts`. Refactored `ChatView`, `InputArea`, `MessagesArea` to remove Jotai dependencies for UI state (`isStreamingAtom`, `inputValueAtom`, `selectedImagesAtom`, `suggestedActionsMapAtom`, `activeChatIdAtom`). UI state now uses local component state (`useState` in `ChatView`) or derived Nanostore state (`$sendMessage.loading`), passed down via props. Active chat ID relies solely on route parameter.
+    - Implemented `createMutationStore` utility.
+    - **Refactored all data stores using the new `createStore` utility:** `$chatSessions`, `$defaultConfig` (in `chatStores.ts`), `$activeChatSession` (still uses `onMount`), `$activeChatHistory` (in `activeChatHistoryStore.ts`), `$providerStatus` (in `providerStores.ts`), `$allToolsStatus` (in `toolStores.ts`), `$mcpStatus` (in `mcpStores.ts`), `$customInstructions` (in `settingsStores.ts`).
+    - **Enhanced `createStore` utility:** Added `dependsOn` option to handle reactivity for dynamic stores (like `$activeChatHistory` depending on `router`).
+    - **Removed `createFetcherStore` utility:** Replaced by `createStore`.
+    - Removed deprecated `$availableProvidersStore`.
+    - Updated `createMutationStore` and mutation store definitions (`getOptimisticUpdate`, `applyMutationResult`) to handle `StandardStore` ('loading'/'error') states correctly.
+    - **Removed obsolete Jotai atoms:** Deleted `webview-ui/src/store/atoms.ts`. Refactored `ChatView`, `InputArea`, `MessagesArea` to remove Jotai dependencies. UI state now uses local component state (`useState`) or derived Nanostore state (`$sendMessage.loading`), passed down via props.
 - **Routing (`@nanostores/router`):** Implemented and integrated.
-- **Pub/Sub:** Explicit subscribe/unsubscribe mechanisms implemented for Provider Status, Tool Status, Default Config, Custom Instructions, MCP Status. Backend pushes updates only when subscribed.
+- **Pub/Sub:** Handled within `createStore` utility. Backend pushes updates only when subscribed.
 - **Request/Response:** Strict FE->BE communication via `requestData`. Unified backend `RequestHandler`.
 - **Stream Processing:** Handles mixed stream parts, pushes updates via `pushUpdate`.
 - **Multi-Chat Backend Structure:** `HistoryManager` handles multiple sessions. Handlers operate on `chatId`.
@@ -36,26 +41,30 @@
     - Removed `McpServerSettings.tsx`.
 
 ## What's Left
-- **Testing (Manual - Post-Refactor):** Crucial next step.
-    - Verify all UI interactions, state updates, data loading, navigation after major Jotai removal and Nanostores integration.
-    - Test `isStreaming` state derivation from `$sendMessage.loading`.
-    - Test `inputValue` local state management.
-    - Test `selectedImages` state from `useImageUpload` hook.
-    - Test prop passing (`inputValue`, `isStreaming`, `selectedImages`, `suggestedActionsMap`) from `ChatView` down.
-- **Implement Pub/Sub for Suggested Actions:** Replace temporary local state for `suggestedActionsMap` in `ChatView.tsx` with a proper Nanostore atom listening to backend pushes.
+- **Testing (Manual - Post `createStore` Refactor):** Crucial next step.
+    - Verify all refactored stores (`$chatSessions`, `$defaultConfig`, `$activeChatSession`, `$activeChatHistory`, `$providerStatus`, `$allToolsStatus`, `$mcpStatus`, `$customInstructions`) load initial data correctly.
+    - Verify real-time updates via PubSub for all subscribed stores.
+    - Verify mutation logic and optimistic updates for settings (`provider`, `tool auth`, `mcp retry`), chat creation/deletion, message sending/deletion.
+    - **Verify reactivity:** Confirm that `$activeChatHistory` updates correctly when the route (`chatId`) changes.
+    - Test UI interactions, loading/error states, navigation after major refactoring.
+    - Test state derivation (`isStreaming`) and local state management (`inputValue`, `selectedImages`).
+- **Implement Incremental PubSub Updates (Backend + Frontend):** Next major task after testing.
+- **Enhance `createMutationStore` for Multi-Store Updates:** Future task.
+- **Implement Features Based on New Communication Model:** Pagination, Refresh, Connection Status. Future task.
+- **Implement Pub/Sub for Suggested Actions:** Replace temporary state in `ChatView.tsx`.
 - **Image Upload (Backend & Full Test):** Review/update backend handling (`HistoryManager`, `AiService`) and test the full flow.
 - **VS Code Tool Enhancements:** Implement remaining VS Code debugging tools (stop, step, breakpoints); enhance `runCommandTool`.
 - **UI Refinements & Error Handling:** Continue improving UI styling and error reporting/handling.
 - **Test Structured Output:** Thoroughly test suggested actions parsing and display.
 
-## Current Status (Post-Jotai Removal)
-- Frontend state management is now fully based on Nanostores and local component state (`useState`).
-- Obsolete Jotai atoms and related logic have been removed.
-- Components (`ChatView`, `InputArea`, `MessagesArea`) receive necessary state via props.
-- Active chat ID is determined solely by the route parameter.
+## Current Status (Post `createStore` Refactor)
+- Frontend state management uses Nanostores via the enhanced `createStore` utility (handling ReqRes+PubSub and dependencies) and `createMutationStore`.
+- Obsolete Jotai atoms and `createFetcherStore` utility removed.
+- Dynamic stores like `$activeChatHistory` are reactive to router changes.
+- Components use local state (`useState`) or receive Nanostore state via props/`useStore`.
 
 ## Known Issues / TODOs
-- **Suggested Actions:** Currently use temporary local state in `ChatView`; needs proper Nanostore/PubSub implementation.
-- **Testing:** Major refactoring requires thorough manual testing.
+- **Testing:** Thorough manual testing of the `createStore` refactoring, reactivity, and mutations is required.
+- **Suggested Actions:** Needs proper Nanostore/PubSub implementation.
 - **Image Upload:** Backend processing needs verification/completion.
-- **(Previous Known Issues Still Apply where relevant, e.g., filesystem test linter issue)**
+- **(Previous Known Issues Still Apply where relevant)**

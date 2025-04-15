@@ -55,30 +55,26 @@ export function createFetcherStore<T, TRawResponse = T>(
     try {
         // NOTE: The type here is potentially TRawResponse if the backend pushes the raw structure
         // The 'listen' callback receives the *entire* pushUpdate message payload: { topic: string, data: T | TRawResponse | null }
+        // It also handles requesting the subscription from the backend.
         unsubscribe = listen(topic, (messagePayload: { topic: string, data: TRawResponse | T | null }) => {
+            // This callback *receives* updates for the topic.
             if (isMounted && messagePayload && messagePayload.topic === topic) {
                 console.log(`[createFetcherStore ${topic}] Received update via listen. Full messagePayload:`, JSON.stringify(messagePayload)); // Log raw message
                 // Extract the 'data' part of the message before processing
-                const updateData = messagePayload.data;
-                 console.log(`[createFetcherStore ${topic}] Extracted updateData from message:`, JSON.stringify(updateData)); // Log extracted data from message
-                // Check if the updateData has a 'payload' property, common for push updates
-                let dataToProcess: TRawResponse | null | undefined;
-                if (typeof updateData === 'object' && updateData !== null && 'payload' in updateData) {
-                    console.log(`[createFetcherStore ${topic}] Update seems to have a 'payload' property. Extracting payload.`);
-                    dataToProcess = (updateData as { payload: TRawResponse | null }).payload;
-                } else {
-                     console.log(`[createFetcherStore ${topic}] Update does not have 'payload'. Using data directly.`);
-                    dataToProcess = updateData as TRawResponse | null | undefined; // Use data directly if no payload property
-                }
-                console.log(`[createFetcherStore ${topic}] Data prepared for processing:`, JSON.stringify(dataToProcess));
-                // Process the prepared 'dataToProcess'
-                const transformedUpdate = processFetchResponse(dataToProcess);
-                console.log(`[createFetcherStore ${topic}] Data after transformFetchResponse:`, JSON.stringify(transformedUpdate)); // Log transformed data
-                // Deep clone the data to ensure reference changes for reactivity
-                const clonedUpdate = transformedUpdate ? JSON.parse(JSON.stringify(transformedUpdate)) : null;
-                // Force reactivity by setting to null briefly before the actual update
-                store.set(null);
-                setTimeout(() => store.set(clonedUpdate), 0); // Update store with cloned transformed data in next tick
+                 const updateData = messagePayload.data as T | null; // Assume data is the final type T | null
+                 console.log(`[createFetcherStore ${topic}] Update data received:`, JSON.stringify(updateData));
+
+                 // Data is already the correct type T | null, no need for processFetchResponse
+                 // Force a new reference to ensure reactivity, especially for arrays.
+                 let finalUpdateData: T | null;
+                 if (Array.isArray(updateData)) {
+                     finalUpdateData = [...updateData] as T; // Create new array reference
+                 } else if (typeof updateData === 'object' && updateData !== null) {
+                     finalUpdateData = { ...updateData } as T; // Create new object reference
+                 } else {
+                     finalUpdateData = updateData; // Primitives are fine
+                 }
+                 store.set(finalUpdateData);
             }
         });
     } catch (error) {
@@ -95,11 +91,8 @@ export function createFetcherStore<T, TRawResponse = T>(
                  console.log(`[createFetcherStore ${topic}] Initial fetch data after transformFetchResponse:`, JSON.stringify(transformedData)); // Log transformed initial fetch data
                 // Only set data if not waiting for the first subscription update
                 if (!waitForSubscription) {
-                     // Deep clone the data to ensure reference changes for reactivity
-                    const clonedData = transformedData ? JSON.parse(JSON.stringify(transformedData)) : null;
-                    // Force reactivity by setting to null briefly before the actual update
-                    store.set(null);
-                    setTimeout(() => store.set(clonedData), 0); // Update store with cloned transformed data in next tick
+                     // Assume transformedData is a new reference if transformation occurred.
+                     store.set(transformedData); // Set directly
                 } else {
                     // If waiting, we might still log or store it temporarily if needed,
                     // but the main 'set' happens in the listen callback.

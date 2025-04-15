@@ -1,16 +1,23 @@
 import { RequestHandler, HandlerContext } from './RequestHandler';
 import { DefaultChatConfig } from '../../common/types';
 
-export class GetDefaultConfigHandler implements RequestHandler {
-    public readonly requestType = 'getDefaultConfig';
+// Define the expected response structure/type
+export type GetDefaultConfigResponse = DefaultChatConfig | null;
 
-    public async handle(payload: any, context: HandlerContext): Promise<DefaultChatConfig> {
+// Payload is likely empty for getting the default config
+export interface GetDefaultConfigPayload {}
+
+export class GetDefaultConfigHandler implements RequestHandler<GetDefaultConfigPayload, GetDefaultConfigResponse> {
+    public readonly requestType = 'getDefaultConfig';
+    public static readonly requestType = 'getDefaultConfig';
+
+    public async handle(_payload: GetDefaultConfigPayload, context: HandlerContext): Promise<GetDefaultConfigResponse> {
         console.log(`[GetDefaultConfigHandler] Handling ${this.requestType} request...`);
         try {
-            // Assuming AiService or HistoryManager has the method to get defaults
-            // Let's use HistoryManager as it was used before
+            // Assuming HistoryManager has the method to get defaults
             const config = context.historyManager.getDefaultConfig();
-            return config;
+            // Return the config, which might be null or partially undefined based on settings
+            return config ?? null;
         } catch (error: any) {
             console.error(`[GetDefaultConfigHandler] Error fetching default config:`, error);
             throw new Error(`Failed to get default config: ${error.message}`);

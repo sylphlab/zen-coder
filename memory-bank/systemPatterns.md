@@ -10,10 +10,29 @@
     - `HistoryManager` (`src/historyManager.ts`): Manages chat history persistence (`globalState`) and translation between UI/Core formats.
     - `StreamProcessor` (`src/streamProcessor.ts`): Handles parsing the AI response stream (`fullStream` via `text-delta`), and performs post-stream parsing of appended JSON blocks (e.g., for `suggested_actions`) before updating history/UI.
     - `McpManager` (`src/ai/mcpManager.ts`): Manages lifecycle, configuration, and tool fetching for MCP servers.
-- **Webview Message Handling:** Uses a unified Request Handler pattern (`src/webview/handlers/RequestHandler.ts`). All FE -> BE messages are treated as requests (must include `requestId`). `ZenCoderChatViewProvider` uses a single `_handlers` map to route requests based on `message.requestType` (for `type: 'requestData'`) or `message.type` (for other actions like `subscribe`, `unsubscribe`, `sendMessage`). Backend ALWAYS sends a `responseData` message back.
-- **State Management:** Chat history (`UiMessage[]`) persisted in `context.workspaceState` (per workspace). API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`).
-- **Tool Authorization:** Managed via VS Code setting `zencoder.toolAuthorization`. This object defines status (`disabled`, `requiresAuthorization`, `alwaysAllow`) for standard tool categories (e.g., `filesystem`, `vscode`) and MCP servers. It also allows specific overrides (`disabled`, `requiresAuthorization`, `alwaysAllow`, `inherit`) for individual tools (standard or MCP). `AiService` reads this config to determine the final availability of each tool based on inheritance rules. (Replaces previous `zencoder.tools.*.enabled` settings and `globalState` `toolEnabledStatus` key).
-- **Configuration Files:**
+- **Standard Data Communication Pattern (FE <-> BE):**
+    - **Core Principle:** Explicit separation of state fetching (ReqRes) and update subscription (PubSub). PubSub **does not** send initial state upon subscription.
+    - **Initial State Fetching (ReqRes):** Frontend uses `requestData(requestType, payload)` to request the initial state of data from the corresponding backend Handler (e.g., `getChatSessions`, `getChatHistory`).
+    - **Real-time Updates (PubSub):**
+        - Frontend uses `listen(topic, handleUpdate)` to subscribe to a specific topic via the backend `SubscribeHandler`.
+        - Backend uses `pushUpdate(topic, data)` to push **updates** (not initial state) to subscribed clients.
+        - **Current:** Backend pushes the **full updated state** for simplicity (e.g., the entire updated `ChatSession[]` list).
+        - **Future Goal:** Refactor backend to push **incremental updates (patches)**, ideally using JSON Patch (RFC 6902), for better efficiency, especially for large data structures like chat history. Frontend `handleUpdate` will then apply these patches.
+    - **Mutation:** User actions that modify state are sent via `requestData(mutationRequestType, payload)`. Backend handlers process the mutation and typically trigger a PubSub `pushUpdate` with the changed state (full or patch).
+- **Standardized Frontend Store Creation (`createStore` Utility):**
+    - Location: `webview-ui/src/stores/utils/createStore.ts`
+    - Purpose: Provides a consistent way to create Nanostores (`StandardStore`) that follow the ReqRes + PubSub pattern.
+    - API: `createStore({ key, fetch, subscribe?, initialData? })`
+        - `key`: String identifier for debugging.
+        - `fetch`: Configures the initial `requestData` call (`requestType`, `payload` (static or dynamic function), optional `transformResponse`).
+        - `subscribe` (Optional): Configures the `listen` subscription (`topic` (static or dynamic function), `handleUpdate` function to process pushed updates).
+        - `initialData` (Optional): Data to hold before the first fetch completes.
+    - State: The created store holds `'loading' | 'error' | TData | null`.
+    - Methods: Includes a `.refetch()` method.
+    - Lifecycle: Uses `onMount` to manage initial fetch, subscription, unsubscription, and handling changes in dynamic `payload`/`topic`.
+- **State Management (Persistence):** Chat history (`UiMessage[]` with `seqId`) and session metadata (`ChatSession` with `nextSeqId`) persisted in `context.workspaceState` (per workspace) via `HistoryManager`. API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`).
+- **Tool Authorization:** Managed via VS Code setting `zencoder.toolAuthorization`. (Details remain the same).
+- **Configuration Files:** (Details remain the same).
     - Global MCP Servers: `[VS Code User Data]/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`
     - Project MCP Servers: `[Workspace]/.zen/mcp_servers.json`
     - Project Custom Instructions: `[Workspace]/.zen/custom_instructions.md`
@@ -41,7 +60,7 @@
     - This approach balances streaming simplicity, robustness against conflicts (via validation), and avoids requiring AI to generate complex XML/CDATA or frontend Markdown parsing for actions.
 
 ## Design Patterns
-- **Service Layer:** Core functionalities (AI interaction, status, models, history) are encapsulated in dedicated services/managers.
-- **Message Passing:** Strict Request/Response pattern for FE -> BE communication (all messages require `requestId` and receive `responseData`). Pub/Sub pattern for BE -> FE state updates (using `pushUpdate` messages with `topic` and `data`).
-- **Handler/Registry Pattern:** Unified pattern using `RequestHandler` interface and a single handler map in `ZenCoderChatViewProvider` for all incoming requests.
-- **Dependency Injection (Manual):** Dependencies like `AiService`, `HistoryManager`, etc., are passed down through constructors or context objects.
+- **Service Layer:** Core functionalities encapsulated in services/managers.
+- **Message Passing:** Unified Request/Response pattern (`requestData`/`responseData` with `requestId`) and Pub/Sub (`subscribe`/`unsubscribe`/`pushUpdate` with `topic`).
+- **Handler/Registry Pattern:** Unified backend handlers (`RequestHandler` interface, registered in `extension.ts`).
+- **Dependency Injection (Manual):** Core services passed via constructors.

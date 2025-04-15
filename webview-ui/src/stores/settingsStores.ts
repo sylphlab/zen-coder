@@ -1,6 +1,6 @@
-// No direct CustomInstructions type exported, define it inline based on usage
-import { createFetcherStore } from './utils/createFetcherStore';
 import { requestData } from '../utils/communication';
+// Removed createFetcherStore import
+import { StandardStore, createStore } from './utils/createStore'; // Import createStore and StandardStore
 
 /**
  * Define the shape of the custom instructions data
@@ -15,21 +15,28 @@ type CustomInstructionsUpdatePayload = { payload: CustomInstructionsData | null 
 
 /**
  * Store that fetches and subscribes to custom instructions (global and project).
- * Holds `CustomInstructionsData | null`. Null indicates the initial loading state.
- * Initial fetch returns CustomInstructionsData directly.
- * Updates might push { payload: CustomInstructionsData | null }.
+ * Holds CustomInstructionsData | null | 'loading' | 'error'.
  */
-export const $customInstructions = createFetcherStore<
-  CustomInstructionsData | null, // Store data type
-  CustomInstructionsData // Raw response type from initial fetch
->(
-  'customInstructions',   // Topic to listen for updates
-  'getCustomInstructions', // Request type for initial fetch
-  {
-    initialData: null,    // Start with null
-    // No transform needed for initial fetch as raw response matches store type
-  }
-);
+export const $customInstructions: StandardStore<CustomInstructionsData> = createStore<
+    CustomInstructionsData,           // TData: The data structure held by the store
+    CustomInstructionsData,           // TResponse: Raw fetch response type
+    {},                               // PPayload: Fetch takes no payload
+    CustomInstructionsUpdatePayload   // UUpdateData: Type of data from pubsub
+>({
+    key: 'customInstructions',
+    fetch: {
+        requestType: 'getCustomInstructions',
+        // No payload or transform needed
+    },
+    subscribe: {
+        topic: 'customInstructions',
+        handleUpdate: (currentData, updateData) => {
+            // Update comes as { payload: CustomInstructionsData | null }
+            return updateData?.payload ?? null;
+        }
+    },
+    initialData: null // Explicitly null, createStore handles 'loading'
+});
 
 // --- Mutation Stores for Settings ---
 import { createMutationStore } from './utils/createMutationStore';

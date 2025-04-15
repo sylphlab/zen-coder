@@ -1,4 +1,5 @@
-import { WebviewResponseMessage, WebviewRequestMessage } from '../../../src/common/types'; // Removed WebviewActionMessage
+import { WebviewResponseMessage, WebviewRequestMessage } from '../../../src/common/types';
+import { $sendMessage } from '../stores/chatStores'; // Import mutation store
 
 // --- VS Code API Helper ---
 // @ts-ignore
@@ -14,7 +15,8 @@ interface PendingRequest {
     timeoutId: number;
 }
 const pendingRequests = new Map<string, PendingRequest>();
-const activeSubscriptions = new Map<string, { topic: string; callback: (data: any) => void }>();
+// Store callbacks directly under the topic key
+const topicCallbacks = new Map<string, Set<(data: any) => void>>();
 let isListenerInitialized = false;
 const REQUEST_TIMEOUT = 15000; // 15 seconds
 
@@ -35,6 +37,9 @@ const handleIncomingMessage = (event: MessageEvent): void => {
         handleResponse(message);
     } else if (message.type === 'pushUpdate') {
         notifySubscribers(message.payload?.topic, message.payload?.data);
+    } else if (message.type === 'startAssistantMessage') {
+        // Loading state is handled automatically by createMutationStore for $sendMessage
+        console.log(`[Communication FP Listener] Received startAssistantMessage for chat ${message.payload?.chatId}, message ${message.payload?.messageId}. Loading state handled by mutation store.`);
     } else {
         console.warn(`[Communication FP Listener] Unhandled message type: ${message.type}`);
     }
@@ -65,20 +70,30 @@ const handleResponse = (message: WebviewResponseMessage): void => {
 };
 
 /**
- * Notifies subscribers for a given topic when a pushUpdate message is received.
+ * Notifies subscribers for a given topic when a pushUpdate message is received. (Simplified)
  */
 const notifySubscribers = (topic?: string, data?: any): void => {
-     if (!topic) return;
-     console.log(`[Communication FP] Notifying subscribers for topic: ${topic}`);
-     activeSubscriptions.forEach((sub) => {
-         if (sub.topic === topic) {
+     if (!topic) {
+         console.warn("[Communication FP] notifySubscribers called without a topic.");
+         return;
+     }
+     console.log(`[Communication FP] Notifying subscribers for topic: "${topic}"`);
+     const callbacks = topicCallbacks.get(topic); // Get Set of callbacks for the topic
+     if (callbacks && callbacks.size > 0) {
+         console.log(`[Communication FP] Found ${callbacks.size} callbacks for topic "${topic}". Executing...`);
+         // Create a copy of the callbacks before iterating, in case a callback modifies the Set during iteration
+         const callbacksToExecute = Array.from(callbacks);
+         callbacksToExecute.forEach((callback) => {
              try {
-                 sub.callback(data);
+                 console.log(`[Communication FP]   Executing callback for topic "${topic}"...`);
+                 callback(data); // Execute each callback
              } catch (error) {
-                 console.error(`[Communication FP] Error in subscription callback for topic ${topic}:`, error);
+                 console.error(`[Communication FP]   Error in subscription callback for topic "${topic}":`, error);
              }
-         }
-     });
+         });
+     } else {
+         console.warn(`[Communication FP] No active subscription callbacks found for topic: "${topic}"`);
+     }
  };
 
 
@@ -99,7 +114,7 @@ export function initializeListener(): void {
 }
 
 /**
- * Cleans up the global message listener.
+ * Cleans up the global message listener. (Simplified)
  */
 export function cleanupListener(): void {
     if (!isListenerInitialized) {
@@ -113,7 +128,7 @@ export function cleanupListener(): void {
         req.reject(new Error(`Communication listener cleaned up while request ${id} was pending.`));
     });
     pendingRequests.clear();
-    activeSubscriptions.clear();
+    topicCallbacks.clear(); // Clear topicCallbacks
     console.log("[Communication FP] Global message listener cleaned up.");
 }
 
@@ -138,7 +153,7 @@ export function requestData<T = any>(requestType: string, payload?: any): Promis
         pendingRequests.set(requestId, { resolve, reject, timeoutId });
 
         const messageToSend: WebviewRequestMessage = {
-            type: 'requestData', // Explicitly for requests expecting data back
+            type: 'requestData',
             requestId,
             requestType,
             payload
@@ -156,75 +171,79 @@ export function requestData<T = any>(requestType: string, payload?: any): Promis
     });
 }
 
-// Removed postActionMessage function
-
 /**
- * Creates a subscription to a topic pushed from the backend.
+ * Creates a subscription to a topic pushed from the backend. (Simplified)
  * Uses requestData to send 'subscribe' and 'unsubscribe' requests.
- * Returns a dispose function to unsubscribe.
+ * Returns a function to unsubscribe. (Refined)
  */
-export function listen(topic: string, callback: (data: any) => void): () => Promise<void> { // Return Promise<void> for dispose
+export function listen(topic: string, callback: (data: any) => void): () => Promise<void> {
      // Ensure listener is initialized lazily
     if (!isListenerInitialized) {
          console.warn("[Communication FP] listen called before initializeListener. Initializing lazily.");
          initializeListener();
     }
 
-    const subscriptionId = generateUniqueId();
-    activeSubscriptions.set(subscriptionId, { topic, callback });
-    console.log(`[Communication FP] Added internal subscription for topic: ${topic} (ID: ${subscriptionId})`);
+    const currentCallbacks = topicCallbacks.get(topic);
+    const isFirstListener = !currentCallbacks || currentCallbacks.size === 0;
 
-    let isSubscribedToServer = false;
-    let isDisposedLocally = false;
+    // Add callback to the Set for the topic
+    if (!currentCallbacks) {
+        topicCallbacks.set(topic, new Set([callback]));
+    } else {
+        currentCallbacks.add(callback);
+    }
+    console.log(`[Communication FP] Added listener callback for topic: "${topic}". New Count: ${topicCallbacks.get(topic)!.size}`);
 
-    console.log(`[Communication FP] Requesting backend subscription via requestData for topic: ${topic} (ID: ${subscriptionId})`);
-    // Use requestData for subscribe
-    requestData('subscribe', { topic, subscriptionId })
-        .then(() => {
-            if (!isDisposedLocally) {
-                isSubscribedToServer = true;
-                console.log(`[Communication FP] Backend subscription successful for topic: ${topic} (ID: ${subscriptionId})`);
-            } else {
-                console.log(`[Communication FP] Subscription ${subscriptionId} was disposed locally before backend ack.`);
-                // If already disposed locally, try to unsubscribe backend immediately
-                requestData('unsubscribe', { subscriptionId }).catch(err => console.warn(`[Communication FP] Error during immediate backend unsubscribe for ${subscriptionId}:`, err));
-            }
-        })
-        .catch(error => {
-            console.error(`[Communication FP] Backend subscription failed for topic: ${topic} (ID: ${subscriptionId})`, error);
-            // If backend subscription fails, clean up local state
-            isDisposedLocally = true; // Mark as disposed to prevent future unsubscribe attempts
-            activeSubscriptions.delete(subscriptionId);
-        });
+    // If first listener for this topic, request subscription from backend
+    if (isFirstListener) {
+        console.log(`[Communication FP] First listener for topic "${topic}". Requesting backend subscription.`);
+        requestData('subscribe', { topic })
+            .then(() => {
+                console.log(`[Communication FP] Backend subscription successful for topic: ${topic}`);
+            })
+            .catch(error => {
+                console.error(`[Communication FP] Backend subscription failed for topic: ${topic}`, error);
+                // If subscribe fails, remove the topic entry if it's still empty (no other listeners added meanwhile)
+                const currentSet = topicCallbacks.get(topic);
+                if (currentSet && currentSet.size === 0) {
+                     topicCallbacks.delete(topic);
+                }
+            });
+    }
+
+    let isDisposed = false; // Flag to prevent multiple unsubscribes
 
     // Return an async dispose function
     const dispose = async (): Promise<void> => {
-        if (isDisposedLocally) {
-            console.warn(`[Communication FP] Subscription ${subscriptionId} already disposed locally.`);
+        if (isDisposed) {
+            console.warn(`[Communication FP] Listener for topic "${topic}" already disposed.`);
             return;
         }
-        isDisposedLocally = true;
-        console.log(`[Communication FP] Disposing local subscription for topic: ${topic} (ID: ${subscriptionId})`);
-        activeSubscriptions.delete(subscriptionId);
+        isDisposed = true;
+        console.log(`[Communication FP] Disposing listener callback for topic: "${topic}"`);
 
-        // Only attempt to unsubscribe from backend if we think we successfully subscribed
-        if (isSubscribedToServer) {
-            console.log(`[Communication FP] Requesting backend unsubscription via requestData for topic: ${topic} (ID: ${subscriptionId})`);
-            try {
-                // Use requestData for unsubscribe
-                await requestData('unsubscribe', { subscriptionId });
-                console.log(`[Communication FP] Backend unsubscription successful for topic: ${topic} (ID: ${subscriptionId})`);
-            } catch (error) {
-                // Log error but don't throw, as local cleanup already happened
-                console.warn(`[Communication FP] Backend unsubscription failed for ${subscriptionId}. Error:`, error);
+        const callbacks = topicCallbacks.get(topic);
+        if (callbacks) {
+            callbacks.delete(callback);
+            console.log(`[Communication FP] Removed listener callback for topic: "${topic}". Remaining: ${callbacks.size}`);
+
+            // If last callback removed, unsubscribe from backend
+            if (callbacks.size === 0) {
+                topicCallbacks.delete(topic); // Remove the Set from the map
+                console.log(`[Communication FP] Last listener removed for topic "${topic}". Requesting backend unsubscription.`);
+                try {
+                    await requestData('unsubscribe', { topic }); // Send only topic
+                    console.log(`[Communication FP] Backend unsubscription successful for topic: ${topic}`);
+                } catch (error) {
+                    console.warn(`[Communication FP] Backend unsubscription failed for topic ${topic}. Error:`, error);
+                }
             }
-        } else {
-             console.log(`[Communication FP] Skipping backend unsubscription for ${subscriptionId} as initial subscription likely failed or was disposed early.`);
         }
-    };
+    }; // End of dispose function
 
     return dispose;
 }
+
 
 // --- Location Specific Communication Functions --- (Keep using requestData)
 

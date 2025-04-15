@@ -1,6 +1,7 @@
 {
 	"compilerOptions": {
-		"module": "Node16",
+		"module": "ESNext", // Changed from Node16
+    "moduleResolution": "Bundler", // Added Bundler resolution
 		"target": "ES2022",
 		"lib": [
 			"ES2022",

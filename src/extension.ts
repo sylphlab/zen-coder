@@ -54,6 +54,8 @@ import { GetMcpStatusHandler } from './webview/handlers/GetMcpStatusHandler';
 import { GetCustomInstructionsHandler } from './webview/handlers/GetCustomInstructionsHandler';
 import { GetDefaultConfigHandler } from './webview/handlers/GetDefaultConfigHandler';
 import { GetModelsForProviderHandler } from './webview/handlers/GetModelsForProviderHandler';
+import { GetChatSessionHandler } from './webview/handlers/GetChatSessionHandler'; // Import the new handler
+import { GetChatHistoryHandler } from './webview/handlers/GetChatHistoryHandler'; // Import the history handler
 import { GetLastLocationHandler } from './webview/handlers/GetLastLocationHandler'; // Import new handler
 import { SubscribeHandler } from './webview/handlers/SubscribeHandler';
 import { UnsubscribeHandler } from './webview/handlers/UnsubscribeHandler';
@@ -157,6 +159,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new GetCustomInstructionsHandler(),
             new GetDefaultConfigHandler(),
             new GetModelsForProviderHandler(),
+            new GetChatSessionHandler(this._historyManager), // Register the session handler
+            new GetChatHistoryHandler(this._historyManager), // Register the history handler
             new GetLastLocationHandler(), // Register new handler
             // Actions
             new SetApiKeyHandler(this._aiService),
@@ -360,8 +364,9 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             });
         });
 
-        // TODO: Subscribe to MCP Server Status Changes from McpManager
-        // this._mcpManager.eventEmitter.on('serversStatusChanged', (status: McpConfiguredStatusPayload) => {
+        // Subscribe to MCP Server Status Changes from McpManager
+        // TODO: Reactivate or refine this listener if needed. For now, rely on AiService's toolsStatusChanged
+        // this._mcpManager.on('serversStatusChanged', (status: McpConfiguredStatusPayload) => {
         //     this.postMessageToWebview({
         //         type: 'pushUpdate',
         //         payload: { topic: 'mcpStatus', data: status }

@@ -10,8 +10,7 @@ import {
     $setApiKey,
     $deleteApiKey,
     $setProviderEnabled,
-    availableProvidersStore // Keep if still used for filtering/display?
-} from '../../stores/providerStores'; // Import stores
+} from '../../stores/providerStores'; // Import stores - Ensure availableProvidersStore is definitely removed
 
 export function ProviderSettings(): JSX.Element {
     // --- State from Stores ---
@@ -19,10 +18,9 @@ export function ProviderSettings(): JSX.Element {
     const { mutate: setApiKeyMutate, loading: isSettingKey } = useStore($setApiKey);
     const { mutate: deleteApiKeyMutate, loading: isDeletingKey } = useStore($deleteApiKey);
     const { mutate: setProviderEnabledMutate, loading: isTogglingEnabled } = useStore($setProviderEnabled);
-    // TODO: Check if availableProvidersStore is still needed or if $providerStatus is sufficient
-    const availableProviders = useStore(availableProvidersStore); // Keep for now
 
-    const isLoadingProviders = providerStatus === null; // Loading based on main status store
+    // Ensure loading check uses 'loading' state
+    const isLoadingProviders = providerStatus === 'loading';
 
     // --- Local State ---
     const [apiKeysInput, setApiKeysInput] = useState<{ [providerId: string]: string }>({});
@@ -77,20 +75,21 @@ export function ProviderSettings(): JSX.Element {
     }, []);
 
     const filteredProviders = useMemo(() => {
-        const currentProviderStatus = providerStatus ?? []; // Use providerStatus from hook, default to empty array
+        // Ensure providerStatus is an array before filtering
+        const currentProviderStatus = Array.isArray(providerStatus) ? providerStatus : [];
         if (!searchQuery) {
-            return currentProviderStatus;
+            return currentProviderStatus; // Return the array (or empty array if not loaded/error)
         }
         const lowerCaseQuery = searchQuery.toLowerCase();
-        // Add type annotation for provider parameter in filter
-        return currentProviderStatus.filter((provider: ProviderInfoAndStatus) =>
+        // Type is already correct due to the check above
+        return currentProviderStatus.filter((provider) => // Type inference works here
             provider.name.toLowerCase().includes(lowerCaseQuery) ||
             provider.id.toLowerCase().includes(lowerCaseQuery)
         );
-    }, [searchQuery, providerStatus]); // Depend on providerStatus directly
+    }, [searchQuery, providerStatus]);
 
-    // Add type annotation for providerInfo parameter
-    const renderProviderSetting = (providerInfo: ProviderInfoAndStatus) => {
+    // Ensure explicit type annotation for providerInfo parameter
+    const renderProviderSetting = (providerInfo: ProviderInfoAndStatus): JSX.Element => {
         const { id, name, apiKeyUrl, requiresApiKey, enabled, apiKeySet } = providerInfo;
         const apiKeyText = apiKeySet ? '(Key 已設定)' : '(Key 未設定)';
         const apiKeyColor = apiKeySet ? 'green' : 'red';
@@ -166,12 +165,14 @@ export function ProviderSettings(): JSX.Element {
             </div>
 
             {isLoadingProviders && <p class="text-gray-500 dark:text-gray-400">正在載入 Provider 狀態...</p>}
-            {/* TODO: Add better error display if useProviderStatus provided error state */}
-            {!isLoadingProviders && providerStatus && ( // Check providerStatus directly
+            {/* Handle error state */}
+            {providerStatus === 'error' && <p class="text-red-500 dark:text-red-400">載入 Provider 狀態時發生錯誤。</p>}
+            {!isLoadingProviders && providerStatus !== 'error' && Array.isArray(providerStatus) && ( // Check providerStatus is loaded array data correctly
                 providerStatus.length > 0 ? (
                     <ul class="space-y-4">
                         {filteredProviders.length > 0 ? (
-                            filteredProviders.map(providerInfo => renderProviderSetting(providerInfo))
+                            // Ensure explicit type for providerInfo in map
+                            filteredProviders.map((providerInfo: ProviderInfoAndStatus) => renderProviderSetting(providerInfo))
                         ) : (
                             <li class="text-gray-500 dark:text-gray-400 italic">未找到匹配嘅 Provider。</li>
                         )}

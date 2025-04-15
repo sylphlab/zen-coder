@@ -12,12 +12,11 @@ import {
     UiMessage,
     ChatConfig,
     UiTextMessagePart,
-    ChatSession,
+    ChatSession, // Keep ChatSession
     DefaultChatConfig
 } from '../../../src/common/types';
 // Import Nanostore stores
 import {
-    $chatSessions,
     $defaultConfig,
     $sendMessage,
     $deleteMessage,
@@ -25,8 +24,9 @@ import {
     $executeToolAction,
     $stopGeneration,
     $updateChatConfig
-    // Removed activeChatIdAtom import
 } from '../stores/chatStores';
+// Import new stores and remove $chatSessions
+import { $activeChatHistory, $activeChatSession } from '../stores/activeChatHistoryStore'; // Removed setActiveChatIdAndSubscribe
 import { router } from '../stores/router';
 
 interface ChatViewProps {
@@ -58,26 +58,28 @@ const calculateEffectiveConfig = (chatSession: ChatSession | null | undefined, d
 };
 
 export function ChatView({ chatIdFromRoute }: ChatViewProps) {
-    // --- Nanostores State ---
-    const allChatSessions = useStore($chatSessions);
-    // Removed useStore(activeChatIdAtom)
+    // --- Nanostores State ---竹ns
+    const currentChatSession = useStore($activeChatSession); // Can be 'loading', null, or ChatSession
     const defaultConfig = useStore($defaultConfig);
-    const { mutate: sendMessageMutate, loading: isSending } = useStore($sendMessage);
+    const { mutate: sendMessageMutate, loading: isSending } = useStore($sendMessage); // isSending is the loading state
     const { mutate: deleteMessageMutate, loading: isDeletingMsg } = useStore($deleteMessage);
     const { mutate: clearHistoryMutate, loading: isClearing } = useStore($clearChatHistory);
     const { mutate: executeToolMutate, loading: isExecutingTool } = useStore($executeToolAction);
     const { mutate: stopGenerationMutate, loading: isStopping } = useStore($stopGeneration);
     const { mutate: updateConfigMutate, loading: isUpdatingConfig } = useStore($updateChatConfig);
 
+    // --- Use the store for messages ---
+    const messages = useStore($activeChatHistory); // Now UiMessage[] | null
+    const isHistoryLoading = messages === null; // History is loading if null
+
+    // --- Nanostores Derived State ---
+    const isStreaming = isSending; // Use the loading state from $sendMessage
+
     // --- Local UI State ---
     const [inputValue, setInputValue] = useState('');
-    // TODO: Replace with Nanostore listening to backend 'suggestedActionsUpdate' topic
     const [suggestedActionsMap, setSuggestedActionsMap] = useState<Record<string, SuggestedAction[]>>({});
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
-
-    // --- Nanostores Derived State ---
-    const isStreaming = useStore($sendMessage).loading;
 
     // --- Custom Hooks ---
     const {
@@ -88,41 +90,52 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
         triggerImageUpload,
         removeSelectedImage,
         clearSelectedImages
-    } = useImageUpload();
+ } = useImageUpload();
 
 
     // --- Derived State (from Nanostores & Route) ---
-    const currentChat = useMemo(() => {
-        return allChatSessions?.find(s => s.id === chatIdFromRoute) ?? null;
-    }, [allChatSessions, chatIdFromRoute]);
+    const isLoadingSessionData = currentChatSession === 'loading';
 
-    const messages = useMemo(() => currentChat?.history ?? [], [currentChat]);
-
-    const effectiveConfig = useMemo(() => calculateEffectiveConfig(currentChat, defaultConfig), [currentChat, defaultConfig]);
+    // Calculate effective config *before* handlers that might need it
+    // Handle 'loading'/'error' states for both session and default config
+    const effectiveConfig = useMemo(() => {
+        const session = (currentChatSession === 'loading' || currentChatSession === 'error' || currentChatSession === null)
+            ? null
+            : currentChatSession;
+        // Explicitly type 'defaults' to guide the type checker
+        const defaults: DefaultChatConfig | null = (defaultConfig === 'loading' || defaultConfig === 'error' || defaultConfig === null)
+            ? null
+            : defaultConfig;
+        return calculateEffectiveConfig(session, defaults);
+    }, [currentChatSession, defaultConfig]);
     const providerId = effectiveConfig.providerId;
     const modelId = effectiveConfig.modelId;
 
-    // --- Effects ---
-    // Removed activeChatIdAtom sync effect
+    // --- Logging ---
+    console.log(`[ChatView Render] chatId=${chatIdFromRoute}, isLoadingSession=${isLoadingSessionData}, isHistoryLoading=${isHistoryLoading}, sessionStatus=${currentChatSession === 'loading' ? 'loading' : (currentChatSession ? 'loaded' : 'not-found/error')}, isStreaming=${isStreaming}`);
 
+
+    // --- Effects ---
     // Scroll to bottom
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
+        // Check if messages is an array before accessing length
+        if (!isHistoryLoading && Array.isArray(messages) && messages.length > 0) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
+    }, [messages, isHistoryLoading]);
 
-    // Redirect if chat not found (or deleted)
-     useEffect(() => {
-         if (chatIdFromRoute && allChatSessions !== null && !currentChat) {
-             console.log(`[ChatView] Chat ${chatIdFromRoute} not found in sessions, redirecting to chat list.`);
-             router.open('/'); // Navigate to chat list page
-         }
-     }, [chatIdFromRoute, allChatSessions, currentChat]);
+    // Removed the redundant redirect logic - ChatPage.tsx handles this
+    // useEffect(() => { ... }, [chatIdFromRoute, allChatSessions, currentChatSession]);
 
-    // Clear input on chat change
-    useEffect(() => {
-        setInputValue('');
-        clearSelectedImages();
-    }, [chatIdFromRoute, setInputValue, clearSelectedImages]);
+    // History subscription is now handled within the $activeChatHistory store's onMount
+    // Remove the useEffect hook that called setActiveChatIdAndSubscribe
+    // useEffect(() => {
+    //     console.log(`[ChatView Initial Task State Effect Subscribe] Subscribing to history for ${chatIdFromRoute}`);
+    //     setActiveChatIdAndSubscribe(chatIdFromRoute);
+    //     setInputValue('');
+    //     clearSelectedImages();
+    //     setSuggestedActionsMap({});
+    // }, [chatIdFromRoute]);
 
 
     // --- Event Handlers ---
@@ -135,123 +148,55 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
             const payload = { chatId: chatIdFromRoute, content: contentParts, providerId: providerId, modelId: modelId };
             setInputValue('');
             clearSelectedImages();
-            try {
-                await sendMessageMutate(payload);
-            } catch (error) {
-                 console.error(`Error sending message:`, error);
-                 // TODO: Show error notification
-            }
+            try { await sendMessageMutate(payload); } catch (error) { console.error(`Error sending message:`, error); }
         }
     }, [ inputValue, selectedImages, isSending, isStreaming, chatIdFromRoute, providerId, modelId, sendMessageMutate, setInputValue, clearSelectedImages ]);
 
-    const handleKeyDown = useCallback((e: KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey && !isSending && !isStreaming) {
-            e.preventDefault();
-            handleSend();
-        }
-    }, [handleSend, isSending, isStreaming]);
-
-     const handleClearChat = useCallback(() => {
-         if (chatIdFromRoute) setShowClearConfirm(true);
-     }, [chatIdFromRoute]);
-
-     const confirmClearChat = useCallback(async () => {
-         if (chatIdFromRoute) {
-             setShowClearConfirm(false);
-             try {
-                 await clearHistoryMutate({ chatId: chatIdFromRoute });
-             } catch (error) {
-                  console.error(`Error clearing chat history:`, error);
-                  // TODO: Show error
-             }
-         }
-     }, [chatIdFromRoute, clearHistoryMutate]);
-
-     const cancelClearChat = useCallback(() => {
-         setShowClearConfirm(false);
-     }, []);
-
-    const handleSuggestedActionClick = useCallback(async (action: SuggestedAction) => {
-        if (!chatIdFromRoute || !providerId || !modelId) return;
-        try {
-            switch (action.action_type) {
-                case 'send_message':
-                    if (typeof action.value === 'string') {
-                        await sendMessageMutate({ chatId: chatIdFromRoute, content: [{ type: 'text', text: action.value }], providerId: providerId, modelId: modelId });
-                    }
-                    break;
-                case 'run_tool':
-                    if (typeof action.value === 'object' && action.value?.toolName) {
-                        await executeToolMutate({ toolName: action.value.toolName, args: action.value.args ?? {} });
-                    }
-                    break;
-                case 'fill_input':
-                     if (typeof action.value === 'string') {
-                         setInputValue(action.value);
-                     }
-                    break;
-            }
-            // TODO: Revisit how to clear suggestions for the specific message
-        } catch (error) {
-             console.error(`Error handling suggested action:`, error);
-             // TODO: Show error
-        }
-    }, [ chatIdFromRoute, providerId, modelId, sendMessageMutate, executeToolMutate, setInputValue ]);
-
-    const handleStopGeneration = useCallback(async () => {
-        try {
-            await stopGenerationMutate();
-        } catch (error) {
-            console.error('Error stopping generation:', error);
-            // TODO: Show error
-        }
-    }, [stopGenerationMutate]);
-
-    const handleChatModelChange = useCallback(async (newProviderId: string | null, newModelId: string | null) => {
-        if (chatIdFromRoute) {
-            const newConfig: Partial<ChatConfig> = {
-                providerId: newProviderId ?? undefined,
-                modelId: newModelId ?? undefined,
-                useDefaults: false
-            };
-            try {
-                await updateConfigMutate({ chatId: chatIdFromRoute, config: newConfig });
-            } catch (error) {
-                 console.error(`Error updating chat config:`, error);
-                 // TODO: Show error
-            }
-        }
-    }, [chatIdFromRoute, updateConfigMutate]);
-
+    const handleKeyDown = useCallback((e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey && !isSending && !isStreaming) { e.preventDefault(); handleSend(); } }, [handleSend, isSending, isStreaming]);
+    const handleClearChat = useCallback(() => { if (chatIdFromRoute) setShowClearConfirm(true); }, [chatIdFromRoute]);
+    const confirmClearChat = useCallback(async () => { if (chatIdFromRoute) { setShowClearConfirm(false); try { await clearHistoryMutate({ chatId: chatIdFromRoute }); } catch (error) { console.error(`Error clearing chat history:`, error); } } }, [chatIdFromRoute, clearHistoryMutate]);
+    const cancelClearChat = useCallback(() => { setShowClearConfirm(false); }, []);
+    const handleSuggestedActionClick = useCallback(async (action: SuggestedAction) => { if (!chatIdFromRoute || !providerId || !modelId) return; try { switch (action.action_type) { case 'send_message': if (typeof action.value === 'string') await sendMessageMutate({ chatId: chatIdFromRoute, content: [{ type: 'text', text: action.value }], providerId: providerId, modelId: modelId }); break; case 'run_tool': if (typeof action.value === 'object' && action.value?.toolName) await executeToolMutate({ toolName: action.value.toolName, args: action.value.args ?? {} }); break; case 'fill_input': if (typeof action.value === 'string') setInputValue(action.value); break; } } catch (error) { console.error(`Error handling suggested action:`, error); } }, [ chatIdFromRoute, providerId, modelId, sendMessageMutate, executeToolMutate, setInputValue ]);
+    const handleStopGeneration = useCallback(async () => { try { await stopGenerationMutate(); } catch (error) { console.error('Error stopping generation:', error); } }, [stopGenerationMutate]);
+    const handleChatModelChange = useCallback(async (newProviderId: string | null, newModelId: string | null) => { if (chatIdFromRoute) { const cfg: Partial<ChatConfig> = { providerId: newProviderId ?? undefined, modelId: newModelId ?? undefined, useDefaults: false }; try { await updateConfigMutate({ chatId: chatIdFromRoute, config: cfg }); } catch (e) { console.error(`Error updating chat config:`, e); } } }, [chatIdFromRoute, updateConfigMutate]);
     const handleCopyMessage = useCallback((messageId: string) => {
-        const messageToCopy = messages.find(msg => msg.id === messageId);
-        if (messageToCopy?.content) {
-            const textToCopy = messageToCopy.content.filter((part): part is UiTextMessagePart => part.type === 'text').map(part => part.text).join('\n');
-            if (textToCopy) navigator.clipboard.writeText(textToCopy).catch(err => console.error(`Copy failed:`, err));
+        // Ensure messages is an array before using find
+        const msg = Array.isArray(messages) ? messages.find(m => m.id === messageId) : null;
+        if (msg?.content) {
+            const txt = msg.content.filter((p): p is UiTextMessagePart => p.type === 'text').map(p => p.text).join('\n');
+            if (txt) navigator.clipboard.writeText(txt).catch(err => console.error(`Copy failed:`, err));
         }
     }, [messages]);
+    const handleDeleteMessage = useCallback(async (messageId: string) => { if (!chatIdFromRoute) return; try { await deleteMessageMutate({ chatId: chatIdFromRoute, messageId }); } catch (error) { console.error(`Error deleting message:`, error); } }, [chatIdFromRoute, deleteMessageMutate]);
 
-    const handleDeleteMessage = useCallback(async (messageId: string) => {
-        if (!chatIdFromRoute) return;
-        try {
-            await deleteMessageMutate({ chatId: chatIdFromRoute, messageId });
-        } catch (error) {
-            console.error(`Error deleting message:`, error);
-            // TODO: Show error
-        }
-    }, [chatIdFromRoute, deleteMessageMutate]);
 
     // --- Render Logic ---
-    // Display loading only if sessions haven't loaded initially
-    if (allChatSessions === null) {
-        return <div class="p-6 text-center text-gray-500">Loading chats...</div>;
-    }
-    // If sessions loaded but current chat isn't found (potentially due to deletion/navigation)
-    // The redirect effect above should handle navigation, but we can show a brief message.
-    if (!currentChat) {
-        return <div class="p-6 text-center text-yellow-500">Loading chat or chat not found...</div>;
+    // Updated loading check based on new stores
+    if (isLoadingSessionData || isHistoryLoading) {
+        console.log(`[ChatView Render] Loading... isLoadingSession=${isLoadingSessionData}, isHistoryLoading=${isHistoryLoading}`);
+        return (
+            <div class="chat-container flex flex-col flex-1 h-full p-4 overflow-hidden">
+                <div class="p-6 text-center text-gray-500">Loading chat...</div>
+            </div>
+        );
     }
 
+    // If session loading finished but session is null (not found or error)
+    if (currentChatSession === null) {
+         console.log(`[ChatView Render] Session data loaded, but chat ${chatIdFromRoute} not found or error occurred. Waiting for redirect from ChatPage.`);
+         // Render minimal placeholder while ChatPage handles redirect
+         return (
+             <div class="chat-container flex flex-col flex-1 h-full p-4 overflow-hidden">
+                 <div class="p-6 text-center text-gray-500">Chat not found or failed to load.</div>
+             </div>
+         );
+    }
+
+    // --- Render Main Chat UI ---
+    // Ensure messages is an array, default to empty if null or loading
+    const displayMessages = Array.isArray(messages) ? messages : [];
+
+    console.log(`[ChatView Render] Rendering main UI. Msgs: ${displayMessages.length}`);
     return (
         <div class="chat-container flex flex-col flex-1 h-full p-4 overflow-hidden">
             <HeaderControls
@@ -265,9 +210,9 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
                 onCopyMessage={handleCopyMessage}
                 onDeleteMessage={handleDeleteMessage}
                 className="flex-1 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
-                messages={messages}
+                messages={displayMessages} // Pass the guaranteed array
                 suggestedActionsMap={suggestedActionsMap}
-                isStreaming={isStreaming}
+                isStreaming={isStreaming} // Use derived state from isSending
             />
             <InputArea
                 className="mt-auto"
@@ -282,7 +227,7 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
                 currentModelId={modelId ?? null}
                 inputValue={inputValue}
                 setInputValue={setInputValue}
-                isStreaming={isStreaming}
+                isStreaming={isStreaming} // Use derived state from isSending
                 selectedImages={selectedImages}
             />
              <ConfirmationDialog

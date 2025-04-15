@@ -1,6 +1,59 @@
 # Active Context
 
 ## Current Focus
+**Communication Mechanism Refactoring:** Implementing and standardizing the ReqRes (fetch initial state) + PubSub (subscribe updates, no initial state) pattern across the application using the new `createStore` utility.
+
+## Next Steps
+1.  **Implement Incremental PubSub Updates (Backend + Frontend):**
+    *   **Backend:** Modify `pushUpdate` logic to calculate and send JSON Patches (RFC 6902) instead of full state for relevant topics (especially `chatHistoryUpdate`). This requires adding sequence IDs (`seqId`) to messages and potentially versioning to states.
+    *   **Frontend:** Update the `handleUpdate` function within `createStore` (or specific store definitions) to correctly apply received JSON Patches to the current state.
+3.  **Enhance `createMutationStore` for Multi-Store Updates:**
+    *   Modify `createMutationStore` to optionally accept an array of `targetAtom` configurations.
+    *   Update `getOptimisticUpdate` and `applyMutationResult` to return/accept updates for multiple stores.
+    *   Update relevant mutation stores (e.g., `$createChat` might affect `$chatSessions` and potentially navigate the router) to utilize this.
+4.  **Implement Features Based on New Communication Model:**
+    *   Chat History Pagination (Scroll-to-load-more).
+    *   Manual Refresh button.
+    *   Connection Status Indicator & Disconnect/Reconnect Handling (including fetching delta updates).
+5.  **Testing (Manual):** Thoroughly test all refactored stores and communication flows.
+    *   Verify initial data loading via ReqRes.
+    *   Verify real-time updates via PubSub (full state push for now).
+    *   Verify mutation logic, including optimistic updates and error handling.
+    *   Verify dynamic stores (`$activeChatHistory`, `$activeChatSession`) correctly react to route changes.
+6.  **Implement Pub/Sub for Suggested Actions:** Replace temporary state in `ChatView.tsx`.
+7.  **Resume Image Upload:** Continue implementation.
+8.  **Compliance Review & VS Code Tool Enhancements:** As before.
+
+## Recent Changes (Communication Refactor, `createStore` Utility)
++ **Defined Standard Communication Pattern:** Established **ReqRes (fetch initial) + PubSub (subscribe updates, no initial state)** as the standard. Documented in `systemPatterns.md`.
++ **Created `createStore` Utility (`stores/utils/createStore.ts`):** Implemented a standardized utility for creating Nanostores that follow the new pattern, handling fetch, subscription, loading/error states, and dynamic parameters.
++ **Created Backend Handlers:** Added `GetChatSessionHandler`, `GetChatHistoryHandler`. Fixed `GetChatSessionsHandler`, `GetDefaultConfigHandler` response types.
++ **Refactored Core Stores:**
++   - `$chatSessions` (`chatStores.ts`): Refactored using `createStore`.
++   - `$defaultConfig` (`chatStores.ts`): Refactored using `createStore`, removed dependency on old `createFetcherStore`.
++   - `$activeChatSession` (`activeChatHistoryStore.ts`): Refactored to use ReqRes pattern (onMount + requestData).
++   - `$activeChatHistory` (`activeChatHistoryStore.ts`): Refactored using `createStore` with `dependsOn: [router]` for reactivity.
++ **Enhanced `createStore` Utility:** Added `dependsOn` option to handle reactivity for stores whose fetch/subscribe logic depends on other stores (like the router).
++ **Completed Store Refactoring:**
++   - `$providerStatus` (`providerStores.ts`): Refactored using `createStore`. Removed deprecated `$availableProvidersStore`.
++   - `$allToolsStatus` (`toolStores.ts`): Refactored using `createStore`.
++   - `$mcpStatus` (`mcpStores.ts`): Refactored using `createStore`.
++   - `$customInstructions` (`settingsStores.ts`): Refactored using `createStore`.
++ **Updated `createMutationStore`:** Modified to accept `StandardStore` (with 'loading'/'error' states) as `targetAtom` and handle these states in callbacks (including type fixes).
++ **Updated Mutation Store Callbacks (`chatStores.ts`, `providerStores.ts`, `toolStores.ts`, `mcpStores.ts`):** Adjusted `getOptimisticUpdate` and `applyMutationResult` to correctly handle the `loading`/'error' states of `StandardStore`.
++ **Updated `ChatView.tsx`:** Removed dependency on `$chatSessions`, uses `$activeChatSession` and `$activeChatHistory`, removed call to `setActiveChatIdAndSubscribe`, updated loading state checks.
++ **(Previous Refactoring - Communication Pattern, Initial `createStore`, Core Stores):** Remains relevant.
+
+## Active Decisions
++ **Communication Pattern:** **ReqRes (Fetch Initial) + PubSub (Subscribe Updates, No Initial State)** is the standard. PubSub currently pushes full state, aiming for incremental patches later.
++ **Store Creation Utility:** Use the enhanced **`createStore`** utility (`stores/utils/createStore.ts`) with `dependsOn` option for creating data stores following the standard pattern.
++ **State Management:** **Nanostores** is primary. `createStore` and `createMutationStore` are the standard utilities.
++ **Routing:** Using **`@nanostores/router`**.
++ **Dependencies for Stores:** Stores needing dynamic parameters handle this via dynamic `payload`/`topic` functions and the `dependsOn` option in `createStore`. Stores like `$activeChatSession` still use `onMount` for specific router change logic.
++ **(Previous decisions remain largely valid unless superseded above)**
+# Active Context
+
+## Current Focus
 **Nanostores Refactoring:** Completing the switch from Jotai/Custom Hooks to Nanostores for frontend state management. Removing obsolete Jotai atoms and ensuring UI components rely on local state or Nanostore derived state passed via props.
 
 ## Next Steps

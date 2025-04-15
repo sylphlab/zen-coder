@@ -1,37 +1,62 @@
 import { useStore } from '@nanostores/preact';
-import { ComponentChild } from 'preact'; // Import ComponentChild
+import { ComponentChild } from 'preact';
 import './app.css';
 import { SettingPage } from './pages/SettingPage';
 import { ChatListPage } from './pages/ChatListPage';
 import { ChatView } from './components/ChatView';
-import { router } from './stores/router'; // Import the Nanostores router
+import { router, $location } from './stores/router'; // Import router and $location
 
 // Removed useLocationSync import
 
 // --- App Component ---
 export function App() {
-    // Get the current page object from the router store
+    // Get the current router page object and location state
     const page = useStore(router);
+    const locationValue = useStore($location); // Track location state
 
-    // TODO: Implement initial location fetching and setting for the nanostore router
-    // This might involve a useEffect in App or main.tsx calling requestData('getLastLocation')
-    // and then router.open(fetchedLocation). For now, it might default to '/' or be blank.
-    // const { isLoading } = useSomeInitialLocationLoadingLogic(); // Placeholder
-    // if (isLoading) { return <div class="flex justify-center items-center h-screen">Initializing Location...</div>; }
+    // --- Loading and Error Handling ---
+    // Show loading indicator while initial location is being fetched
+    if (locationValue === 'loading') {
+        return (
+            <div class="flex justify-center items-center h-screen text-gray-500 dark:text-gray-400">
+                Initializing...
+            </div>
+        );
+    }
 
+    // Show error if location fetch failed
+    if (locationValue === 'error') {
+         return (
+             <div class="flex justify-center items-center h-screen text-red-500 dark:text-red-400">
+                 Error loading initial application state. Please check console or reload.
+             </div>
+         );
+    }
+
+    // --- Page Routing (only after location is loaded AND router state is initialized) ---
+    let CurrentPage: ComponentChild = null;
+
+    // Wait for the router 'page' object to be defined after location loads
+    if (!page) {
+         // Router state not yet initialized after location load
+         return (
+            <div class="flex justify-center items-center h-screen text-gray-500 dark:text-gray-400">
+                Initializing Router...
+            </div>
+        );
+    }
 
     // Determine which component to render based on the route name
-    let CurrentPage: ComponentChild = null; // Use imported ComponentChild type
-    if (page?.route === 'home') {
+    if (page.route === 'home') {
         CurrentPage = <ChatListPage />;
-    } else if (page?.route === 'chat' && page.params && page.params.chatId) { // Add check for page.params
+    } else if (page.route === 'chat' && page.params && page.params.chatId) {
         // Pass chatId as a prop, key forces re-render on ID change
         CurrentPage = <ChatView key={page.params.chatId} chatIdFromRoute={page.params.chatId} />;
-    } else if (page?.route === 'settings') {
+    } else if (page.route === 'settings') {
         CurrentPage = <SettingPage />;
     } else {
-        // Fallback for unknown routes or initial state before routing resolves
-        CurrentPage = <div class="p-6 text-center text-red-500">404: Page Not Found or Initializing<br/>Path: {page?.path ?? 'Unknown'}</div>;
+        // Fallback for unknown routes - now router state 'page' is guaranteed to be defined
+        CurrentPage = <div class="p-6 text-center text-red-500">404: Page Not Found<br/>Path: {page.path}</div>;
     }
 
     return (

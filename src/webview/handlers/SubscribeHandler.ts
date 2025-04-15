@@ -1,30 +1,32 @@
 import { RequestHandler, HandlerContext } from './RequestHandler';
 
+// Simplified Payload: Only topic is needed
 interface SubscribePayload {
     topic: string;
-    subscriptionId: string;
+    // subscriptionId is no longer sent/needed
 }
 
 export class SubscribeHandler implements RequestHandler {
     public readonly requestType = 'subscribe';
 
     public async handle(payload: SubscribePayload, context: HandlerContext): Promise<{ success: boolean }> {
-        const { topic, subscriptionId } = payload;
+        const { topic } = payload; // Destructure only topic
 
-        if (!topic || typeof topic !== 'string' || !subscriptionId || typeof subscriptionId !== 'string') {
+        // Validate only topic
+        if (!topic || typeof topic !== 'string') {
             console.error('[SubscribeHandler] Invalid payload:', payload);
-            throw new Error('Invalid payload for subscribe request.');
+            throw new Error('Invalid payload for subscribe request (missing or invalid topic).');
         }
 
-        console.log(`[SubscribeHandler] Handling subscription request for topic: ${topic}, ID: ${subscriptionId}`);
+        console.log(`[SubscribeHandler] Handling subscription request for topic: ${topic}`); // Removed ID log
 
         try {
-            // Delegate to AiService (or a dedicated SubscriptionManager)
-            await context.aiService.addSubscription(topic, subscriptionId);
-            console.log(`[SubscribeHandler] Subscription successful for topic: ${topic}, ID: ${subscriptionId}`);
+            // Call simplified AiService method
+            await context.aiService.addSubscription(topic); // Pass only topic
+            console.log(`[SubscribeHandler] Subscription successful for topic: ${topic}`); // Removed ID log
             return { success: true };
         } catch (error: any) {
-            console.error(`[SubscribeHandler] Error adding subscription for topic: ${topic}, ID: ${subscriptionId}:`, error);
+            console.error(`[SubscribeHandler] Error adding subscription for topic: ${topic}:`, error); // Removed ID log
             throw new Error(`Failed to subscribe to topic ${topic}: ${error.message}`);
         }
     }

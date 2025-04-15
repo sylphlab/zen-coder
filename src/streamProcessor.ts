@@ -121,25 +121,26 @@ export class StreamProcessor {
 
     private async _handleTextDelta(part: { textDelta: string }, chatId: string, assistantMessageId: string): Promise<void> {
         await this._historyManager.appendTextChunk(chatId, assistantMessageId, part.textDelta);
-        // Get the specific updated message and push it
-        const updatedMessage = await this._historyManager.getMessage(chatId, assistantMessageId);
-        if (updatedMessage) {
-            const topic = `chatMessageUpdate/${chatId}/${assistantMessageId}`; // More specific topic
-            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: updatedMessage } });
+        // Get the updated history for THIS specific chat
+        const updatedHistory = this._historyManager.getHistory(chatId); // Get UiMessage[]
+        if (updatedHistory) {
+            const topic = `chatHistoryUpdate/${chatId}`; // Use the new topic format
+            // Send the entire history array for the active chat
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: updatedHistory } });
         } else {
-             console.warn(`[StreamProcessor] Could not find message ${assistantMessageId} after text delta to push.`);
+             console.warn(`[StreamProcessor] Could not get history for chat ${chatId} after text delta to push.`);
         }
     }
 
     private async _handleToolCall(part: ToolCallPart, chatId: string, assistantMessageId: string): Promise<void> {
         await this._historyManager.addToolCall(chatId, assistantMessageId, part.toolCallId, part.toolName, part.args);
-        // Get the specific updated message and push it
-        const updatedMessage = await this._historyManager.getMessage(chatId, assistantMessageId);
-         if (updatedMessage) {
-            const topic = `chatMessageUpdate/${chatId}/${assistantMessageId}`; // More specific topic
-            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: updatedMessage } });
+        // Get the updated history for THIS specific chat
+        const updatedHistory = this._historyManager.getHistory(chatId);
+        if (updatedHistory) {
+            const topic = `chatHistoryUpdate/${chatId}`; // Use the new topic format
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: updatedHistory } });
         } else {
-             console.warn(`[StreamProcessor] Could not find message ${assistantMessageId} after tool call to push.`);
+             console.warn(`[StreamProcessor] Could not get history for chat ${chatId} after tool call to push.`);
         }
     }
 
@@ -154,15 +155,14 @@ export class StreamProcessor {
     }
 
     private async _handleToolResult(part: ToolResultPart, chatId: string): Promise<void> {
-        await this._historyManager.updateToolStatus(chatId, part.toolCallId, 'complete', part.result); // Use updateToolStatus
-        // Get the specific updated message (containing the tool result) and push it
-        // Need to find the message ID associated with the tool call ID
-        const assistantMessage = await this._historyManager.findMessageByToolCallId(chatId, part.toolCallId);
-        if (assistantMessage) {
-            const topic = `chatMessageUpdate/${chatId}/${assistantMessage.id}`; // More specific topic
-            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: assistantMessage } });
+        await this._historyManager.updateToolStatus(chatId, part.toolCallId, 'complete', part.result);
+        // Get the updated history for THIS specific chat
+        const updatedHistory = this._historyManager.getHistory(chatId);
+         if (updatedHistory) {
+            const topic = `chatHistoryUpdate/${chatId}`; // Use the new topic format
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: updatedHistory } });
         } else {
-             console.warn(`[StreamProcessor] Could not find message for tool call ${part.toolCallId} after tool result to push.`);
+             console.warn(`[StreamProcessor] Could not get history for chat ${chatId} after tool result to push.`);
         }
     }
 

@@ -1,27 +1,36 @@
-import { AllToolsStatusInfo, ToolCategoryInfo } from '../../../src/common/types'; // Added ToolCategoryInfo
-import { createFetcherStore } from './utils/createFetcherStore';
-
-/**
- * Atom that fetches and subscribes to the status of all tools (standard and MCP).
- * It holds `AllToolsStatusInfo | null`. Null indicates the initial loading state.
- */
-export const $allToolsStatus = createFetcherStore<AllToolsStatusInfo | null>(
-  'allToolsStatusUpdate', // Topic to listen for updates
-  'getAllToolsStatus',    // Request type for initial fetch
-  {
-    initialData: null, // Start with null
-    // No transformer needed as the fetch response is the correct type
-  }
-);
-
-// --- Mutation Store for Tool Authorization ---
-import { WritableAtom } from 'nanostores'; // Import WritableAtom for targetAtom type
-import { createMutationStore, OptimisticUpdateResult } from './utils/createMutationStore'; // Import OptimisticUpdateResult
-import { ToolAuthorizationConfig } from '../../../src/common/types';
+import { AllToolsStatusInfo, ToolCategoryInfo, ToolAuthorizationConfig, CategoryStatus, ToolStatus } from '../../../src/common/types';
+// Removed createFetcherStore import
+import { StandardStore, createStore } from './utils/createStore'; // Import createStore and StandardStore
+import { WritableAtom } from 'nanostores';
+import { createMutationStore, OptimisticUpdateResult } from './utils/createMutationStore';
 import { requestData } from '../utils/communication';
-import { CategoryStatus, ToolStatus } from '../../../src/common/types';
+// Removed duplicate imports for ToolAuthorizationConfig, CategoryStatus, ToolStatus
 
 type SetToolAuthPayload = { config: Partial<ToolAuthorizationConfig> };
+
+// --- $allToolsStatus Store (Refactored using createStore) ---
+export const $allToolsStatus: StandardStore<AllToolsStatusInfo> = createStore<
+    AllToolsStatusInfo, // TData: The data structure held by the store
+    AllToolsStatusInfo, // TResponse: Raw fetch response type
+    {},                 // PPayload: Fetch takes no payload
+    AllToolsStatusInfo  // UUpdateData: PubSub pushes the full structure
+>({
+    key: 'allToolsStatus',
+    fetch: {
+        requestType: 'getAllToolsStatus',
+        // No payload or transform needed
+    },
+    subscribe: {
+        topic: 'allToolsStatusUpdate',
+        handleUpdate: (currentData, updateData) => {
+            // Update comes as the full AllToolsStatusInfo structure or null
+            // Ensure [] is returned if updateData is null
+            console.log(`[$allToolsStatus handleUpdate] Received update. Data: ${updateData ? 'array' : 'null'}`);
+            return updateData ?? [];
+        }
+    },
+    initialData: null, // Explicitly null, createStore handles 'loading'
+});
 
 // Helper to resolve tool status based on override and category status
 const resolveToolStatus = (toolOverride: ToolStatus, categoryStatus: CategoryStatus): CategoryStatus => {
@@ -36,32 +45,40 @@ const resolveToolStatus = (toolOverride: ToolStatus, categoryStatus: CategorySta
     }
 };
 
-// Define the type for the target atom explicitly
-type TargetAtomType = WritableAtom<AllToolsStatusInfo | null>;
+// Define the type for the target atom explicitly using StandardStore
+type TargetAtomType = StandardStore<AllToolsStatusInfo>;
 
 export const $setToolAuthorization = createMutationStore<
   TargetAtomType, // Use the explicit type for the target atom
-  AllToolsStatusInfo | null,
+  AllToolsStatusInfo, // TData matches StandardStore's data type
   SetToolAuthPayload,
   void // Assuming no return value needed
 >({
-  targetAtom: $allToolsStatus,
+  targetAtom: $allToolsStatus, // Target the new store
   performMutation: async (payload: SetToolAuthPayload) => {
     await requestData<void>('setToolAuthorization', payload);
     // Backend push via $allToolsStatus subscription will eventually confirm/correct state
   },
-  // `getOptimisticUpdate` receives the payload and current state,
+  // `getOptimisticUpdate` receives the payload and current state (which can be loading/error/null/TData),
   // and returns the { optimisticState, revertState } object directly.
-  getOptimisticUpdate: (payload: SetToolAuthPayload, currentData: AllToolsStatusInfo | null): OptimisticUpdateResult<AllToolsStatusInfo | null> => {
-    if (!currentData) {
-      // console.warn('[Optimistic Update] No current tool status data to update.'); // Removed log
-      return { optimisticState: null, revertState: null }; // Return the required structure
+  // The type OptimisticUpdateResult<TData> expects TData for optimisticState/revertState.
+  getOptimisticUpdate: (payload: SetToolAuthPayload, currentState: AllToolsStatusInfo | null | 'loading' | 'error'): OptimisticUpdateResult<AllToolsStatusInfo> => {
+    // Check if currentState is actually the data type
+    if (currentState === 'loading' || currentState === 'error' || currentState === null) {
+      // Can't perform a meaningful optimistic update. Return the original non-data state
+      // cast appropriately if needed, but ideally, the mutation store handles this.
+      // For type safety, we return an empty array as a placeholder TData,
+      // knowing the revert state will handle restoration if needed,
+      // though realistically no update happens in this path.
+      const placeholderState: AllToolsStatusInfo = [];
+      return { optimisticState: placeholderState, revertState: placeholderState };
     }
+    // Now TypeScript knows currentState is AllToolsStatusInfo
+    const currentData = currentState;
 
     // Store original state for revert - ensure deep clone
-    const revertState = JSON.parse(JSON.stringify(currentData));
+    const revertState = JSON.parse(JSON.stringify(currentData)) as AllToolsStatusInfo; // Type is AllToolsStatusInfo
 
-    // console.log('[Optimistic Update] Applying update for setToolAuthorization:', payload); // Removed log
     const newAuthConfig = payload.config;
     // Deep clone the current data to create the next state
     const nextData: AllToolsStatusInfo = JSON.parse(JSON.stringify(currentData));
@@ -122,8 +139,13 @@ export const $setToolAuthorization = createMutationStore<
 
     // console.log('[Optimistic Update] Finished applying optimistic update. Final nextData:', JSON.stringify(nextData).substring(0, 500) + '...'); // Removed log
     // Return the required structure { optimisticState, revertState }
-    return { optimisticState: nextData, revertState: revertState };
+    return { optimisticState: nextData, revertState }; // Both are AllToolsStatusInfo type
   },
+   applyMutationResult: (result: void, currentState: AllToolsStatusInfo | null | 'loading' | 'error') => {
+       // Type expected: TData | null = AllToolsStatusInfo | null
+       // Return the current state only if it's data, otherwise null.
+       return currentState !== 'loading' && currentState !== 'error' && currentState !== null ? currentState : null;
+   }
 });
 
 // Potential future atoms related to tools can be added here.
