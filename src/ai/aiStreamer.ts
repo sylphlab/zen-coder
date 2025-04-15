@@ -17,6 +17,7 @@ export class AiStreamer {
     private readonly configResolver: ConfigResolver; // Add ConfigResolver instance
     private readonly context: vscode.ExtensionContext;
     private activeAbortController: AbortController | null = null;
+    private _activeChatId: string | null = null; // Store chatId for active stream
 
     constructor(
         context: vscode.ExtensionContext,
@@ -162,9 +163,11 @@ export class AiStreamer {
         }
         // --- End Abort ---
 
-        // Create a new controller for the current stream
+        // Create a new controller and store associated chatId for the current stream
         this.activeAbortController = new AbortController();
+        this._activeChatId = chatId; // Store the chatId
         const abortSignal = this.activeAbortController.signal;
+        console.log(`[AiStreamer] Stored active chatId: ${this._activeChatId}`);
 
         try {
             console.log(`[AiStreamer] Starting streamText for chat ${chatId} with model ${effectiveProviderId}/${effectiveModelId}`);
@@ -177,8 +180,13 @@ export class AiStreamer {
                 experimental_continueSteps: true,
                 onFinish: ({ finishReason, usage }) => {
                     console.log(`[AiStreamer] streamText finished for chat ${chatId}. Reason: ${finishReason}, Usage: ${JSON.stringify(usage)}`);
+                    // Clear active state ONLY if this is the stream that just finished
                     if (this.activeAbortController?.signal === abortSignal) {
                         this.activeAbortController = null;
+                        this._activeChatId = null;
+                        console.log(`[AiStreamer] Cleared active controller and chatId for finished stream.`);
+                    } else {
+                         console.log(`[AiStreamer onFinish] Signal mismatch, not clearing active controller/chatId.`);
                     }
                 },
                 experimental_repairToolCall: async ({ toolCall, tools, messages, system, error }: any) => {
@@ -215,8 +223,13 @@ export class AiStreamer {
             } else {
                 vscode.window.showErrorMessage(`與 AI 互動時出錯: ${error.message}`);
             }
+            // Clear active state ONLY if this error belongs to the currently tracked stream
             if (this.activeAbortController?.signal === abortSignal) {
                 this.activeAbortController = null;
+                 this._activeChatId = null;
+                 console.log(`[AiStreamer] Cleared active controller and chatId after stream error.`);
+            } else {
+                 console.log(`[AiStreamer Error Catch] Signal mismatch, not clearing active controller/chatId.`);
             }
             throw error;
         }
@@ -224,15 +237,22 @@ export class AiStreamer {
 
     /**
      * Aborts the currently active AI response stream, if any.
+     * Returns the chatId of the aborted stream if successful, otherwise null.
      */
-    public abortCurrentStream(): void {
-        if (this.activeAbortController) {
-            console.log('[AiStreamer] Aborting current AI stream...');
+    public abortCurrentStream(): string | null { // Make synchronous and return string | null
+        let chatIdToSave: string | null = null; // Initialize chatIdToSave
+        if (this.activeAbortController && this._activeChatId) {
+            chatIdToSave = this._activeChatId; // Capture chatId before nullifying
+            console.log(`[AiStreamer] Aborting current AI stream for chat ${chatIdToSave}...`);
             this.activeAbortController.abort('User requested cancellation');
-            this.activeAbortController = null; // Clear immediately after aborting
+            this.activeAbortController = null;
+            this._activeChatId = null; // Clear immediately after capturing
             console.log('[AiStreamer] Stream aborted by user request.');
+            // Save is now handled by the caller (AiService) using the returned chatId
         } else {
-            console.warn('[AiStreamer] Attempted to abort stream, but no active stream found.');
+            console.warn(`[AiStreamer] Attempted to abort stream, but no active stream or chatId found (Controller: ${!!this.activeAbortController}, ChatId: ${this._activeChatId}).`);
+            chatIdToSave = null; // Ensure null is returned if no active stream
         }
+        return chatIdToSave; // Return the captured chatId or null
     }
 }

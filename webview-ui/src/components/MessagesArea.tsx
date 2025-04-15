@@ -1,132 +1,226 @@
 import { FunctionalComponent } from 'preact';
-import { Ref } from 'preact';
-// Restore markdown/syntax highlighting imports
+// Add UiMessageContentPart, remove unused UiTextMessagePart
+import { UiMessage, SuggestedAction, UiToolCallPart, UiImagePart, UiMessageContentPart } from '../../../src/common/types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { SuggestedAction, UiMessage, UiMessageContentPart, UiToolCallPart, UiTextMessagePart, UiImagePart } from '../../../src/common/types';
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { ClipboardIcon, TrashIcon, ArrowPathIcon } from '@heroicons/react/24/outline'; // Use outline icons
+import { memo } from 'preact/compat'; // Import memo for optimization
 
-interface MessagesAreaProps {
-    messages: UiMessage[];
-    suggestedActionsMap: Record<string, SuggestedAction[]>;
-    isStreaming: boolean;
-    handleSuggestedActionClick: (action: SuggestedAction) => void;
-    messagesEndRef: Ref<HTMLDivElement>;
-    onCopyMessage: (messageId: string) => void;
-    onDeleteMessage: (messageId: string) => void;
-    className?: string;
+// --- Component Types ---
+
+interface MessageContentPartProps {
+  part: UiMessageContentPart; // Use the imported type
+  isStreaming?: boolean; // Indicate if the message part is being streamed
 }
 
-// Restore original renderContentPart
-const renderContentPart = (part: UiMessageContentPart, index: number) => {
+interface MessageProps {
+  message: UiMessage;
+  isStreaming?: boolean; // Added to MessageProps
+  suggestedActions: SuggestedAction[] | undefined;
+  handleSuggestedActionClick: (action: SuggestedAction) => void;
+  onCopy: (messageId: string) => void;
+  onDelete: (messageId: string) => void;
+}
+
+export interface MessagesAreaProps {
+  messages: UiMessage[];
+  suggestedActionsMap: { [messageId: string]: SuggestedAction[] | undefined };
+  isStreaming: boolean; // Overall streaming status
+  handleSuggestedActionClick: (action: SuggestedAction) => void;
+  messagesEndRef: preact.RefObject<HTMLDivElement>;
+  onCopyMessage: (messageId: string) => void;
+  onDeleteMessage: (messageId: string) => void;
+  className?: string;
+}
+
+// --- Helper Components ---
+
+// Memoized component for rendering code blocks
+const CodeBlock: FunctionalComponent<{ language: string | undefined; children: string }> = memo(({ language, children }) => {
+    return (
+        <SyntaxHighlighter
+            style={oneDark as any} // Cast needed due to potential style type mismatch
+            language={language || 'text'}
+            PreTag="div"
+        >
+            {String(children).replace(/\n$/, '')}
+        </SyntaxHighlighter>
+    );
+});
+
+// Component for rendering Tool Calls
+const ToolCallPart: FunctionalComponent<{ part: UiToolCallPart }> = ({ part }) => {
+    let statusIndicator = '';
+    if (part.status === 'pending' || part.status === 'running') {
+        statusIndicator = ' (Running...)';
+    } else if (part.status === 'error') {
+        statusIndicator = ' (Error)';
+    } else if (part.status === 'complete') {
+        statusIndicator = ' (Completed)';
+    }
+
+    return (
+        <div class="my-2 p-3 border border-gray-300 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-700">
+            <p class="font-semibold text-sm text-gray-600 dark:text-gray-300">
+                <ArrowPathIcon class="inline-block w-4 h-4 mr-1 animate-spin" /> Tool Call: {part.toolName}{statusIndicator}
+            </p>
+            <pre class="text-xs mt-1 whitespace-pre-wrap"><code>{JSON.stringify(part.args, null, 2)}</code></pre>
+            {part.result && part.status === 'complete' && (
+                 <pre class="text-xs mt-1 pt-1 border-t border-gray-200 dark:border-gray-500 whitespace-pre-wrap"><code>Result: {JSON.stringify(part.result, null, 2)}</code></pre>
+            )}
+             {part.result && part.status === 'error' && (
+                 <pre class="text-xs mt-1 pt-1 border-t border-red-200 dark:border-red-500 text-red-600 dark:text-red-400 whitespace-pre-wrap"><code>Error: {JSON.stringify(part.result, null, 2)}</code></pre>
+            )}
+        </div>
+    );
+};
+
+// Component for rendering Images
+const ImagePart: FunctionalComponent<{ part: UiImagePart }> = ({ part }) => {
+     // Check if data is Base64 or Data URI
+     const src = part.data.startsWith('data:') ? part.data : `data:${part.mediaType};base64,${part.data}`;
+    return (
+        <div class="my-2">
+             <img src={src} alt="Uploaded content" class="max-w-xs max-h-64 rounded" />
+        </div>
+    );
+};
+
+// Component to render individual content parts
+const MessageContentPart: FunctionalComponent<MessageContentPartProps> = ({ part }) => {
     switch (part.type) {
         case 'text':
-             return (
-                 <div key={`text-${index}`} className="prose dark:prose-invert prose-sm max-w-none">
-                      <ReactMarkdown
-                         // Add key based on text content to force re-render on change
-                         key={`md-${index}-${part.text.slice(-20)}`} // Use index and part of text
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                              code({ node, className, children, ...props }) {
-                                 const match = /language-(\w+)/.exec(String(className || ''));
-                                 const language = match ? match[1] : undefined;
-                                 const codeText = String(children).replace(/\n$/, '');
-
-                                 return language ? (
-                                     <SyntaxHighlighter
-                                         style={vscDarkPlus as any}
-                                         language={language}
-                                         PreTag="div"
-                                         // @ts-ignore
-                                         {...props}
-                                     >
-                                         {codeText}
-                                     </SyntaxHighlighter>
-                                 ) : (
-                                     <code className={className} {...props}>
-                                         {children}
-                                     </code>
-                                 );
-                             }
-                         }}
-                     >
-                         {part.text}
-                     </ReactMarkdown>
-                </div>
+            return (
+                <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw]} // Allows rendering HTML within Markdown
+                    components={{
+                        code({ node, inline, className, children, ...props }: any) {
+                            const match = /language-(\w+)/.exec(className || '');
+                            return !inline && match ? (
+                                <CodeBlock language={match[1]} {...props}>
+                                    {String(children)}
+                                </CodeBlock>
+                            ) : (
+                                <code className={className} {...props}>
+                                    {children}
+                                </code>
+                            );
+                        },
+                        // Add custom renderers if needed (e.g., for tables, links)
+                    }}
+                >
+                    {part.text}
+                </ReactMarkdown>
             );
-        case 'image':
-             return (
-                 <img
-                     key={`image-${index}`}
-                     src={`data:${part.mediaType};base64,${part.data}`}
-                     alt="User uploaded content"
-                     class="max-w-full h-auto rounded my-2" // Restored original size
-                 />
-             );
         case 'tool-call':
-             let statusText = `[${part.toolName} requested...]`;
-             let statusClass = "bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300";
-             if (part.status === 'pending') { statusText = `[${part.toolName} pending...]`; statusClass = "bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-100"; }
-             else if (part.status === 'running') { statusText = `[${part.toolName} ${part.progress ?? ''} running...]`; statusClass = "bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-100 animate-pulse"; }
-             else if (part.status === 'complete') { let res = part.result !== undefined ? JSON.stringify(part.result) : 'Completed'; if (res?.length > 100) res = res.substring(0, 97) + '...'; statusText = `[${part.toolName} completed. Result: ${res}]`; statusClass = "bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-100"; }
-             else if (part.status === 'error') { statusText = `[${part.toolName} failed. Error: ${part.result ?? 'Unknown'}]`; statusClass = "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-100"; }
-             const argsString = JSON.stringify(part.args, null, 2);
-             return ( <div key={part.toolCallId || `tool-${index}`} class={`tool-call-summary block my-1 p-2 rounded text-xs font-mono ${statusClass}`}> <div>{statusText}</div> <details class="mt-1"> <summary class="cursor-pointer text-gray-500 dark:text-gray-400 text-xs">Arguments</summary> <pre class="mt-1 text-xs whitespace-pre-wrap break-words">{argsString}</pre> </details> </div> );
+            return <ToolCallPart part={part} />;
+        case 'image':
+            return <ImagePart part={part} />;
         default:
-             console.warn("Encountered unknown content part type:", (part as any)?.type);
+            console.warn("Unknown message part type:", part);
             return null;
     }
 };
 
+// --- Main Message Component ---
+
+const Message: FunctionalComponent<MessageProps> = memo(({ message, isStreaming, suggestedActions, handleSuggestedActionClick, onCopy, onDelete }) => {
+    const isUser = message.role === 'user';
+    const isAssistant = message.role === 'assistant';
+    const isPending = isAssistant && message.status === 'pending'; // Check for pending status
+
+    const handleCopy = () => onCopy(message.id);
+    const handleDelete = () => onDelete(message.id);
+
+    console.log(`[Message Render] ID: ${message.id}, Role: ${message.role}, Status: ${message.status}, isStreaming: ${isStreaming}, isPending: ${isPending}, Content Parts: ${message.content?.length ?? 0}`);
+
+
+    return (
+        <div class={`flex mb-4 ${isUser ? 'justify-end' : ''}`}>
+            <div class={`p-3 rounded-lg max-w-xl lg:max-w-2xl xl:max-w-3xl ${isUser ? 'bg-blue-100 dark:bg-blue-900' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                 {/* Display Loading Indicator if pending */}
+                 {isPending ? (
+                     <div class="flex items-center space-x-2 text-gray-500 dark:text-gray-400">
+                          <ArrowPathIcon class="animate-spin h-4 w-4" />
+                          <span>Thinking...</span>
+                     </div>
+                 ) : (
+                      /* Render actual content if not pending */
+                      Array.isArray(message.content) && message.content.map((part, index) => (
+                           <MessageContentPart key={index} part={part} isStreaming={isStreaming && index === message.content.length - 1} />
+                      ))
+                 )}
+
+                {/* Actions (Copy/Delete) - Show only for non-pending messages */}
+                {!isPending && (
+                     <div class="flex justify-end space-x-2 mt-2 opacity-50 group-hover:opacity-100 transition-opacity duration-150">
+                         <button onClick={handleCopy} class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600" title="Copy">
+                             <ClipboardIcon class="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                         </button>
+                         <button onClick={handleDelete} class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600" title="Delete">
+                             <TrashIcon class="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                         </button>
+                     </div>
+                )}
+                {/* Suggested Actions - Show only for the last assistant message when not streaming and not pending */}
+                 {!isUser && !isStreaming && !isPending && suggestedActions && suggestedActions.length > 0 && (
+                     <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 flex flex-wrap gap-2">
+                         {suggestedActions.map((action, index) => (
+                             <button
+                                 key={index}
+                                 onClick={() => handleSuggestedActionClick(action)}
+                                 class="text-xs bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 py-1 px-2 rounded"
+                             >
+                                 {action.label}
+                             </button>
+                         ))}
+                     </div>
+                 )}
+            </div>
+        </div>
+    );
+});
+
+// --- Messages Area Component ---
 
 export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
+    messages,
+    suggestedActionsMap,
+    isStreaming,
     handleSuggestedActionClick,
     messagesEndRef,
     onCopyMessage,
     onDeleteMessage,
-    messages,
-    suggestedActionsMap,
-    isStreaming,
     className
 }) => {
-    // Enhanced logging
-    console.log(`[MessagesArea Render] Rendering. Messages count: ${messages?.length ?? 'undefined/null'}.`);
-    if (messages && messages.length > 0) {
-        console.log(`[MessagesArea Render] Last message ID: ${messages[messages.length - 1]?.id}, Role: ${messages[messages.length - 1]?.role}`);
-    } else if (messages) {
-        console.log(`[MessagesArea Render] Messages array is empty.`);
-    } else {
-        console.log(`[MessagesArea Render] Messages prop is null or undefined.`);
-    }
-
+    console.log(`[MessagesArea Render] Rendering. Messages count: ${messages.length}.`);
+    const lastMessage = messages[messages.length - 1];
+    console.log(`[MessagesArea Render] Last message ID: ${lastMessage?.id}, Role: ${lastMessage?.role}`);
 
     return (
-        <div class={`messages-area flex-1 overflow-y-auto p-4 space-y-4 ${className ?? ''}`}>
-            {messages.map((msg) => (
-                <div key={msg.id} class={`message group relative flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {/* Action buttons */}
-                    <div class={`message-actions absolute top-0 mx-1 flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${msg.role === 'user' ? 'right-full mr-1' : 'left-full ml-1'}`}>
-                        <button onClick={() => onCopyMessage(msg.id)} title="Copy Message" class="p-1 rounded bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200"> <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /> </svg> </button>
-                        <button onClick={() => onDeleteMessage(msg.id)} title="Delete Message" class="p-1 rounded bg-red-200 dark:bg-red-800 hover:bg-red-300 dark:hover:bg-red-700 text-red-700 dark:text-red-200"> <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"> <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /> </svg> </button>
-                    </div>
-                    {/* Message content */}
-                    <div class={`message-content p-3 rounded-lg max-w-xs md:max-w-md lg:max-w-lg ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`}>
-                        {Array.isArray(msg.content) ? msg.content.map(renderContentPart) : null}
-                        {/* Suggested Actions */}
-                        {msg.role === 'assistant' && suggestedActionsMap[msg.id] && (
-                            <div class="suggested-actions mt-2 pt-2 border-t border-gray-300 dark:border-gray-600 flex flex-wrap gap-2">
-                                {suggestedActionsMap[msg.id].map((action, actionIndex) => (
-                                    <button key={actionIndex} onClick={() => handleSuggestedActionClick(action)} disabled={isStreaming} class="px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed">
-                                        {action.label}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            ))}
+        <div class={`p-4 ${className || ''}`}>
+            {messages.map((msg) => {
+                 const isLastMessage = msg.id === lastMessage?.id;
+                // Only pass suggested actions to the last assistant message
+                 const actionsForThisMessage = (isLastMessage && msg.role === 'assistant') ? suggestedActionsMap[msg.id] : undefined;
+
+                return (
+                     <Message
+                         key={msg.id}
+                         message={msg}
+                         // Pass overall streaming status only if it's the last message
+                         isStreaming={isStreaming && isLastMessage}
+                         suggestedActions={actionsForThisMessage}
+                         handleSuggestedActionClick={handleSuggestedActionClick}
+                         onCopy={onCopyMessage}
+                         onDelete={onDeleteMessage}
+                     />
+                 );
+            })}
             <div ref={messagesEndRef} />
         </div>
     );

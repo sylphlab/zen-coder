@@ -3,6 +3,7 @@ import { AiService } from './aiService'; // Import AiService to access its metho
 import { HistoryManager } from '../historyManager';
 import { ProviderStatusManager } from './providerStatusManager';
 import { ToolManager } from './toolManager';
+import { SUGGESTED_ACTIONS_TOPIC_PREFIX, SuggestedActionsPayload, ProviderInfoAndStatus, AllToolsStatusInfo, DefaultChatConfig } from '../common/types'; // Import necessary types
 
 /**
  * Manages subscriptions from the webview and pushes updates.
@@ -35,12 +36,10 @@ export class SubscriptionManager {
         if (!this._activeTopics.has(topic)) {
             this._activeTopics.add(topic);
             console.log(`[SubscriptionManager] Topic '${topic}' is now active.`);
-            // Potentially start background processes based on topic here if needed
         } else {
             console.log(`[SubscriptionManager] Topic '${topic}' was already active.`);
         }
         console.log(`[SubscriptionManager] Active topics: ${Array.from(this._activeTopics).join(', ')}`);
-        // Initial state is fetched via requestData by the frontend's createStore.
     }
 
     /**
@@ -51,7 +50,6 @@ export class SubscriptionManager {
         if (this._activeTopics.has(topic)) {
             this._activeTopics.delete(topic);
             console.log(`[SubscriptionManager] Topic '${topic}' is now inactive.`);
-            // Potentially stop background processes based on topic here if needed
         } else {
             console.warn(`[SubscriptionManager] Attempted to unsubscribe from inactive topic: ${topic}`);
         }
@@ -62,25 +60,24 @@ export class SubscriptionManager {
      * Checks if a topic is currently active (i.e., the webview is subscribed).
      */
     public hasSubscription(topic: string): boolean {
+        if (topic.startsWith(SUGGESTED_ACTIONS_TOPIC_PREFIX)) {
+            return this._activeTopics.has(topic);
+        }
         return this._activeTopics.has(topic);
     }
 
     // --- Notification Helpers ---
-    // These methods fetch the latest data (using the AiService getter)
-    // and push it to the webview if the relevant topic is active.
 
     public async notifyProviderStatusChange(): Promise<void> {
-        const topic = 'providerStatus'; // Standard topic name used by frontend store
+        const topic = 'providerStatusUpdate'; // Consistent topic name
         if (this.hasSubscription(topic)) {
             try {
                 const aiService = this._aiServiceGetter();
-                // Access necessary managers/data via AiService instance and its providerManager
                 const latestStatus = await aiService.providerStatusManager.getProviderStatus(
-                    aiService.providerManager.allProviders, // Use providerManager
-                    aiService.providerManager.providerMap      // Use providerManager
+                    aiService.providerManager.allProviders,
+                    aiService.providerManager.providerMap
                 );
-                 // Wrap in payload as expected by the specific store ($providerStatus)
-                const dataToSend = { payload: latestStatus };
+                const dataToSend = latestStatus; // Send array directly
                 console.log('[SubscriptionManager] Pushing providerStatus update.');
                 this._postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: dataToSend } });
             } catch (error) {
@@ -89,12 +86,12 @@ export class SubscriptionManager {
         }
     }
 
+
     public async notifyToolStatusChange(): Promise<void> {
-        const topic = 'allToolsStatusUpdate'; // Standard topic name used by frontend store
+        const topic = 'allToolsStatusUpdate';
         if (this.hasSubscription(topic)) {
             try {
                 const aiService = this._aiServiceGetter();
-                // Delegate fetching the status info to AiService -> ToolManager
                 const latestStatusInfo = await aiService.getResolvedToolStatusInfo();
                 console.log('[SubscriptionManager] Pushing tool status update.');
                 this._postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: latestStatusInfo } });
@@ -105,7 +102,7 @@ export class SubscriptionManager {
     }
 
     public async notifyDefaultConfigChange(): Promise<void> {
-        const topic = 'defaultConfig'; // Standard topic name used by frontend store
+        const topic = 'defaultConfigUpdate';
         if (this.hasSubscription(topic)) {
             try {
                 const aiService = this._aiServiceGetter();
@@ -119,12 +116,11 @@ export class SubscriptionManager {
     }
 
     public async notifyCustomInstructionsChange(): Promise<void> {
-        const topic = 'customInstructions'; // Standard topic name used by frontend store
+        const topic = 'customInstructionsUpdate';
         if (this.hasSubscription(topic)) {
             try {
                 const aiService = this._aiServiceGetter();
                 const latestInstructions = await aiService.getCombinedCustomInstructions();
-                // Log the data structure being pushed
                 console.log('[SubscriptionManager] Fetched latest instructions for push:', JSON.stringify(latestInstructions, null, 2));
                 console.log('[SubscriptionManager] Pushing customInstructions update.');
                 this._postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: latestInstructions } });
@@ -134,11 +130,6 @@ export class SubscriptionManager {
         }
     }
 
-    // Note: McpManager pushes its own status updates via the callback passed during its construction in AiService.
-    // SubscriptionManager doesn't need to handle mcpStatus notifications directly, but AiService might
-    // want to check hasSubscription('mcpStatus') before passing the callback or forwarding the message.
-
-    // Add methods for other push updates if needed (e.g., chat sessions, chat history)
     public notifyChatSessionsUpdate(sessionsData: any): void {
         const topic = 'chatSessionsUpdate';
         if (this.hasSubscription(topic)) {
@@ -152,6 +143,20 @@ export class SubscriptionManager {
         if (this.hasSubscription(topic)) {
             console.log(`[SubscriptionManager] Pushing ${topic}.`);
             this._postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: historyData } });
+        }
+    }
+
+    /**
+     * Pushes suggested actions updates to the webview for a specific chat.
+     * @param payload - The SuggestedActionsPayload containing the actions or clear instruction.
+     */
+    public notifySuggestedActionsUpdate(payload: SuggestedActionsPayload): void {
+        const topic = `${SUGGESTED_ACTIONS_TOPIC_PREFIX}${payload.chatId}`;
+        if (this.hasSubscription(topic)) {
+            console.log(`[SubscriptionManager] Pushing ${topic}. Action Type: ${payload.type}`);
+            this._postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: payload } });
+        } else {
+             console.log(`[SubscriptionManager] No active subscription for ${topic}, skipping suggested actions push.`);
         }
     }
 

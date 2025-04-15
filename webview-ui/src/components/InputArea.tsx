@@ -10,7 +10,7 @@ export interface SelectedImage { // Ensure this is exported
     name: string;
 }
 
-interface InputAreaProps {
+export interface InputAreaProps {
     // State props passed down from parent (ChatView)
     inputValue: string;
     setInputValue: (value: string) => void;

@@ -1,126 +1,148 @@
+// Stores related to settings page (API keys, provider enablement, etc.)
+
+import { DefaultChatConfig, ToolAuthorizationConfig } from '../../../src/common/types'; // Import required types - Removed CombinedCustomInstructions
+import { createStore, StandardStore } from './utils/createStore';
+import { createMutationStore } from './utils/createMutationStore';
 import { requestData } from '../utils/communication';
-// Removed createFetcherStore import
-import { StandardStore, createStore } from './utils/createStore'; // Import createStore and StandardStore
+// Removed incorrect import: import { GetCustomInstructionsResponse } from '../../../src/webview/handlers/GetCustomInstructionsHandler';
 
-/**
- * Define the shape of the custom instructions data
- */
-type CustomInstructionsData = { global: string; project: string | null; projectPath: string | null };
+// --- Custom Instructions Store ---
 
-/**
- * Represents the raw payload pushed via updates (if different from fetch).
- * Assuming updates push { payload: CustomInstructionsData | null }
- */
-type CustomInstructionsUpdatePayload = { payload: CustomInstructionsData | null }; // Keep for update type checking if needed, but fetch is direct
+// Type for the update payload pushed via PubSub
+type CustomInstructionsUpdatePayload = {
+    global?: string;
+    project?: string;
+    projectPath?: string | null;
+};
 
-/**
- * Store that fetches and subscribes to custom instructions (global and project).
- * Holds CustomInstructionsData | null | 'loading' | 'error'.
- */
-export const $customInstructions: StandardStore<CustomInstructionsData> = createStore<
-    CustomInstructionsData,           // TData: The data structure held by the store
-    CustomInstructionsData,           // TResponse: Raw fetch response type
-    {},                               // PPayload: Fetch takes no payload
-    CustomInstructionsData | null     // UUpdateData: Backend pushes the data directly
+export const $customInstructions: StandardStore<CustomInstructionsUpdatePayload> = createStore<
+    CustomInstructionsUpdatePayload, // TData
+    CustomInstructionsUpdatePayload, // TResponse (Use the same type as TData/UUpdateData, as the handler returns this structure)
+    {},                       // PPayload (no payload)
+    CustomInstructionsUpdatePayload // UUpdateData (backend pushes the full object)
 >({
     key: 'customInstructions',
     fetch: {
         requestType: 'getCustomInstructions',
-        // No payload or transform needed
+        transformResponse: (response) => response ?? { global: '', project: undefined, projectPath: null }, // Default if null
     },
     subscribe: {
-        topic: 'customInstructions',
-        handleUpdate: (currentData, updateData: CustomInstructionsData | null) => {
-             // Backend pushes CustomInstructionsData | null directly.
-            console.log('[$customInstructions handleUpdate] Received updateData:', updateData);
-            // Return the received data (or null if that's what was pushed)
-            return updateData;
-        }
+        topic: () => 'customInstructionsUpdate', // Static topic
+        handleUpdate: (_currentState, updateData) => updateData, // Update is the new state
     },
-    initialData: null // Explicitly null, createStore handles 'loading'
+    initialData: { global: '', project: undefined, projectPath: null }, // Initial default
 });
 
 // --- Mutation Stores for Settings ---
-import { createMutationStore, OptimisticUpdateResult } from './utils/createMutationStore'; // Import OptimisticUpdateResult
-import { DefaultChatConfig } from '../../../src/common/types';
-import { $defaultConfig } from './chatStores'; // Import the target store
 
 // Set Default Config
-type SetDefaultConfigPayload = { config: Partial<DefaultChatConfig> };
+type SetDefaultConfigPayload = Partial<DefaultChatConfig>;
+// Import $defaultConfig store type
+import { $defaultConfig } from './chatStores';
+
 export const $setDefaultConfig = createMutationStore<
-  typeof $defaultConfig,       // Target Atom: $defaultConfig
-  DefaultChatConfig | null,    // Target Atom's state type (TDataState in createMutationStore)
-  SetDefaultConfigPayload,     // Payload type
-  void                         // Result type (backend handler returns { success: true }, but mutation doesn't need it)
+  typeof $defaultConfig, // Target store for optimistic update
+  DefaultChatConfig | null, // Target store's state type (excluding 'loading'/'error')
+  SetDefaultConfigPayload, // Type for payload passed to mutate
+  void // Result type from performMutation (usually void for settings)
 >({
-  targetAtom: $defaultConfig, // Specify the target store
+  targetAtom: $defaultConfig, // Target the defaultConfig store
   performMutation: async (payload: SetDefaultConfigPayload) => {
     await requestData<void>('setDefaultConfig', payload);
-    // Backend push via SubscriptionManager will eventually confirm, but optimistic update provides immediate feedback.
+    // Backend should trigger a push update via SubscriptionManager upon success
   },
-  getOptimisticUpdate: (
-    payload: SetDefaultConfigPayload,
-    currentDataState: DefaultChatConfig | null | 'loading' | 'error'
-  ): OptimisticUpdateResult<DefaultChatConfig | null> => {
-    const currentState = (currentDataState === 'loading' || currentDataState === 'error' || currentDataState === null)
-      ? {} // Start from empty if loading/error/null
-      : currentDataState;
-
-    const optimisticState: DefaultChatConfig = {
-      ...currentState,
-      ...payload.config, // Apply the updates optimistically
-    };
-    console.log('[$setDefaultConfig getOptimisticUpdate] Current:', currentDataState, 'Optimistic:', optimisticState);
+  // Optimistic update: Apply changes directly to the current state
+  getOptimisticUpdate: (payload: SetDefaultConfigPayload, currentDataState: DefaultChatConfig | null | 'loading' | 'error') => {
+    const currentState = (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
     return {
-      optimisticState: optimisticState,
-      revertState: currentDataState, // Revert to original state ('loading', 'error', null, or data)
+      optimisticState: { ...(currentState ?? {}), ...payload } as DefaultChatConfig | null, // Merge payload optimistically
+      revertState: currentDataState, // Store original state for potential revert
     };
   },
-   // applyMutationResult can be simple, just confirming the state, as the optimistic one should be correct.
-   // The backend push notification will also update the store via its subscribe handler.
-   applyMutationResult: (result: void, currentDataState: DefaultChatConfig | null | 'loading' | 'error') => {
-       // The optimistic state should already reflect the change.
-       // We could potentially refetch here to be 100% sure, but let's rely on the push for now.
-       console.log('[$setDefaultConfig applyMutationResult] Mutation successful. State kept as optimistic/updated.');
-       // Return the current state (which should be the optimistically updated one)
-       // Return the current state (which should be the optimistically updated one)
-       // ApplyMutationResult is not strictly needed here as the backend push via subscription handles final state.
-       // Removing it simplifies the logic.
-       // return (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
+  // Apply mutation result (optional, as backend push should handle final state)
+  // If backend doesn't push, this could return the optimistic state again, but relying on push is better.
+   applyMutationResult: (_result: void, currentDataState: DefaultChatConfig | null | 'loading' | 'error', _tempId?: string) => { // Removed unused result variable
+        // We rely on the backend push update via the subscription in $defaultConfig store
+        // Thus, we don't need to explicitly return a new state here.
+        // Return the current state (which might be the optimistic one) to satisfy types.
+        const currentState = (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
+        return currentState; // Return current state, actual update comes via PubSub
    }
-   // Let's remove applyMutationResult entirely for this mutation.
 });
 
 // Set Global Custom Instructions
-type SetGlobalInstructionsPayload = { instructions: string };
+type SetGlobalCustomInstructionsPayload = { instructions: string };
 export const $setGlobalCustomInstructions = createMutationStore<
-  undefined, any, SetGlobalInstructionsPayload, { success: boolean } // Change TResult to { success: boolean }
+  typeof $customInstructions,
+  CustomInstructionsUpdatePayload,
+  SetGlobalCustomInstructionsPayload,
+  void
 >({
-  performMutation: async (payload: SetGlobalInstructionsPayload): Promise<{ success: boolean }> => {
-    // Explicitly return the result, which should be { success: boolean }
-    return await requestData<{ success: boolean }>('setGlobalCustomInstructions', payload);
-    // Update relies on backend push for $customInstructions store
+  targetAtom: $customInstructions,
+  performMutation: async (payload: SetGlobalCustomInstructionsPayload) => {
+    await requestData<void>('setGlobalCustomInstructions', payload);
   },
+  getOptimisticUpdate: (payload: SetGlobalCustomInstructionsPayload, currentDataState: CustomInstructionsUpdatePayload | null | 'loading' | 'error') => {
+    const currentState = (currentDataState === 'loading' || currentDataState === 'error') ? { global: '', project: undefined, projectPath: null } : (currentDataState ?? { global: '', project: undefined, projectPath: null });
+    return {
+      optimisticState: { ...currentState, global: payload.instructions },
+      revertState: currentDataState,
+    };
+  },
+   applyMutationResult: (_result: void, currentDataState: CustomInstructionsUpdatePayload | null | 'loading' | 'error') => { // Removed unused result variable
+       const currentStateValue = (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
+       return currentStateValue; // Rely on PubSub push
+   }
 });
 
 // Set Project Custom Instructions
-type SetProjectInstructionsPayload = { instructions: string };
+type SetProjectCustomInstructionsPayload = { instructions: string };
 export const $setProjectCustomInstructions = createMutationStore<
-  undefined, any, SetProjectInstructionsPayload, { success: boolean } // Change TResult to { success: boolean }
+  typeof $customInstructions,
+  CustomInstructionsUpdatePayload,
+  SetProjectCustomInstructionsPayload,
+  void
 >({
-  performMutation: async (payload: SetProjectInstructionsPayload): Promise<{ success: boolean }> => {
-    // Explicitly return the result, which should be { success: boolean }
-    return await requestData<{ success: boolean }>('setProjectCustomInstructions', payload);
-    // Update relies on backend push for $customInstructions store
+  targetAtom: $customInstructions,
+  performMutation: async (payload: SetProjectCustomInstructionsPayload) => {
+    await requestData<void>('setProjectCustomInstructions', payload);
   },
+  getOptimisticUpdate: (payload: SetProjectCustomInstructionsPayload, currentDataState: CustomInstructionsUpdatePayload | null | 'loading' | 'error') => {
+    const currentState = (currentDataState === 'loading' || currentDataState === 'error') ? { global: '', project: undefined, projectPath: null } : (currentDataState ?? { global: '', project: undefined, projectPath: null });
+    // Note: Optimistic update might not know the projectPath yet if file didn't exist.
+    return {
+      optimisticState: { ...currentState, project: payload.instructions },
+      revertState: currentDataState,
+    };
+  },
+   applyMutationResult: (_result: void, currentDataState: CustomInstructionsUpdatePayload | null | 'loading' | 'error') => { // Removed unused result variable
+       const currentStateValue = (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
+       return currentStateValue; // Rely on PubSub push
+   }
 });
 
 // Open or Create Project Instructions File
 export const $openOrCreateProjectInstructionsFile = createMutationStore<
   undefined, any, void, void
 >({
+  targetAtom: undefined,
   performMutation: async () => {
     await requestData<void>('openOrCreateProjectInstructionsFile');
-    // This action likely opens a file, no state change expected here.
-  },
+  }
+});
+
+// Set Tool Authorization Config
+type SetToolAuthPayload = { config: ToolAuthorizationConfig };
+export const $setToolAuthorization = createMutationStore<
+  undefined, // No specific target atom for optimistic update of the complex config
+  any,
+  SetToolAuthPayload,
+  void
+>({
+  targetAtom: undefined,
+  performMutation: async (payload: SetToolAuthPayload) => {
+    await requestData<void>('setToolAuthorization', payload);
+    // Backend should trigger tool status update via SubscriptionManager
+  }
+  // Optimistic update is complex here, relying on backend push is safer
 });

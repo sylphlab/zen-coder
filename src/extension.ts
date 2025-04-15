@@ -12,7 +12,6 @@ import {
     DefaultChatConfig,
     WebviewRequestMessage,
     WebviewResponseMessage,
-    // WebviewRequestType, // Removed import
     ProviderInfoAndStatus,
     AllToolsStatusInfo
 } from './common/types';
@@ -24,7 +23,6 @@ import { ProviderStatusManager } from './ai/providerStatusManager';
 import { ConfigResolver } from './ai/configResolver'; // Import ConfigResolver
 import { ModelResolver } from './ai/modelResolver';
 import { RequestHandler, HandlerContext } from './webview/handlers/RequestHandler';
-// MessageHandler interface is no longer needed
 import { McpManager } from './ai/mcpManager';
 // Import necessary handlers
 import { SendMessageHandler } from './webview/handlers/SendMessageHandler';
@@ -48,8 +46,7 @@ import { UpdateChatConfigHandler } from './webview/handlers/UpdateChatConfigHand
 import { UpdateLastLocationHandler } from './webview/handlers/UpdateLastLocationHandler';
 import { SetDefaultConfigHandler } from './webview/handlers/SetDefaultConfigHandler';
 import { DeleteMessageHandler } from './webview/handlers/DeleteMessageHandler';
-// Removed: import { GetChatStateHandler } from './webview/handlers/GetChatStateHandler';
-import { GetChatSessionsHandler } from './webview/handlers/GetChatSessionsHandler'; // Added import for new handler
+import { GetChatSessionsHandler } from './webview/handlers/GetChatSessionsHandler';
 import { GetAvailableProvidersHandler } from './webview/handlers/GetAvailableProvidersHandler';
 import { GetProviderStatusHandler } from './webview/handlers/GetProviderStatusHandler';
 import { GetAllToolsStatusHandler } from './webview/handlers/GetAllToolsStatusHandler';
@@ -57,13 +54,13 @@ import { GetMcpStatusHandler } from './webview/handlers/GetMcpStatusHandler';
 import { GetCustomInstructionsHandler } from './webview/handlers/GetCustomInstructionsHandler';
 import { GetDefaultConfigHandler } from './webview/handlers/GetDefaultConfigHandler';
 import { GetModelsForProviderHandler } from './webview/handlers/GetModelsForProviderHandler';
-import { GetChatSessionHandler } from './webview/handlers/GetChatSessionHandler'; // Import the new handler
-import { GetChatHistoryHandler } from './webview/handlers/GetChatHistoryHandler'; // Import the history handler
-import { GetLastLocationHandler } from './webview/handlers/GetLastLocationHandler'; // Import new handler
+import { GetChatSessionHandler } from './webview/handlers/GetChatSessionHandler';
+import { GetChatHistoryHandler } from './webview/handlers/GetChatHistoryHandler';
+import { GetLastLocationHandler } from './webview/handlers/GetLastLocationHandler';
 import { SubscribeHandler } from './webview/handlers/SubscribeHandler';
 import { UnsubscribeHandler } from './webview/handlers/UnsubscribeHandler';
-import { OpenGlobalMcpConfigHandler } from './webview/handlers/OpenGlobalMcpConfigHandler'; // Import new handler
-import { OpenProjectMcpConfigHandler } from './webview/handlers/OpenProjectMcpConfigHandler'; // Import new handler
+import { OpenGlobalMcpConfigHandler } from './webview/handlers/OpenGlobalMcpConfigHandler';
+import { OpenProjectMcpConfigHandler } from './webview/handlers/OpenProjectMcpConfigHandler';
 
 let aiServiceInstance: AiService | undefined = undefined;
 
@@ -76,8 +73,10 @@ try {
         const providerStatusManagerInstance = new ProviderStatusManager(context);
         const subscriptionManagerInstance = new SubscriptionManager(() => aiServiceInstance!);
         const chatSessionManagerInstance = new ChatSessionManager(context, subscriptionManagerInstance);
-        const historyManagerInstance = new HistoryManager(chatSessionManagerInstance); // Single instance
+        // Corrected: Pass both chatSessionManagerInstance and subscriptionManagerInstance
+        const historyManagerInstance = new HistoryManager(chatSessionManagerInstance, subscriptionManagerInstance);
 
+        // AiService constructor needs the correct historyManagerInstance now
         aiServiceInstance = new AiService(context, historyManagerInstance, providerStatusManagerInstance, chatSessionManagerInstance, subscriptionManagerInstance);
         await aiServiceInstance.initialize();
 
@@ -142,10 +141,10 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._aiService = aiService;
         this._chatSessionManager = chatSessionManager;
         this._historyManager = historyManager; // Store the passed instance
-        // REMOVED internal instantiation
         this._configResolver = new ConfigResolver(this._chatSessionManager);
         this._modelResolver = new ModelResolver(context, aiService.providerStatusManager, aiService);
         this._handlers = new Map();
+        // Pass postMessageCallback directly to McpManager constructor
         this._mcpManager = new McpManager(context, this.postMessageToWebview.bind(this));
         console.log("ZenCoderChatViewProvider constructed.");
     }
@@ -165,7 +164,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new GetDefaultConfigHandler(),
             new GetModelsForProviderHandler(),
             new GetChatSessionHandler(),
-            new GetChatHistoryHandler(this._historyManager), // Uses the unified _historyManager
+            new GetChatHistoryHandler(this._historyManager),
             new GetLastLocationHandler(),
             new SetApiKeyHandler(),
             new DeleteApiKeyHandler(),
@@ -185,7 +184,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new UnsubscribeHandler(),
             new OpenOrCreateProjectInstructionsFileHandler(),
             new UpdateLastLocationHandler(),
-            new SendMessageHandler(this._streamProcessor), // StreamProcessor uses the unified _historyManager
+            new SendMessageHandler(this._streamProcessor),
             new StopGenerationHandler(this._aiService),
             new ExecuteToolActionHandler(),
             new OpenGlobalMcpConfigHandler(),
@@ -209,7 +208,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._view = webviewView;
         console.log("Resolving webview view...");
 
-        // Initialize StreamProcessor with the unified _historyManager
+        // Initialize StreamProcessor with the unified _historyManager and postMessageCallback
         this._streamProcessor = new StreamProcessor(
             this._historyManager, // Use the instance passed to the constructor
             this.postMessageToWebview.bind(this)
@@ -239,9 +238,9 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
              console.log("Webview view disposed.");
          }, null, this._context.subscriptions);
 
-         // Set the callback on the single AiService instance, which propagates it to the single HistoryManager instance
+         // Set the callback on the single AiService instance, which propagates it
          this._aiService.setPostMessageCallback(this.postMessageToWebview.bind(this));
-         console.log("Webview view resolved, message listener attached, and postMessageCallback set for AiService/HistoryManager.");
+         console.log("Webview view resolved, message listener attached, and postMessageCallback set for AiService.");
      }
 
     private async _handleWebviewMessage(message: any): Promise<void> {
@@ -279,11 +278,11 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         }
 
         if (handler && !responseError) {
-            // CORRECT: Pass the unified _historyManager instance in the context
+            // Pass the unified instances in the context
             const context: HandlerContext = {
                 webview: this._view.webview,
                 aiService: this._aiService,
-                historyManager: this._historyManager, // Pass the unified instance stored in the provider
+                historyManager: this._historyManager, // Pass the unified instance
                 chatSessionManager: this._chatSessionManager,
                 configResolver: this._configResolver,
                 providerStatusManager: this._aiService.providerStatusManager,
@@ -329,7 +328,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             console.log('[Extension] Received providerStatusChanged event from AiService.');
             this.postMessageToWebview({
                 type: 'pushUpdate',
-                payload: { topic: 'providerStatus', data: status }
+                payload: { topic: 'providerStatusUpdate', data: status } // Corrected topic name
             });
         });
 
@@ -337,7 +336,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             console.log('[Extension] Received toolsStatusChanged event from AiService.');
             this.postMessageToWebview({
                 type: 'pushUpdate',
-                payload: { topic: 'allToolsStatus', data: statusInfo }
+                payload: { topic: 'allToolsStatusUpdate', data: statusInfo } // Corrected topic name
             });
         });
 

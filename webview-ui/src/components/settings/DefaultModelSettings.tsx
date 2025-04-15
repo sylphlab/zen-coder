@@ -10,17 +10,15 @@ import { ModelSelector } from '../ModelSelector';
 
 export function DefaultModelSettings(): JSX.Element {
     const defaultConfig = useStore($defaultConfig); // Use the fetcher store
-    const { mutate: setDefaultConfigMutate, loading: isSaving } = useStore($setDefaultConfig); // Use the mutation store
+    const { mutate: setDefaultConfigMutate } = useStore($setDefaultConfig); // Remove unused loading state
     const isLoadingConfig = defaultConfig === null; // Derive loading state
 
     const handleDefaultChatModelChange = useCallback(async (newProviderId: string | null, newModelId: string | null) => {
         console.log(`[DefaultModelSettings] Calling mutation store to set default chat model: Provider=${newProviderId}, Model=${newModelId}`);
         try {
-            await setDefaultConfigMutate({ // Use the mutate function
-                config: {
-                    defaultProviderId: newProviderId ?? undefined,
-                    defaultModelId: newModelId ?? undefined
-                }
+            await setDefaultConfigMutate({ // Pass payload directly
+                defaultProviderId: newProviderId ?? undefined,
+                defaultModelId: newModelId ?? undefined
             });
             console.log(`Default chat model update request sent.`);
             // Update will happen via $defaultConfig subscription

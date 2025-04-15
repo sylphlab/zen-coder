@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { WorkspaceChatState, ChatSession, UiMessageContentPart } from '../common/types'; // Assuming ChatSession/UiMessageContentPart are needed for validation/defaults
+import { WorkspaceChatState, ChatSession, UiMessageContentPart, UiMessage } from '../common/types'; // Added UiMessage
 import { v4 as uuidv4 } from 'uuid'; // Needed for creating default chat
 
 /**
@@ -26,6 +26,9 @@ export class WorkspaceStateManager {
 
         try {
             loadedState = this._context.workspaceState.get<WorkspaceChatState>(this.WORKSPACE_STATE_KEY);
+            // --- Add Logging AFTER Load ---
+            console.log(`[WorkspaceStateManager loadState] Raw loaded state from workspaceState.get:`, JSON.stringify(loadedState)?.substring(0, 500) + (JSON.stringify(loadedState)?.length > 500 ? '...' : ''));
+            // --- End Logging ---
 
             if (loadedState && typeof loadedState === 'object' && typeof loadedState.chats === 'object' && loadedState.chats !== null) {
                 // Basic validation and migration/fixing logic
@@ -53,7 +56,7 @@ export class WorkspaceStateManager {
                 // Validate last location (keep if valid string, otherwise use default later)
                 workspaceState.lastLocation = (typeof validLastLocation === 'string') ? validLastLocation : undefined;
 
-                console.log(`[WorkspaceStateManager] Loaded ${Object.keys(workspaceState.chats).length} chats. Last Active ID: ${validLastActiveId}, Last Location: ${workspaceState.lastLocation}`);
+                console.log(`[WorkspaceStateManager] Loaded and validated ${Object.keys(workspaceState.chats).length} chats. Last Active ID: ${validLastActiveId}, Last Location: ${workspaceState.lastLocation}`);
 
             } else {
                 console.log("[WorkspaceStateManager] No valid workspace state found or state is empty. Initializing.");
@@ -103,21 +106,29 @@ export class WorkspaceStateManager {
             this._lastSavedStateJson = '{}'; // Reset tracker
         }
 
+        // --- Add Logging BEFORE Return ---
+        console.log(`[WorkspaceStateManager loadState] State AFTER validation/initialization:`, JSON.stringify(workspaceState)?.substring(0, 500) + (JSON.stringify(workspaceState)?.length > 500 ? '...' : ''));
+        // --- End Logging ---
         return workspaceState;
     }
 
     /**
-     * Saves the provided workspace state to VS Code workspace state if it has changed.
+     * Saves the provided workspace state to VS Code workspace state.
+     * Now *always* attempts the update if forceSave is true, bypassing the JSON comparison.
      * @param stateToSave - The WorkspaceChatState object to save.
-     * @param forceSave - If true, saves even if the state hasn't changed according to the tracker.
+     * @param forceSave - If true, forces the update attempt.
      */
     public async saveState(stateToSave: WorkspaceChatState, forceSave: boolean = false): Promise<void> {
         try {
             const currentStateJson = JSON.stringify(stateToSave);
+            // Modify the condition: Always save if forceSave is true. Only compare JSON if forceSave is false.
             if (forceSave || currentStateJson !== this._lastSavedStateJson) {
+                 console.log(`[WorkspaceStateManager saveState] Attempting save (force: ${forceSave}). Changed: ${currentStateJson !== this._lastSavedStateJson}. State snapshot:`, currentStateJson.substring(0, 500) + (currentStateJson.length > 500 ? '...' : ''));
                 await this._context.workspaceState.update(this.WORKSPACE_STATE_KEY, stateToSave);
-                this._lastSavedStateJson = currentStateJson; // Update tracker
-                // console.log(`[WorkspaceStateManager] Saved workspace state.`); // Optional: Verbose logging
+                this._lastSavedStateJson = currentStateJson; // Update tracker *after* successful update
+                console.log(`[WorkspaceStateManager saveState] State update successful.`);
+            } else {
+                console.log(`[WorkspaceStateManager saveState] Skipping save, state unchanged (force: ${forceSave}).`);
             }
         } catch (error) {
             console.error("[WorkspaceStateManager] Failed to save workspace state:", error);
@@ -166,38 +177,60 @@ export class WorkspaceStateManager {
      */
     private validateAndFixChatHistory(chat: ChatSession): void {
         if (!Array.isArray(chat.history)) {
-             console.warn(`[WorkspaceStateManager] Chat ${chat.id} history is not an array. Resetting.`);
+             console.warn(`[WorkspaceStateManager validateAndFixChatHistory] Chat ${chat.id} history is not an array. Resetting.`);
              chat.history = [];
              return;
         }
 
-        chat.history.forEach((msg: any, index: number) => {
+        chat.history.forEach((msg: UiMessage, index: number) => { // Use UiMessage type
+            let messageModified = false; // Track if modifications happen for logging
             // Validate Role
             if (!msg.role || !['user', 'assistant', 'system', 'tool'].includes(msg.role)) {
-                const inferredRole = msg.sender === 'user' ? 'user' : 'assistant'; // Basic inference from old 'sender'
-                console.warn(`[WorkspaceStateManager] Chat ${chat.id}, Message ${index}: Missing/invalid role. Inferring as '${inferredRole}'. ID: ${msg.id}`);
+                const originalRole = msg.role;
+                const inferredRole = (msg as any).sender === 'user' ? 'user' : 'assistant'; // Basic inference from old 'sender'
+                console.warn(`[WorkspaceStateManager validateAndFixChatHistory] Chat ${chat.id}, Message ${index}: Missing/invalid role ('${originalRole}'). Inferring as '${inferredRole}'. ID: ${msg.id}`);
                 msg.role = inferredRole;
+                messageModified = true;
             }
 
             // Validate Content is Array
             if (!Array.isArray(msg.content)) {
-                console.warn(`[WorkspaceStateManager] Chat ${chat.id}, Message ${index}: Content not an array. Resetting. ID: ${msg.id}`);
+                console.warn(`[WorkspaceStateManager validateAndFixChatHistory] Chat ${chat.id}, Message ${index}: Content not an array. Resetting. ID: ${msg.id}`);
                 msg.content = [{ type: 'text', text: '[Invalid Content]' }];
+                messageModified = true;
             } else {
-                // Optional: Deeper validation of content parts if needed
-                msg.content.forEach((part: any, partIndex: number) => {
-                    if (!part.type || typeof part.type !== 'string') {
-                        console.warn(`[WorkspaceStateManager] Chat ${chat.id}, Message ${index}, Part ${partIndex}: Invalid content part type. Replacing. ID: ${msg.id}`);
-                        // Replace invalid part
-                        msg.content[partIndex] = { type: 'text', text: '[Invalid Part]' };
+                // Validate content parts
+                const originalContent = JSON.stringify(msg.content); // Store original for comparison
+                msg.content = msg.content.filter((part: any, partIndex: number) => {
+                    const isValid = part && typeof part.type === 'string';
+                    if (!isValid) {
+                         console.warn(`[WorkspaceStateManager validateAndFixChatHistory] Chat ${chat.id}, Message ${index}, Part ${partIndex}: Invalid content part type or structure. Removing part. ID: ${msg.id}`, part);
+                         messageModified = true;
                     }
-                    // Add more specific validation per part type (text, image, tool-call) if necessary
+                    return isValid;
                 });
+                 if (msg.content.length === 0 && originalContent !== '[]') {
+                      console.warn(`[WorkspaceStateManager validateAndFixChatHistory] Chat ${chat.id}, Message ${index}: All content parts removed due to invalid structure. Adding placeholder. ID: ${msg.id}`);
+                      msg.content = [{ type: 'text', text: '[Invalid Content Parts]' }];
+                      messageModified = true;
+                 }
             }
 
             // Ensure other essential fields exist (id, timestamp)
-            if (!msg.id) msg.id = `msg-${Date.now()}-${index}`;
-            if (!msg.timestamp) msg.timestamp = Date.now();
+            if (!msg.id) {
+                 msg.id = `msg-${Date.now()}-${index}`;
+                 console.warn(`[WorkspaceStateManager validateAndFixChatHistory] Chat ${chat.id}, Message ${index}: Missing ID. Assigning new ID: ${msg.id}`);
+                 messageModified = true;
+            }
+            if (!msg.timestamp) {
+                 msg.timestamp = Date.now();
+                 console.warn(`[WorkspaceStateManager validateAndFixChatHistory] Chat ${chat.id}, Message ${index}: Missing timestamp. Assigning current time. ID: ${msg.id}`);
+                 messageModified = true;
+            }
+
+            if (messageModified) {
+                 console.log(`[WorkspaceStateManager validateAndFixChatHistory] Chat ${chat.id}, Message ${index}: Modified message state due to validation issues. New state (content):`, JSON.stringify(msg.content));
+            }
         });
     }
 }

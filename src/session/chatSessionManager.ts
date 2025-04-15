@@ -31,7 +31,9 @@ export class ChatSessionManager {
 
     /** Helper to save the current state using the state manager. */
     private async saveState(force: boolean = false): Promise<void> {
+        console.log(`[ChatSessionManager saveState] Triggered. Force save: ${force}`); // Add log
         await this._stateManager.saveState(this._workspaceState, force);
+        console.log(`[ChatSessionManager saveState] Completed.`); // Add log
     }
 
     /**
@@ -209,21 +211,21 @@ export class ChatSessionManager {
 
     /**
      * Directly updates the timestamp of a chat session (used by HistoryManager when history changes)
-     * and pushes a delta update for the timestamp.
+     * and pushes a delta update for the timestamp. Also forces a save to persist history changes.
      * @param chatId The ID of the chat session.
      */
     public async touchChatSession(chatId: string): Promise<void> {
          const chat = this.getChatSession(chatId);
          if (chat) {
              const now = Date.now();
-             if (chat.lastModified !== now) { // Avoid saving if timestamp hasn't changed
-                 chat.lastModified = now;
-                 await this.saveState(); // Save the change
+             // Always trigger save, even if only timestamp changed, to persist history modifications
+             chat.lastModified = now;
+             await this.saveState(true); // Force save to ensure latest history is persisted
 
-                 // Push delta update for lastModified
-                 const delta: SessionUpdateDelta = { type: 'sessionUpdate', sessionId: chatId, lastModified: now };
-                 this._subscriptionManager.notifyChatSessionsUpdate(delta); // Use specific notifier
-             }
+             // Push delta update for lastModified
+             const delta: SessionUpdateDelta = { type: 'sessionUpdate', sessionId: chatId, lastModified: now };
+             this._subscriptionManager.notifyChatSessionsUpdate(delta); // Use specific notifier
+             console.log(`[ChatSessionManager] Touched session ${chatId} and forced save.`); // Added log
          }
     }
 }

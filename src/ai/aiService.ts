@@ -137,8 +137,19 @@ export class AiService {
     public async deleteApiKey(providerId: string): Promise<void> {
         await this._providerManager.deleteApiKey(providerId);
     }
-   public abortCurrentStream(): void {
-       this._aiStreamer.abortCurrentStream();
+   public async abortCurrentStream(): Promise<void> { // Keep async
+       const abortedChatId = this._aiStreamer.abortCurrentStream(); // This is now synchronous and returns string | null
+       if (abortedChatId) { // Check if a chatId was returned
+           try {
+                console.log(`[AiService] Triggering save for aborted chat ${abortedChatId}...`);
+                await this.chatSessionManager.touchChatSession(abortedChatId); // Force save using the correct manager
+                console.log(`[AiService] Save triggered successfully for aborted chat ${abortedChatId}.`);
+           } catch (saveError) {
+               console.error(`[AiService] Failed to trigger save after aborting chat ${abortedChatId}:`, saveError);
+           }
+       } else {
+            console.log(`[AiService] abortCurrentStream called, but no active stream was found by AiStreamer.`);
+       }
    }
    public async retryMcpConnection(serverName: string): Promise<void> {
        await this._mcpManager.retryMcpConnection(serverName);

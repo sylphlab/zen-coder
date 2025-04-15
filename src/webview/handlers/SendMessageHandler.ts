@@ -121,7 +121,8 @@ export class SendMessageHandler implements RequestHandler { // Implement Request
     private async _processAIResponse(streamResult: StreamTextResult<any, any>, chatId: string, assistantUiMsgId: string, context: HandlerContext): Promise<void> {
         // The old 'startAssistantMessage' postMessage is removed.
         // HistoryManager.addAssistantMessageFrame now handles pushing the initial frame delta.
-        await this._streamProcessor.process(streamResult, chatId, assistantUiMsgId);
+        // Access the full stream via .fullStream
+        await this._streamProcessor.processStream(streamResult.fullStream, chatId, assistantUiMsgId);
     }
 
     /** Finalizes the history after stream processing. */

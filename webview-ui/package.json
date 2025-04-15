@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@nanostores/preact": "^1.0.0",
     "@nanostores/react": "^1.0.0",
     "@nanostores/router": "^1.0.0",
@@ -19,6 +20,7 @@
     "preact": "^10.26.2",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^15.6.1",
+    "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",
     "wouter": "^3.6.0"
   },

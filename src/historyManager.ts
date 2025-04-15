@@ -15,27 +15,35 @@ import {
 } from './utils/historyUtils';
 import { ChatSessionManager } from './session/chatSessionManager';
 import { MessageModifier } from './history/messageModifier';
+import { SubscriptionManager } from './ai/subscriptionManager'; // Import SubscriptionManager
 
 /**
  * Manages reading chat history, adding new message frames, deleting messages/history,
  * and translating message formats. Modifying existing message content is delegated
  * to MessageModifier. Relies on ChatSessionManager for session data access.
+ * Pushes history delta updates via SubscriptionManager.
  */
 export class HistoryManager {
     private readonly _sessionManager: ChatSessionManager;
     private readonly _messageModifier: MessageModifier;
-    private _postMessageCallback?: (message: any) => void;
+    private readonly _subscriptionManager: SubscriptionManager; // Store SubscriptionManager instance
+    private _postMessageCallback?: (message: any) => void; // Keep for now, but primarily use SubscriptionManager
 
-    constructor(sessionManager: ChatSessionManager) {
+    // Modify constructor to accept SubscriptionManager
+    constructor(sessionManager: ChatSessionManager, subscriptionManager: SubscriptionManager) {
         this._sessionManager = sessionManager;
-        this._messageModifier = new MessageModifier(sessionManager);
-        console.log(`[HistoryManager constructor] Instance created. Callback initially: ${typeof this._postMessageCallback}`);
+        this._subscriptionManager = subscriptionManager; // Store SubscriptionManager
+        // Pass SubscriptionManager to MessageModifier
+        this._messageModifier = new MessageModifier(sessionManager, this._subscriptionManager); // Pass the stored instance
+        console.log(`[HistoryManager constructor] Instance created. SubscriptionManager injected.`);
     }
 
     // Use arrow function for setter to ensure consistent 'this' if needed elsewhere
     public setPostMessageCallback = (callback: (message: any) => void): void => {
         console.log(`[HistoryManager setPostMessageCallback START] Current callback type: ${typeof this._postMessageCallback}. Received callback type: ${typeof callback}`);
         this._postMessageCallback = callback;
+        // Pass it down to modifier if it still needs it for other purposes (like suggested actions *before* refactor)
+        // this._messageModifier.setPostMessageCallback(callback); // Modify MessageModifier if needed
         console.log(`[HistoryManager setPostMessageCallback END] Internal _postMessageCallback type after assignment: ${typeof this._postMessageCallback}. Is set? ${!!this._postMessageCallback}`);
     }
 
@@ -51,7 +59,6 @@ export class HistoryManager {
     }
 
     public addUserMessage = async (chatId: string, content: UiMessageContentPart[]): Promise<string> => { // Arrow function
-        console.log(`[HistoryManager addUserMessage START] Checking callback. Is set? ${!!this._postMessageCallback}. Type: ${typeof this._postMessageCallback}`);
         const chat = this._sessionManager.getChatSession(chatId);
         if (!chat) {
             console.warn(`[HistoryManager] Chat session not found: ${chatId} (addUserMessage)`);
@@ -69,23 +76,17 @@ export class HistoryManager {
             timestamp: Date.now()
         };
         chat.history.push(userUiMessage);
-        await this._sessionManager.touchChatSession(chatId);
+        await this._sessionManager.touchChatSession(chatId); // Triggers save and session update delta
 
-        if (this._postMessageCallback) {
-            console.log(`[HistoryManager addUserMessage] Callback IS set. Pushing delta...`);
-            const delta: HistoryAddMessageDelta = { type: 'historyAddMessage', chatId, message: userUiMessage };
-            const topic = `chatHistoryUpdate/${chatId}`;
-            this._postMessageCallback({ type: 'pushUpdate', payload: { topic, data: delta } });
-             console.log(`[HistoryManager] Pushed user message delta: ${userUiMessage.id}`);
-        } else {
-            console.warn(`[HistoryManager] Cannot push user message delta, postMessageCallback not set.`);
-        }
+        // Use SubscriptionManager to push delta
+        const delta: HistoryAddMessageDelta = { type: 'historyAddMessage', chatId, message: userUiMessage };
+        this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
+        console.log(`[HistoryManager] Pushed user message delta via SubscriptionManager: ${userUiMessage.id}`);
 
         return userUiMessage.id;
     }
 
     public addAssistantMessageFrame = async (chatId: string): Promise<string> => { // Arrow function
-        console.log(`[HistoryManager addAssistantMessageFrame START] Checking callback. Is set? ${!!this._postMessageCallback}. Type: ${typeof this._postMessageCallback}`);
         const chat = this._sessionManager.getChatSession(chatId);
         if (!chat) {
             console.warn(`[HistoryManager] Chat session not found: ${chatId} (addAssistantMessageFrame)`);
@@ -100,17 +101,13 @@ export class HistoryManager {
             timestamp: Date.now()
         };
         chat.history.push(initialAssistantUiMessage);
-        await this._sessionManager.touchChatSession(chatId);
+        await this._sessionManager.touchChatSession(chatId); // Triggers save and session update delta
 
-        if (this._postMessageCallback) {
-             console.log(`[HistoryManager addAssistantMessageFrame] Callback IS set. Pushing delta...`);
-             const delta: HistoryAddMessageDelta = { type: 'historyAddMessage', chatId, message: initialAssistantUiMessage };
-             const topic = `chatHistoryUpdate/${chatId}`;
-             this._postMessageCallback({ type: 'pushUpdate', payload: { topic, data: delta } });
-             console.log(`[HistoryManager] Pushed assistant message frame delta: ${assistantUiMsgId}`);
-        } else {
-             console.warn(`[HistoryManager] Cannot push assistant message frame delta, postMessageCallback not set.`);
-        }
+        // Use SubscriptionManager to push delta
+        const delta: HistoryAddMessageDelta = { type: 'historyAddMessage', chatId, message: initialAssistantUiMessage };
+        this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
+        console.log(`[HistoryManager] Pushed assistant message frame delta via SubscriptionManager: ${assistantUiMsgId}`);
+
 
         return assistantUiMsgId;
     }
@@ -118,29 +115,26 @@ export class HistoryManager {
     // --- History Deletion ---
 
     public clearHistory = async (chatId: string): Promise<void> => { // Arrow function
-        console.log(`[HistoryManager clearHistory] Checking callback. Is set? ${!!this._postMessageCallback}. Type: ${typeof this._postMessageCallback}`);
         const chat = this._sessionManager.getChatSession(chatId);
-        if (!chat || !this._postMessageCallback) {
-            console.warn(`[HistoryManager clearHistory] Chat not found or callback not set for chat ${chatId}.`);
+        if (!chat) {
+            console.warn(`[HistoryManager clearHistory] Chat not found for chat ${chatId}.`);
             return;
         }
 
         chat.history = [];
-        await this._sessionManager.touchChatSession(chatId);
+        await this._sessionManager.touchChatSession(chatId); // Triggers save and session update delta
 
+        // Use SubscriptionManager to push delta
         const delta: HistoryClearDelta = { type: 'historyClear', chatId };
-        const topic = `chatHistoryUpdate/${chatId}`;
-        console.log(`[HistoryManager clearHistory] Callback IS set. Pushing delta...`);
-        this._postMessageCallback({ type: 'pushUpdate', payload: { topic, data: delta } });
+        this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
 
-        console.log(`[HistoryManager] Cleared history for chat: ${chat.name} (ID: ${chatId}) and pushed delta.`);
+        console.log(`[HistoryManager] Cleared history for chat: ${chat.name} (ID: ${chatId}) and pushed delta via SubscriptionManager.`);
     }
 
     public deleteMessageFromHistory = async (chatId: string, messageId: string): Promise<void> => { // Arrow function
-        console.log(`[HistoryManager deleteMessageFromHistory] Checking callback. Is set? ${!!this._postMessageCallback}. Type: ${typeof this._postMessageCallback}`);
         const chat = this._sessionManager.getChatSession(chatId);
-        if (!chat || !this._postMessageCallback) {
-            console.warn(`[HistoryManager deleteMessageFromHistory] Chat not found or callback not set for chat ${chatId}.`);
+        if (!chat) {
+            console.warn(`[HistoryManager deleteMessageFromHistory] Chat not found for chat ${chatId}.`);
              return;
         }
 
@@ -148,14 +142,13 @@ export class HistoryManager {
         chat.history = chat.history.filter((msg: UiMessage) => msg.id !== messageId);
 
         if (chat.history.length < initialLength) {
-            await this._sessionManager.touchChatSession(chatId);
+            await this._sessionManager.touchChatSession(chatId); // Triggers save and session update delta
 
+            // Use SubscriptionManager to push delta
             const delta: HistoryDeleteMessageDelta = { type: 'historyDeleteMessage', chatId, messageId };
-            const topic = `chatHistoryUpdate/${chatId}`;
-            console.log(`[HistoryManager deleteMessageFromHistory] Callback IS set. Pushing delta...`);
-            this._postMessageCallback({ type: 'pushUpdate', payload: { topic, data: delta } });
+            this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
 
-            console.log(`[HistoryManager] Deleted message ${messageId} from chat ${chatId} and pushed delta.`);
+            console.log(`[HistoryManager] Deleted message ${messageId} from chat ${chatId} and pushed delta via SubscriptionManager.`);
         } else {
             console.warn(`[HistoryManager] Message ${messageId} not found in chat ${chatId} for deletion.`);
         }

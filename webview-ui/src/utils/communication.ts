@@ -26,18 +26,23 @@ const REQUEST_TIMEOUT = 15000; // 15 seconds
  * Handles incoming messages from the extension host.
  */
 const handleIncomingMessage = (event: MessageEvent): void => {
-    const message = event.data as WebviewResponseMessage; // Assume response type for now
+    const message = event.data as WebviewResponseMessage;
+    // Log ALL incoming messages BEFORE type checking
+    console.log(`[Communication FP Listener - RAW] Received message:`, JSON.stringify(message)); // Add detailed raw log
 
     if (!message || typeof message.type !== 'string') {
         console.warn("[Communication FP Listener] Received message without valid type:", message);
         return;
     }
+    console.log(`[Communication FP Listener] Processing message type: ${message.type}`); // Log processed type
 
     if (message.type === 'responseData') {
         handleResponse(message);
     } else if (message.type === 'pushUpdate') {
+        console.log(`[Communication FP Listener] Received 'pushUpdate'. Topic: ${message.payload?.topic}`); // Log pushUpdate details
         notifySubscribers(message.payload?.topic, message.payload?.data);
     } else if (message.type === 'startAssistantMessage') {
+        console.log(`[Communication FP Listener] Received 'startAssistantMessage'. Payload:`, message.payload);
         // Loading state is handled automatically by createMutationStore for $sendMessage
         console.log(`[Communication FP Listener] Received startAssistantMessage for chat ${message.payload?.chatId}, message ${message.payload?.messageId}. Loading state handled by mutation store.`);
     } else {
@@ -77,18 +82,19 @@ const handleResponse = (message: WebviewResponseMessage): void => {
          console.warn("[Communication FP] notifySubscribers called without a topic.");
          return;
      }
-     console.log(`[Communication FP] Notifying subscribers for topic: "${topic}"`);
+     console.log(`[Communication FP - notifySubscribers] START. Topic: "${topic}". Data:`, data); // Log received topic and data
      const callbacks = topicCallbacks.get(topic); // Get Set of callbacks
      if (callbacks && callbacks.size > 0) {
-         console.log(`[Communication FP] Found ${callbacks.size} callbacks for topic "${topic}". Executing...`);
+         console.log(`[Communication FP - notifySubscribers] Found ${callbacks.size} callbacks for topic "${topic}". Executing...`);
          // Create a copy before iterating
-         const callbacksToExecute = Array.from(callbacks);
-         callbacksToExecute.forEach((callback) => {
+         const callbacksToExecute = Array.from(callbacks); // Clone before iteration
+         callbacksToExecute.forEach((callback, index) => { // Add index for logging
              try {
-                 console.log(`[Communication FP]   Executing callback for topic "${topic}"...`);
+                 console.log(`[Communication FP - notifySubscribers]   Executing callback ${index + 1}/${callbacksToExecute.length} for topic "${topic}"...`);
                  callback(data); // Execute callback with just data
+                 console.log(`[Communication FP - notifySubscribers]   Callback ${index + 1} executed successfully.`);
              } catch (error) {
-                 console.error(`[Communication FP]   Error in subscription callback for topic "${topic}":`, error);
+                 console.error(`[Communication FP - notifySubscribers]   Error in callback ${index + 1} for topic "${topic}":`, error);
              }
          });
      } else {

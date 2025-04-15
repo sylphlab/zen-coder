@@ -12,7 +12,7 @@ export interface UiToolCallPart {
     toolCallId: string;
     toolName: string;
     args: any;
-    status?: 'pending' | 'running' | 'complete' | 'error'; // UI state tracking
+    status?: 'pending' | 'running' | 'complete' | 'error'; // UI state tracking for tool calls
     result?: any; // Result of the tool execution
     progress?: string; // Optional progress message during execution
 }
@@ -27,6 +27,8 @@ export interface UiMessage {
     role: 'user' | 'assistant' | 'tool' | 'system'; // Add role property
     content: UiMessageContentPart[]; // Array of content parts (text, tool calls, images)
     timestamp: number; // When the message was created/received
+    /** Optional status for UI rendering (e.g., pending response, error) */
+    status?: 'pending' | 'error'; // Status for the message itself (e.g., waiting for AI response)
     // sender property is deprecated, use role instead
 }
 
@@ -70,6 +72,14 @@ export interface HistoryUpdateToolCallDelta {
   progress?: string;
 }
 
+// Delta to update the overall status of a message (e.g., from 'pending' to 'error' or remove status)
+export interface HistoryUpdateMessageStatusDelta {
+    type: 'historyUpdateMessageStatus';
+    chatId: string;
+    messageId: string;
+    status?: UiMessage['status']; // New status (e.g., 'error') or undefined to clear 'pending'
+}
+
 export interface HistoryDeleteMessageDelta {
   type: 'historyDeleteMessage';
   chatId: string;
@@ -87,6 +97,7 @@ export type ChatHistoryUpdateData =
   | HistoryAppendChunkDelta
   | HistoryAddContentPartDelta // Add the new type to the union
   | HistoryUpdateToolCallDelta
+  | HistoryUpdateMessageStatusDelta // Added message status update
   | HistoryDeleteMessageDelta
   | HistoryClearDelta;
 
@@ -121,6 +132,24 @@ export type ChatSessionsUpdateData =
   | SessionAddDelta
   | SessionDeleteDelta
   | SessionUpdateDelta;
+
+// ================== Pub/Sub Data Payloads ==================
+
+// Payload for streaming status updates
+export type StreamingStatusPayload = {
+    streaming: boolean;
+};
+
+// Payload for suggested action updates (sent after a message stream finishes)
+export type SuggestedActionsPayload = {
+    type: 'setActions'; // Action type (could be expanded later, e.g., 'clearActions')
+    chatId: string; // Needed for topic filtering on frontend
+    messageId: string;
+    actions: SuggestedAction[];
+} | {
+    type: 'clearAllActions'; // Action type to clear all actions for a chat
+    chatId: string; // Needed for topic filtering on frontend
+};
 
 
 // ================== Existing Types ==================
@@ -250,8 +279,6 @@ export type AllToolsStatusInfo = ToolCategoryInfo[];
 
 // --- Request/Response Types for Webview <-> Extension Communication ---
 
-// Removed WebviewRequestType as all requests use requestType: string now
-// export type WebviewRequestType = ... (removed)
 // Define a union type for all possible action request types initiated by the frontend
 export type ActionRequestType =
     | 'setApiKey'
@@ -283,8 +310,6 @@ export interface WebviewRequestMessage {
     payload?: any; // Optional payload for the request (e.g., providerId for getModelsForProvider)
 }
 
-// Removed WebviewActionMessage interface
-
 // --- Payload Types for Message Passing ---
 
 export interface LoadChatStatePayload {
@@ -302,12 +327,6 @@ export interface AppendMessageChunkPayload {
     chatId: string;
     messageId: string;
     textChunk: string;
-}
-
-export interface UpdateSuggestedActionsPayload {
-    chatId: string;
-    messageId: string;
-    actions: SuggestedAction[];
 }
 
 // Add other payload types as needed...
@@ -387,32 +406,18 @@ export type ExtensionMessageType =
   | { type: 'startAssistantMessage'; payload: { chatId: string; messageId: string } } // TODO: Refactor to pushUpdate?
   | { type: 'appendMessageChunk'; payload: { chatId: string; messageId: string; contentChunk: any } } // TODO: Refactor to pushUpdate? Type contentChunk more strictly.
   | { type: 'updateToolCall'; payload: { chatId: string; messageId: string; toolCallId: string; status: UiToolCallPart['status']; result?: any; progress?: string } } // TODO: Refactor to pushUpdate?
-  | { type: 'addSuggestedActions'; payload: { chatId: string; messageId: string; actions: SuggestedAction[] } } // TODO: Refactor to pushUpdate?
   | { type: 'streamFinished'; payload: { chatId: string; messageId: string } } // TODO: Refactor to pushUpdate?
   | { type: 'showSettings' } // Keep for potential future use?
-  // | { type: 'mcpConfigReloaded' } // Removed, use pushUpdate topic
-  // | { type: 'updateMcpConfiguredStatus'; payload: McpConfiguredStatusPayload } // Removed, use pushUpdate topic
-  // | { type: 'updateCustomInstructions'; payload: { global?: string; project?: string; projectPath?: string | null } } // Removed, use pushUpdate topic
-  // | { type: 'updateDefaultConfig'; payload: DefaultChatConfig } // Removed, use pushUpdate topic
-  // | { type: 'pushUpdateProviderStatus'; payload: ProviderInfoAndStatus[] } // Removed, use pushUpdate topic
-  // | UpdateAllToolsStatusPush // Removed, use pushUpdate topic
   | { type: 'pushUpdate'; payload: { topic: string; data: any } } // Unified Pub/Sub update message
   | WebviewResponseMessage; // Add response type
 
 
-// Removed old/duplicate definitions for ParentStatus, ToolStatus, ToolInfo, AllToolsStatusPayload, ToolAuthorizationConfig
-// The new definitions are placed after the Multi-Chat Types section.
-
-// --- Settings Page Specific Types (Payloads for Push/Response) ---
-
 // Payload for MCP server status updates/responses
-// Needs McpServerStatus, assume it's imported or defined above
 import { McpServerStatus } from '../ai/mcpManager'; // Ensure this import is correct
 export interface McpConfiguredStatusPayload {
    [serverName: string]: McpServerStatus;
 }
 
-// AllToolsStatusPayload is replaced by AllToolsStatusInfo defined earlier
 // --- Default Configuration ---
 
 // Structure for default chat configuration (global scope)
@@ -423,14 +428,11 @@ export interface DefaultChatConfig {
     defaultOptimizeModelId?: string; // Keep for future use
 }
 
-
-// Duplicate DefaultChatConfig removed
-
-
-// --- Streaming Status ---
-
+// --- Pub/Sub Topics ---
 export const STREAMING_STATUS_TOPIC = 'streamingStatusUpdate';
+export const SUGGESTED_ACTIONS_TOPIC_PREFIX = 'suggestedActionsUpdate/'; // Topic prefix for suggested actions (dynamic per chat)
+// Add other static topic constants here as needed
 
-export interface StreamingStatusPayload {
-    streaming: boolean;
-}
+// --- Streaming Status --- Payload defined in Pub/Sub Data Payloads section
+
+// --- Suggested Actions --- Payload defined in Pub/Sub Data Payloads section

@@ -16,7 +16,7 @@ import { router } from '../stores/router'; // Import Nanostores router
 //     // Removed: updateLocationAtom
 // } from '../store/atoms';
 
-interface HeaderControlsProps {
+export interface HeaderControlsProps {
     selectedProviderId: string | null; // Added prop
     selectedModelId: string | null;    // Added prop
     onModelChange: (providerId: string | null, modelId: string | null) => void;

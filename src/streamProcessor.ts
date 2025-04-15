@@ -1,200 +1,192 @@
-import * as vscode from 'vscode';
-import { Tool, CoreMessage, StreamTextResult, TextStreamPart, ToolCallPart, ToolResultPart, ToolSet } from 'ai'; // Import necessary types
 import {
-    UiTextMessagePart,
-    ChatSession,
-    STREAMING_STATUS_TOPIC, // Import the topic constant
-    StreamingStatusPayload, // Import the payload type
-    // Delta Imports
-    ChatHistoryUpdateData,
-    HistoryAppendChunkDelta,
-    HistoryUpdateToolCallDelta,
-    HistoryAddContentPartDelta, // Corrected import name
-    UiToolCallPart,
-    UiMessageContentPart
-} from './common/types';
-import { allTools } from './tools';
+    CoreToolChoice,
+    StreamData, // Keep for potential future use or type checking context
+    TextStreamPart,
+    ToolCallPart,     // Corrected import
+    ToolResultPart,   // Corrected import
+    // FinishStreamPart and ErrorStreamPart are not standard exports, handle by type string
+} from 'ai';
 import { HistoryManager } from './historyManager';
-import { isPromise } from 'util/types';
-// SubscriptionManager import removed - using _postMessageCallback directly
+import {
+    SuggestedAction,
+    structuredAiResponseSchema
+} from './common/types';
+import { SubscriptionManager } from './ai/subscriptionManager';
+import { HistoryUpdateMessageStatusDelta } from './common/types';
+
+// Define a union type for the expected parts based on actual exports and observed types
+type ExpectedStreamPart =
+    | TextStreamPart<any> // TextStreamPart might still be generic
+    | ToolCallPart
+    | ToolResultPart
+    // Add other known part types if necessary
+    // Finish and Error will be handled by checking part.type string
+    | { type: 'finish'; finishReason: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number; }; toolCalls?: any[] } // Inferred structure
+    | { type: 'error'; error: any }; // Inferred structure
 
 /**
- * Processes the AI response stream, updates history, and posts messages to the webview.
+ * Processes the AI stream, handling text deltas, tool calls, and final output.
  */
 export class StreamProcessor {
     private _historyManager: HistoryManager;
-    private _postMessageCallback: (message: any) => void;
+    private _subscriptionManager: SubscriptionManager;
+    private _currentChatId: string | null = null;
+    private _currentMessageId: string | null = null;
+    private _accumulatedText: string = '';
+    private _toolCallsInProgress: { [toolCallId: string]: boolean } = {};
 
-    constructor(historyManager: HistoryManager, postMessageCallback: (message: any) => void) {
+    constructor(historyManager: HistoryManager, subscriptionManager: SubscriptionManager) {
         this._historyManager = historyManager;
-        this._postMessageCallback = postMessageCallback;
+        this._subscriptionManager = subscriptionManager;
+        console.log("[StreamProcessor] Instantiated.");
+    }
+
+    private resetState() {
+        this._currentChatId = null;
+        this._currentMessageId = null;
+        this._accumulatedText = '';
+        this._toolCallsInProgress = {};
     }
 
     /**
-     * Processes the stream from the AI service.
-     * @param streamResult The result object from AiService.getAiResponseStream (must not be null).
-     * @param assistantMessageId The ID of the UI message frame for this response.
+     * Processes the stream parts received from the AI SDK.
+     * @param stream The async iterable stream from the AI SDK (yielding specific StreamPart objects).
+     * @param chatId The ID of the chat session.
+     * @param messageId The ID of the assistant message being processed.
      */
-    public async process<TOOLS extends ToolSet, PARTIAL_OUTPUT>(streamResult: StreamTextResult<TOOLS, PARTIAL_OUTPUT>, chatId: string, assistantMessageId: string): Promise<void> {
-        console.log(`[StreamProcessor] Starting processing for message ID: ${assistantMessageId}`);
-
-        const startStreamingPayload: StreamingStatusPayload = { streaming: true };
-        this._postMessageCallback({ type: 'pushUpdate', payload: { topic: STREAMING_STATUS_TOPIC, data: startStreamingPayload } });
-        console.log('[StreamProcessor] Sent streaming: true update');
-
+    public async processStream(
+        stream: AsyncIterable<ExpectedStreamPart>, // Use the corrected union type
+        chatId: string,
+        messageId: string,
+        toolChoice?: CoreToolChoice<any> | undefined
+    ): Promise<{ finishReason: string; usage: { promptTokens: number; completionTokens: number; totalTokens: number; }; finalOutput?: string; finalToolCalls?: any[] }> {
+        this.resetState();
+        this._currentChatId = chatId;
+        this._currentMessageId = messageId;
+        let usage: { promptTokens: number; completionTokens: number; totalTokens: number; } = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+        let finishReason = 'unknown';
+        let finalOutput: string | undefined;
+        let finalToolCalls: any[] | undefined;
         let streamFinishedCleanly = false;
+
         try {
-            for await (const part of streamResult.fullStream) {
-                await this._handleStreamPart(part, chatId, assistantMessageId);
+            for await (const part of stream) { // part is now one of ExpectedStreamPart
+
+                 // console.log(`[StreamProcessor|${chatId}] Raw Stream Part:`, part);
+
+                switch (part.type) {
+                    case 'text-delta':
+                         console.log(`[StreamProcessor|${chatId}] Step: text-delta`);
+                        this._accumulatedText += part.textDelta;
+                        await this._historyManager.messageModifier.appendTextChunk(chatId, messageId, part.textDelta);
+                        break;
+                    case 'tool-call': // Type is ToolCallPart (non-generic)
+                        console.log(`[StreamProcessor|${chatId}] Step: tool-call`);
+                        const toolCallId_call = part.toolCallId;
+                        if (toolCallId_call) {
+                             this._toolCallsInProgress[toolCallId_call] = true;
+                             await this._historyManager.messageModifier.addToolCall(
+                                 chatId,
+                                 messageId,
+                                 toolCallId_call,
+                                 part.toolName,
+                                 part.args
+                             );
+                        } else {
+                             console.warn(`[StreamProcessor|${chatId}] Received tool-call part without toolCallId.`);
+                        }
+                        break;
+                    case 'tool-result': // Type is ToolResultPart (non-generic)
+                         console.log(`[StreamProcessor|${chatId}] Step: tool-result`);
+                        const toolCallId_result = part.toolCallId;
+                         if (toolCallId_result) {
+                             if (this._toolCallsInProgress[toolCallId_result]) {
+                                  delete this._toolCallsInProgress[toolCallId_result];
+                             }
+                             // Determine status: Check for an 'error' property or assume 'complete'
+                             const status = (part as any).error ? 'error' : 'complete';
+                             await this._historyManager.messageModifier.updateToolStatus(
+                                  chatId,
+                                  toolCallId_result,
+                                  status, // Use derived status
+                                  part.result
+                             );
+                         } else {
+                             console.warn(`[StreamProcessor|${chatId}] Received tool-result part without toolCallId.`);
+                         }
+                        break;
+                    case 'finish': // Handle as string type
+                         console.log(`[StreamProcessor|${chatId}] Step: finish`);
+                        // Cast to access properties defined in our inferred type
+                        const finishPart = part as { type: 'finish'; finishReason: string; usage?: { promptTokens: number; completionTokens: number; totalTokens: number; }; toolCalls?: any[] };
+                        finishReason = finishPart.finishReason;
+                        usage = finishPart.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+                        finalOutput = this._accumulatedText;
+                        finalToolCalls = finishPart.toolCalls;
+                        streamFinishedCleanly = true;
+                        console.log(`[StreamProcessor|${chatId}] Stream Finished. Reason: ${finishReason} Usage:`, usage);
+                        break;
+                    case 'error': // Handle as string type
+                        console.log(`[StreamProcessor|${chatId}] Step: error`);
+                         // Cast to access properties defined in our inferred type
+                         const errorPart = part as { type: 'error'; error: any };
+                        console.error(`[StreamProcessor|${chatId}] Stream error reported in part:`, errorPart.error);
+                        finishReason = 'error';
+                        streamFinishedCleanly = false;
+                        const errorDelta: HistoryUpdateMessageStatusDelta = { type: 'historyUpdateMessageStatus', chatId, messageId, status: 'error' };
+                        console.log(`[StreamProcessor|${chatId}] Sending message status update: msgId=${messageId}, status='error' (Stream Error Part)`);
+                        this._subscriptionManager.notifyChatHistoryUpdate(chatId, errorDelta);
+                        break; // Stop processing on explicit error part
+                    default:
+                         // Use a type assertion to log the type if it's not covered by the switch
+                         const unknownPart: any = part;
+                         console.log(`[StreamProcessor|${chatId}] Unhandled stream part type: ${unknownPart.type}`, unknownPart);
+                }
             }
-            console.log("[StreamProcessor] Finished processing fullStream cleanly.");
-            streamFinishedCleanly = true;
-        } catch (error: any) {
-            // Check if it's an AbortError caused by a new stream starting
-            if (error.name === 'AbortError' && error.message === 'New stream initiated by user') {
-                console.log(`[StreamProcessor] Stream for message ${assistantMessageId} intentionally aborted by a newer stream request.`);
-                streamFinishedCleanly = false; // Mark as not finished cleanly, but don't re-throw
-            } else {
-                console.error("[StreamProcessor] Error during fullStream processing:", error);
-                // Re-throw other errors
-                throw error;
-            }
+
+             // --- Post-Stream Processing ---
+             if (streamFinishedCleanly) {
+                 await this.handlePostStreamProcessing(chatId, messageId, this._accumulatedText);
+                 const successDelta: HistoryUpdateMessageStatusDelta = { type: 'historyUpdateMessageStatus', chatId, messageId, status: undefined };
+                 console.log(`[StreamProcessor|${chatId}] Sending message status update: msgId=${messageId}, status='undefined' (Stream Success)`);
+                 this._subscriptionManager.notifyChatHistoryUpdate(chatId, successDelta);
+                 console.log(`[StreamProcessor|${chatId}] Finished processing stream cleanly for message ${messageId}.`);
+             } else if (finishReason !== 'error') {
+                  console.warn(`[StreamProcessor|${chatId}] Stream for message ${messageId} ended unexpectedly without 'finish' or 'error'. Finish reason: ${finishReason}.`);
+                  await this.handlePostStreamProcessing(chatId, messageId, this._accumulatedText);
+             }
+
+        } catch (error) {
+            console.error(`[StreamProcessor|${chatId}] Error processing stream loop for message ${messageId}:`, error);
+            finishReason = 'error';
+            streamFinishedCleanly = false;
+             const errorDelta: HistoryUpdateMessageStatusDelta = { type: 'historyUpdateMessageStatus', chatId, messageId, status: 'error' };
+             console.log(`[StreamProcessor|${chatId}] Sending message status update: msgId=${messageId}, status='error' (Catch Block)`);
+             this._subscriptionManager.notifyChatHistoryUpdate(chatId, errorDelta);
         } finally {
-            // Send the final streaming status update regardless of clean finish or expected abort
-            const endStreamingPayload: StreamingStatusPayload = { streaming: false };
-            this._postMessageCallback({ type: 'pushUpdate', payload: { topic: STREAMING_STATUS_TOPIC, data: endStreamingPayload } });
-            console.log(`[StreamProcessor] Sent streaming: false update (finally block). Stream finished cleanly: ${streamFinishedCleanly}`);
-            console.log(`[StreamProcessor] Stream processing finally block executed for message ID: ${assistantMessageId}.`);
+            this.resetState();
+            console.log(`[StreamProcessor|${chatId}] Stream processing 'finally' block executed for message ID: ${messageId}.`);
         }
+
+        return { finishReason, usage, finalOutput, finalToolCalls };
     }
 
 
-    /**
-     * Handles a single part from the AI stream.
+     /**
+     * Parses potential trailing JSON (like suggested actions) after the main stream finishes.
      */
-    private async _handleStreamPart(part: any, chatId: string, assistantMessageId: string): Promise<void> {
-        switch (part.type) {
-            case 'text-delta':
-                await this._handleTextDelta(part, chatId, assistantMessageId);
-                break;
-            case 'tool-call':
-                await this._handleToolCall(part, chatId, assistantMessageId);
-                break;
-            case 'tool-call-streaming-start':
-                this._handleToolCallStreamingStart(part);
-                break;
-            case 'tool-call-delta':
-                this._handleToolCallDelta(part);
-                break;
-            case 'tool-result':
-                await this._handleToolResult(part, chatId);
-                break;
-            case 'reasoning':
-                this._handleReasoning(part);
-                break;
-            case 'reasoning-signature':
-                console.log("[StreamProcessor] Reasoning Signature:", part.signature);
-                break;
-            case 'redacted-reasoning':
-                console.log("[StreamProcessor] Redacted Reasoning:", part.data);
-                break;
-            case 'source':
-                this._handleSource(part);
-                break;
-            case 'file':
-                this._handleFile(part);
-                break;
-            case 'step-start':
-                console.log("[StreamProcessor] Step Start:", part.messageId, part.request);
-                break;
-            case 'step-finish':
-                console.log("[StreamProcessor] Step Finish:", part.messageId, part.finishReason, part.usage);
-                break;
-            case 'finish':
-                console.log("[StreamProcessor] Stream Finished. Reason:", part.finishReason, "Usage:", part.usage);
-                break;
-            case 'error':
-                this._handleError(part, chatId);
-                break;
-            default:
-                console.warn("[StreamProcessor] Unhandled stream part type:", part.type);
-        }
-    }
-
-    // --- Private Handlers for Specific Stream Part Types ---
-
-    private async _handleTextDelta(part: { textDelta: string }, chatId: string, assistantMessageId: string): Promise<void> {
-        const delta: HistoryAppendChunkDelta = {
-            type: 'historyAppendChunk',
-            chatId: chatId,
-            messageId: assistantMessageId,
-            textChunk: part.textDelta,
-        };
-        const topic = `chatHistoryUpdate/${chatId}`;
-        this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: delta } });
-    }
-
-    private async _handleToolCall(part: ToolCallPart, chatId: string, assistantMessageId: string): Promise<void> {
-        const toolCallPart: UiToolCallPart = {
-            type: 'tool-call',
-            toolCallId: part.toolCallId,
-            toolName: part.toolName,
-            args: part.args,
-            status: 'pending', // Initial status
-        };
-        const delta: HistoryAddContentPartDelta = {
-            type: 'historyAddContentPart',
-            chatId: chatId,
-            messageId: assistantMessageId,
-            part: toolCallPart,
-        };
-        const topic = `chatHistoryUpdate/${chatId}`;
-        this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: delta } });
-    }
-
-    private _handleToolCallStreamingStart(part: { type: 'tool-call-streaming-start', toolCallId: string, toolName: string }): void {
-        console.log(`[StreamProcessor] Tool call streaming start: ${part.toolName} (${part.toolCallId})`);
-    }
-
-    private _handleToolCallDelta(part: { type: 'tool-call-delta', toolCallId: string, toolName: string, argsTextDelta: string }): void {
-        // Optional UI update
-    }
-
-    private async _handleToolResult(part: ToolResultPart, chatId: string): Promise<void> {
-        const messageId = this._historyManager.findMessageByToolCallId(chatId, part.toolCallId)?.id;
-        if (!messageId) {
-            console.warn(`[StreamProcessor] Could not find messageId for toolCallId ${part.toolCallId} in chat ${chatId}. Cannot push delta update for tool result.`);
-            return;
-        }
-
-        const delta: HistoryUpdateToolCallDelta = {
-            type: 'historyUpdateToolCall',
-            chatId: chatId,
-            messageId: messageId,
-            toolCallId: part.toolCallId,
-            status: 'complete', // Assuming 'complete' on result
-            result: part.result,
-        };
-        const topic = `chatHistoryUpdate/${chatId}`;
-        this._postMessageCallback({ type: 'pushUpdate', payload: { topic: topic, data: delta } });
-    }
-
-    private _handleReasoning(part: { type: 'reasoning', textDelta: string }): void {
-        console.log("[StreamProcessor] Reasoning:", part.textDelta);
-    }
-
-    private _handleSource(part: { type: 'source', source: any }): void {
-        console.log("[StreamProcessor] Source:", part.source);
-    }
-
-    private _handleFile(part: { type: 'file', name: string, content: string, encoding: string }): void {
-        console.log("[StreamProcessor] File:", part);
-    }
-
-    private _handleError(part: { type: 'error', error: any }, chatId: string): void {
-        console.error("[StreamProcessor] Error part received in stream:", part.error);
-        // No longer sending streaming: false here, finally block handles it.
-        throw new Error(`Stream error: ${part.error}`); // Re-throw to be caught by the main loop
-    }
-
-} // End of StreamProcessor class
+     private async handlePostStreamProcessing(chatId: string, messageId: string, fullText: string): Promise<void> {
+          console.log(`[StreamProcessor|${chatId}] Starting post-stream processing for message ${messageId}.`);
+          try {
+               await this._historyManager.messageModifier.reconcileFinalAssistantMessage(
+                   chatId,
+                   messageId,
+                   null,
+                   () => {}
+               );
+                console.log(`[StreamProcessor|${chatId}] Completed post-stream processing (reconcile) for message ${messageId}.`);
+          } catch (error) {
+               console.error(`[StreamProcessor|${chatId}] Error during reconcileFinalAssistantMessage for message ${messageId}:`, error);
+          }
+     }
+}
