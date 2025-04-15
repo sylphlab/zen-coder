@@ -75,6 +75,8 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
 
     // --- State Management ---
     const [inputValue, _setInputValue] = useState('');
+    // Local state for optimistic UI updates of provider/model selection
+    const [optimisticConfig, setOptimisticConfig] = useState<{ providerId: string | null; modelId: string | null } | null>(null);
     const setInputValue = useCallback((value: string) => {
         _setInputValue(value);
     }, []);
@@ -119,8 +121,10 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
     const effectiveConfig = useMemo(() => {
         return calculateEffectiveConfig(session, defaultConfig);
     }, [session, defaultConfig]);
-    const providerId = effectiveConfig.providerId;
-    const modelId = effectiveConfig.modelId;
+
+    // Determine the provider/model IDs to use, prioritizing optimistic state
+    const providerId = optimisticConfig?.providerId ?? effectiveConfig.providerId;
+    const modelId = optimisticConfig?.modelId ?? effectiveConfig.modelId;
 
     // Refs
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
@@ -144,11 +148,16 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
 
 
     // --- Effects ---
+    // Scroll to bottom effect
     useEffect(() => {
         if (!isHistoryLoading && messages.length > 0) {
             messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
         }
     }, [messages, isHistoryLoading]);
+
+    // Removed useEffect that resets optimisticConfig based on effectiveConfig catching up.
+    // Let optimistic state persist to ensure ModelSelector receives the correct providerId
+    // while fetchModels is potentially running.
 
      // Handle input change event (needed by InputArea)
     const handleInputChange = useCallback((event: TargetedEvent<HTMLTextAreaElement, Event>) => { // Correct event type
@@ -248,7 +257,29 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
     const cancelClearChat = useCallback(() => { setShowClearConfirm(false); }, []);
     const handleSuggestedActionClick = useCallback(async (action: SuggestedAction) => { if (!chatId || !providerId || !modelId) return; try { switch (action.action_type) { case 'send_message': if (typeof action.value === 'string') await sendMessageMutate({ chatId: chatId, content: [{ type: 'text', text: action.value }], providerId: providerId, modelId: modelId }); break; case 'run_tool': if (typeof action.value === 'object' && action.value?.toolName) await executeToolActionMutate({ toolName: action.value.toolName, args: action.value.args ?? {} }); break; case 'fill_input': if (typeof action.value === 'string') setInputValue(action.value); textareaRef.current?.focus(); break; } } catch (error) { console.error(`Error handling suggested action:`, error); } }, [ chatId, providerId, modelId, setInputValue, textareaRef, sendMessageMutate, executeToolActionMutate ]); // Use mutate functions obtained at top level
     const handleStopGeneration = useCallback(async () => { try { await stopGenerationMutate(); } catch (error) { console.error('Error stopping generation:', error); } }, [stopGenerationMutate]); // Use mutate function obtained at top level
-    const handleChatModelChange = useCallback(async (newProviderId: string | null, newModelId: string | null) => { if (chatId) { const cfg: Partial<ChatConfig> = { providerId: newProviderId ?? undefined, modelId: newModelId ?? undefined, useDefaults: false }; try { await updateChatConfigMutate({ chatId: chatId, config: cfg }); } catch (e) { console.error(`Error updating chat config:`, e); } } }, [chatId, updateChatConfigMutate]); // Use mutate function obtained at top level
+    const handleChatModelChange = useCallback(async (newProviderId: string | null, newModelId: string | null) => {
+        if (chatId) {
+            console.log(`[ChatView handleChatModelChange] User selected Provider: ${newProviderId}, Model: ${newModelId}`);
+            // Optimistically update local state
+            setOptimisticConfig({ providerId: newProviderId, modelId: newModelId });
+
+            // Trigger backend update
+            const cfg: Partial<ChatConfig> = {
+                providerId: newProviderId ?? undefined,
+                modelId: newModelId ?? undefined,
+                useDefaults: false // Explicitly set useDefaults to false when user selects a model
+            };
+            try {
+                await updateChatConfigMutate({ chatId: chatId, config: cfg });
+                console.log(`[ChatView handleChatModelChange] Backend update triggered for chat ${chatId}.`);
+            } catch (e) {
+                console.error(`[ChatView handleChatModelChange] Error updating chat config:`, e);
+                // Optionally revert optimistic state on error?
+                // setOptimisticConfig(null); // Revert if backend fails
+            }
+        }
+    }, [chatId, updateChatConfigMutate]); // Use mutate function obtained at top level
+
     const handleCopyMessage = useCallback((messageId: string) => {
         const msg = Array.isArray(messages) ? messages.find(m => m.id === messageId) : null;
         if (msg?.content) {
@@ -293,8 +324,8 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
             {/* Header */}
             <div class="p-2 border-b border-gray-200 dark:border-gray-700">
                 <HeaderControls
-                    selectedProviderId={providerId ?? null}
-                    selectedModelId={modelId ?? null}
+                    selectedProviderId={providerId ?? null} // Use the determined providerId
+                    selectedModelId={modelId ?? null}     // Use the determined modelId
                     onModelChange={handleChatModelChange}
                     // Removed incorrect chatId prop
                 />
@@ -324,7 +355,7 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
                 removeSelectedImage={removeSelectedImage}
                 setSelectedImages={setSelectedImages} // Add missing prop
                 handleStopGeneration={handleStopGeneration}
-                currentModelId={modelId ?? null}
+                currentModelId={modelId ?? null} // Use the determined modelId
                 inputValue={inputValue}
                 setInputValue={setInputValue} // Pass setInputValue
                 // handleInputChange is internal to ChatView, InputArea uses setInputValue

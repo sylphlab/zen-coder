@@ -29,7 +29,7 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
 
     // --- Local State ---
     const [inputValue, setInputValue] = useState('');
-    const selectRef = useRef<HTMLSelectElement>(null); // Re-add ref for imperative update
+    // Removed selectRef
 
     // Effect to fetch models when provider changes
     useEffect(() => {
@@ -50,40 +50,37 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
         }
     }, [selectedProviderId, selectedModelId, modelsState]);
 
-    // Effect to imperatively set select value when the prop changes
-    useEffect(() => {
-        const targetValue = selectedProviderId ?? '';
-        const currentValue = selectRef.current?.value;
-        console.log(`[ModelSelector useEffect/ImperativeUpdate] Running Effect. Prop selectedProviderId: "${selectedProviderId}". Target value: "${targetValue}". Current DOM value: "${currentValue}"`);
-        if (selectRef.current && targetValue !== currentValue) {
-            console.log(`[ModelSelector useEffect/ImperativeUpdate] DOM value mismatch. Attempting to set select value to: "${targetValue}"`);
-            selectRef.current.value = targetValue;
-            // Verify immediately after setting
-            const newValue = selectRef.current?.value;
-            console.log(`[ModelSelector useEffect/ImperativeUpdate] Value AFTER setting: "${newValue}". ${newValue === targetValue ? 'SUCCESS' : 'FAILURE (DOM value did not update)'}`);
-        } else if (selectRef.current) {
-             console.log(`[ModelSelector useEffect/ImperativeUpdate] No mismatch or ref not ready. Current DOM value: "${currentValue}". Target value: "${targetValue}"`);
-        } else {
-            console.log(`[ModelSelector useEffect/ImperativeUpdate] Ref not ready.`);
-        }
-    }, [selectedProviderId]); // Run only when selectedProviderId prop changes
+    // Removed imperative useEffect for select update
 
     // --- Derived Data ---
     let uniqueProviders: { id: string; name: string }[] = [];
     if (Array.isArray(allProvidersStatus)) {
         const providerMap = new Map<string, { id: string; name: string }>();
-        allProvidersStatus.forEach(provider => {
-            if (provider && typeof provider.id === 'string' && typeof provider.name === 'string' && !providerMap.has(provider.id)) {
-                providerMap.set(provider.id, { id: provider.id, name: provider.name });
-            }
-        });
+        // Filter providers based on status before adding to the map
+        allProvidersStatus
+            .filter(provider => provider && provider.enabled && (provider.apiKeySet || !provider.requiresApiKey))
+            .forEach(provider => {
+                // Add only ready providers, ensuring uniqueness by ID
+                if (!providerMap.has(provider.id)) {
+                    providerMap.set(provider.id, { id: provider.id, name: provider.name });
+                }
+            });
         uniqueProviders = Array.from(providerMap.values());
+        // Sort the filtered list
+        uniqueProviders.sort((a, b) => a.name.localeCompare(b.name));
     }
 
     const modelsForSelectedProvider = useMemo(() => {
-        if (modelsState.providerId === selectedProviderId && !modelsState.loading) {
+        const storeProviderId = modelsState.providerId;
+        const propProviderId = selectedProviderId;
+        const isLoading = modelsState.loading;
+        const conditionMet = storeProviderId === propProviderId && !isLoading;
+        console.log(`[ModelSelector useMemo/modelsForSelectedProvider] StoreProvider: ${storeProviderId}, PropProvider: ${propProviderId}, Loading: ${isLoading}, ConditionMet: ${conditionMet}`);
+        if (conditionMet) {
+            console.log(`[ModelSelector useMemo/modelsForSelectedProvider] Returning ${modelsState.models.length} models from store.`);
             return modelsState.models;
         }
+        console.log(`[ModelSelector useMemo/modelsForSelectedProvider] Returning empty array.`);
         return [];
     }, [selectedProviderId, modelsState]);
 
@@ -106,28 +103,46 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     }, [setInputValue]);
 
     const handleModelBlur = useCallback(() => {
+        console.log(`[ModelSelector handleModelBlur] Input value on blur: "${inputValue}"`);
         const lowerInput = inputValue.toLowerCase().trim();
         let matchedModel: AvailableModel | null = null;
+
+        // Check if models are loaded for the correct provider
         if (modelsState.providerId !== selectedProviderId || modelsState.loading) {
+             console.log(`[ModelSelector handleModelBlur] Models not ready or wrong provider. StoreProvider: ${modelsState.providerId}, PropProvider: ${selectedProviderId}, Loading: ${modelsState.loading}. Reverting input.`);
              const currentSelectedModelAgain = modelsState.models.find(m => m.id === selectedModelId);
              const revertValueAgain = currentSelectedModelAgain?.name ?? selectedModelId ?? '';
+             console.log(`[ModelSelector handleModelBlur] Reverting input to: "${revertValueAgain}"`);
              setInputValue(revertValueAgain);
             return;
         }
+
+        console.log(`[ModelSelector handleModelBlur] Trying to match input "${lowerInput}" against ${modelsState.models.length} models.`);
+        // Try to find an exact match (case-insensitive) for ID or Name
         matchedModel = modelsState.models.find(m => m.id.toLowerCase() === lowerInput || (m.name && m.name.toLowerCase() === lowerInput)) ?? null;
+
         if (matchedModel) {
+            console.log(`[ModelSelector handleModelBlur] Found match: ID=${matchedModel.id}, Name=${matchedModel.name}`);
             const finalProviderId = matchedModel.providerId;
             const finalModelId = matchedModel.id;
             const displayValue = matchedModel.name ?? matchedModel.id;
+            console.log(`[ModelSelector handleModelBlur] Setting input value to displayValue: "${displayValue}"`);
             setInputValue(displayValue);
             if (finalProviderId !== selectedProviderId || finalModelId !== selectedModelId) {
+                console.log(`[ModelSelector handleModelBlur] Model changed. Calling onModelChange with Provider: ${finalProviderId}, Model: ${finalModelId}`);
                 onModelChange(finalProviderId, finalModelId);
+            } else {
+                 console.log(`[ModelSelector handleModelBlur] Matched model is the same as current selection. No change needed.`);
             }
         } else {
+            console.log(`[ModelSelector handleModelBlur] No exact match found for "${lowerInput}".`);
             const currentSelectedModel = modelsState.models.find(m => m.id === selectedModelId);
             const revertValue = currentSelectedModel?.name ?? selectedModelId ?? '';
+            console.log(`[ModelSelector handleModelBlur] Reverting input value to current selection: "${revertValue}"`);
             setInputValue(revertValue);
+            // If user cleared the input, deselect the model
             if (!lowerInput && selectedModelId !== null) {
+                 console.log(`[ModelSelector handleModelBlur] Input was cleared. Calling onModelChange to deselect model.`);
                  onModelChange(selectedProviderId, null);
             }
         }
@@ -147,15 +162,15 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
     const modelFetchProviderId = modelsState.providerId;
 
     return (
-        <div class="model-selector flex items-center space-x-2">
-            <label htmlFor={providerSelectId} class="text-sm font-medium mr-1">{providerLabel}:</label>
+        // Use gap for consistent spacing, align items center
+        <div class="model-selector flex items-center gap-2">
+            <label htmlFor={providerSelectId} class="text-sm font-medium flex-shrink-0">{providerLabel}:</label>
             <select
-                ref={selectRef} // Add ref back
+                // Removed ref
                 id={providerSelectId}
-                // Removed value prop to make it uncontrolled visually
-                // The useEffect hook above now handles setting the value imperatively
+                value={selectedProviderId ?? ''} // Control the select value directly
                 onChange={handleProviderSelect}
-                defaultValue={selectedProviderId ?? ''} // Set initial value non-reactively
+                // Removed defaultValue
                 disabled={providersLoading || providersError}
                 class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm focus:ring-blue-500 focus:border-blue-500 outline-none"
             >
@@ -168,7 +183,8 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                 {!providersLoading && !providersError && uniqueProviders.length === 0 && <option disabled>No providers found</option>}
             </select>
 
-            <label htmlFor={modelInputId} class="text-sm font-medium ml-3 mr-1">{modelLabel}:</label>
+            {/* Adjusted margin */}
+            <label htmlFor={modelInputId} class="text-sm font-medium flex-shrink-0 ml-2">{modelLabel}:</label>
             <input
                 list={datalistId}
                 id={modelInputId}
@@ -182,16 +198,30 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                     : modelsError ? "Error loading models"
                     : "Select or Type Model"
                 }
-                disabled={!selectedProviderId || (modelsLoading && modelFetchProviderId === selectedProviderId) || !!modelsError}
-                class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm flex-1 min-w-40 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                // Removed modelsLoading from disabled condition
+                disabled={!selectedProviderId || !!modelsError}
+                // Added flex-grow to allow input to expand
+                class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm flex-grow min-w-40 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 aria-invalid={!!modelsError}
-                title={modelsError ?? ''}
+                title={modelsError ?? (modelsLoading ? 'Loading models...' : '')} // Show loading in title
             />
             <datalist id={datalistId}>
                 {filteredModelsForDatalist.map((model) => (
-                    <option key={`${model.providerId}-${model.id}`} value={model.name}></option>
+                    // Use model.id as the value for consistency with internal logic
+                    // Use model.id as key assuming it's unique for the provider
+                    // Display model.name (or id as fallback) between the tags for the user
+                    <option key={model.id} value={model.id}>{model.name ?? model.id}</option>
                 ))}
             </datalist>
+
+            {/* Error Indicator - Adjusted margin */}
+            {modelsError && (
+                <div class="text-red-500 flex-shrink-0" title={modelsError}>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+            )}
         </div>
     );
 };

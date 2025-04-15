@@ -48,6 +48,44 @@ export const $modelsForSelectedProvider = atom<{
     providerId: null,
 });
 
+
+// --- Pub/Sub Listener for Model Updates ---
+import { listen } from '../utils/communication';
+
+onMount($modelsForSelectedProvider, () => {
+    console.log('[$modelsForSelectedProvider onMount] Setting up listener for providerModelsUpdate');
+    // Define the expected type for the update data payload
+    type ProviderModelsUpdatePayload = { providerId: string; models: AvailableModel[]; source: 'fetch' | 'cache' };
+
+    const unsubscribe = listen('providerModelsUpdate', (updateData: any) => {
+        // Type assertion/check for safety
+        const payload = updateData as ProviderModelsUpdatePayload;
+        if (!payload || typeof payload.providerId !== 'string' || !Array.isArray(payload.models)) {
+             console.warn('[$modelsForSelectedProvider listener] Received invalid update data:', updateData);
+             return;
+        }
+
+        const currentStore = $modelsForSelectedProvider.get();
+        console.log(`[$modelsForSelectedProvider listener] Received update for ${payload.providerId}. Current store provider: ${currentStore.providerId}`);
+        // Only update if the push is for the currently selected provider
+        if (payload.providerId === currentStore.providerId) {
+            console.log(`[$modelsForSelectedProvider listener] Updating models for ${payload.providerId} from background fetch.`);
+            $modelsForSelectedProvider.set({
+                ...currentStore,
+                models: payload.models,
+                loading: false, // Ensure loading is false after background update
+                error: null,    // Clear any previous error
+            });
+        }
+    });
+
+    // Cleanup function
+    return () => {
+        console.log('[$modelsForSelectedProvider onMount] Cleaning up listener for providerModelsUpdate');
+        unsubscribe();
+    };
+});
+
 // Function to fetch models for a given providerId
 export async function fetchModels(providerId: string | null) {
     if (!providerId) {
@@ -56,18 +94,26 @@ export async function fetchModels(providerId: string | null) {
         return; // Exit if no provider is selected
     }
 
-    // Check if we already have models for this provider
-    const currentState = $modelsForSelectedProvider.get();
-    if (currentState.providerId === providerId && !currentState.error) {
-        console.log(`[fetchModels Function] Models for ${providerId} already loaded.`);
-        // Optionally re-fetch if needed, but for now, just return if loaded
-        return;
-    }
+    // Removed early return check to force fetch/state update
+    // const currentState = $modelsForSelectedProvider.get();
+    // if (currentState.providerId === providerId && !currentState.error) {
+    //     console.log(`[fetchModels Function] Models for ${providerId} already loaded.`);
+    //     // Optionally re-fetch if needed, but for now, just return if loaded
+    //     return;
+    // }
 
     console.log(`[fetchModels Function] Fetching models for provider: ${providerId}`);
-    $modelsForSelectedProvider.set({ ...currentState, loading: true, error: null, providerId }); // Set loading state
+    // Ensure loading state is set correctly, even if providerId hasn't changed from the store's perspective yet
+    const currentState = $modelsForSelectedProvider.get(); // Get state again just before setting loading
+    $modelsForSelectedProvider.set({
+        loading: true,
+        error: null,
+        models: currentState.providerId === providerId ? currentState.models : [], // Keep old models if same provider, clear otherwise
+        providerId: providerId // Always update providerId here
+    });
 
     try {
+        // Corrected requestType to match the registered backend handler
         const models = await requestData<AvailableModel[]>('getModelsForProvider', { providerId });
         console.log(`[fetchModels Function] Received ${models.length} models for ${providerId}.`);
         $modelsForSelectedProvider.set({ loading: false, error: null, models, providerId });

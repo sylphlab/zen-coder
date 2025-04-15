@@ -98,7 +98,7 @@ export class GetAvailableModelsHandler implements RequestHandler { // Changed in
     private mapModelsToAvailableModel(models: ModelDefinition[], providerId: string, context: HandlerContext): AvailableModel[] {
         const providerName = context.aiService.providerManager.providerMap.get(providerId)?.name ?? providerId; // Use providerManager
         return models.map(m => ({
-            id: `${providerId}:${m.id}`, // Standardized ID
+            id: m.id, // Use the model's own ID
             name: m.name,
             providerId: providerId,
             providerName: providerName
