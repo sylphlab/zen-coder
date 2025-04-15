@@ -2,7 +2,14 @@ import * as vscode from 'vscode';
 import { CoreMessage, Tool, StreamTextResult } from 'ai'; // Import necessary types
 import { RequestHandler, HandlerContext } from './RequestHandler';
 import { StreamProcessor } from '../../streamProcessor';
-import { UiMessageContentPart, ChatSession } from '../../common/types'; // Import ChatSession
+
+import {
+    UiMessageContentPart,
+    ChatSession,
+    HistoryUpdateMessageStatusDelta, // Existing
+    UiMessage,                     // Added
+    HistoryAddMessageDelta         // Added
+} from '../../common/types';
 
 export class SendMessageHandler implements RequestHandler {
     public readonly requestType = 'sendMessage';
@@ -21,8 +28,9 @@ export class SendMessageHandler implements RequestHandler {
 
         try {
             // Validate input (also get tempId)
-            const { tempId } = message; // Extract tempId from the payload
-            const validationResult = this._validateInput(message, context);
+            const { tempId: userMessageTempId } = message; // Extract and rename tempId for clarity
+            // Pass userMessageTempId to the validation function
+            const validationResult = this._validateInput(message, context, userMessageTempId);
             chatId = validationResult.chatId ?? undefined;
             const { userMessageContent, providerId, modelId } = validationResult;
             if (!userMessageContent || !chatId || !providerId || !modelId) {
@@ -30,14 +38,15 @@ export class SendMessageHandler implements RequestHandler {
                  // Error message already posted by _validateInput
                  return;
             }
-             if (!tempId) {
+            // Validate tempId existence (renamed to userMessageTempId)
+            if (!userMessageTempId) {
                   console.error("[SendMessageHandler] Missing tempId in sendMessage payload.");
-                  // Optionally send an error back to the specific chat?
+                  // TODO: Consider sending an error message back to the UI here as well
                   return; // Stop processing if tempId is missing
              }
 
-            // 1. Add user message (pass tempId)
-            await context.historyManager.addUserMessage(chatId, userMessageContent, tempId); // Pass chatId and tempId
+            // 1. Add user message (pass userMessageTempId)
+            await context.historyManager.addUserMessage(chatId, userMessageContent, userMessageTempId); // Pass chatId and userMessageTempId
 
             // 2. Add assistant message frame (this now pushes a delta)
             assistantUiMsgId = await context.historyManager.addAssistantMessageFrame(chatId!);
@@ -111,7 +120,8 @@ export class SendMessageHandler implements RequestHandler {
     }
 
     /** Validates the input message structure. Returns null if invalid. */
-    private _validateInput(message: any, context: HandlerContext): { chatId: string | null, userMessageContent: UiMessageContentPart[] | null, providerId: string | null, modelId: string | null } {
+    // Add userMessageTempId to the parameters
+    private _validateInput(message: any, context: HandlerContext, userMessageTempId: string | undefined): { chatId: string | null, userMessageContent: UiMessageContentPart[] | null, providerId: string | null, modelId: string | null } {
         const chatId = message.chatId; // Get chatId from message
         const userMessageContent: UiMessageContentPart[] = message.content;
         const providerId = message.providerId;
@@ -143,11 +153,56 @@ export class SendMessageHandler implements RequestHandler {
          );
          if (!isValidContent) {
              console.error("[SendMessageHandler] Invalid content part structure received.");
-             context.postMessage({ type: 'pushUpdate', payload: { topic: `chatHistoryUpdate/${chatId}`, data: { type: 'messageStatus', messageId: 'error-invalid-content', delta: { error: 'Invalid message content structure.' } } } });
+             // Send a new error message instead of a status update
+             const errorMessage: UiMessage = {
+                 id: `error-invalid-content-${Date.now()}`,
+                 role: 'assistant',
+                 content: [{ type: 'text', text: 'Error: Invalid message content structure.' }],
+                 timestamp: Date.now(),
+                 status: 'error',
+                 tempId: userMessageTempId // Link error back to the user message tempId
+             };
+             const errorDelta: HistoryAddMessageDelta = {
+                 type: 'historyAddMessage',
+                 chatId: chatId,
+                 message: errorMessage
+             };
+             context.postMessage({ type: 'pushUpdate', payload: { topic: `chatHistoryUpdate/${chatId}`, data: errorDelta } });
              return { chatId: null, userMessageContent: null, providerId: null, modelId: null };
          }
-
-        return { chatId, userMessageContent, providerId, modelId };
+ 
+         // --- Add check for multimodal support ---
+         const hasText = userMessageContent.some(part => part.type === 'text' && part.text.trim() !== '');
+         const hasImage = userMessageContent.some(part => part.type === 'image');
+ 
+         if (hasText && hasImage) {
+             // TODO: Replace this with a more robust check based on actual model capabilities from ModelResolver/ProviderManager
+             const supportedMultimodalProviders = ['anthropic', 'openai', 'google']; // Example list
+             if (!supportedMultimodalProviders.includes(providerId)) {
+                  console.error(`[SendMessageHandler] Provider '${providerId}' (Model: ${modelId}) does not support mixed text and image input.`);
+                  // Send a new error message instead of a status update
+                  const errorMessage: UiMessage = {
+                      id: `error-multimodal-${Date.now()}`,
+                      role: 'assistant',
+                      content: [{ type: 'text', text: `Error: The selected model (${modelId}) does not support sending text and images together.` }],
+                      timestamp: Date.now(),
+                      status: 'error',
+                      tempId: userMessageTempId // Link error back to the user message tempId
+                  };
+                   const errorDelta: HistoryAddMessageDelta = {
+                      type: 'historyAddMessage',
+                      chatId: chatId,
+                      message: errorMessage
+                  };
+                  context.postMessage({ type: 'pushUpdate', payload: { topic: `chatHistoryUpdate/${chatId}`, data: errorDelta } });
+                  // Also reject the request
+                  return { chatId: null, userMessageContent: null, providerId: null, modelId: null };
+             }
+             console.log(`[SendMessageHandler] Mixed text/image content detected for supported provider '${providerId}'. Proceeding.`);
+         }
+         // --- End multimodal check ---
+ 
+         return { chatId, userMessageContent, providerId, modelId };
     }
 
     /** Prepares data and calls the AI service. Returns the stream result. */

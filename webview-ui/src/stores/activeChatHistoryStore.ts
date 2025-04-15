@@ -114,6 +114,11 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
             const route = router.get();
             const currentRouteChatId = (route && 'params' in route && route.params && 'chatId' in route.params) ? route.params.chatId : 'unknown';
 
+            // --- DETAILED LOGGING --- 
+            console.log(`[$activeChatHistory handleUpdate PRE-SWITCH] updateData object:`, JSON.stringify(updateData));
+            console.log(`[$activeChatHistory handleUpdate PRE-SWITCH] updateData.type: ${updateData?.type}`);
+            // --- END DETAILED LOGGING ---
+
             switch (updateData.type) {
                 case 'historySet': {
                     console.log(`[$activeChatHistory handleUpdate - historySet] Setting full history. Length: ${updateData.history?.length ?? 'null'}`);
@@ -145,8 +150,33 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
                     return setHistoryState;
                 }
                 case 'historyAddMessage': {
-                    console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] START. Message ID: ${updateData.message.id}. TempID: ${updateData.message.tempId}. Role: ${updateData.message.role}`);
+                    console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] START. Message ID: ${updateData.message.id}. TempID: ${updateData.message.tempId}. Role: ${updateData.message.role}, Status: ${updateData.message.status}`);
                     const incomingMessage = updateData.message;
+
+                    // --- START: Handle Backend Validation Error Message ---
+                    // Check if it's an assistant error message linked via tempId
+                    if (incomingMessage.role === 'assistant' && incomingMessage.status === 'error' && incomingMessage.tempId) {
+                        console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Received assistant error message delta for user tempId: ${incomingMessage.tempId}`);
+                        if (newHistory.length > 0) {
+                            const lastMessageIndex = newHistory.length - 1;
+                            const lastMessage = newHistory[lastMessageIndex];
+                            // Check if the last message is the optimistic pending one we should replace
+                            if (lastMessage.role === 'assistant' && lastMessage.status === 'pending' && lastMessage.id.startsWith('pending-assistant-')) {
+                                // TODO: Ideally, verify this pending message corresponds to incomingMessage.tempId
+                                // For now, assume the last pending message is the one to replace.
+                                console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Replacing optimistic pending message ${lastMessage.id} with error message ${incomingMessage.id}.`);
+                                newHistory.pop(); // Remove the pending message
+                                newHistory.push(incomingMessage); // Add the error message
+                                return newHistory; // Return the updated history
+                            } else {
+                                console.warn(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Received assistant error, but last message wasn't the expected pending one. Adding error message anyway. Last msg ID: ${lastMessage?.id}, Status: ${lastMessage?.status}`);
+                            }
+                        } else {
+                             console.warn(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Received assistant error, but history is empty. Adding error message.`);
+                        }
+                        // If we didn't replace, fall through to default add logic below
+                    }
+                    // --- END: Handle Backend Validation Error Message ---
 
                     // 1. Handle User Message Reconciliation
                     if (incomingMessage.role === 'user' && incomingMessage.tempId) {
@@ -270,8 +300,9 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
 
                     return newHistory; // Return the modified array
                 }
-                 case 'historyUpdateMessageStatus': {
-                    console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] START. Updating status for message ID: ${updateData.messageId} to '${updateData.status ?? 'undefined'}' from ${typeof updateData.status}`);
+                // --- Add case for historyUpdateMessageStatus ---
+                case 'historyUpdateMessageStatus': {
+                    console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] START. Updating status for message ID: ${updateData.messageId} to '${updateData.status ?? 'undefined'}'`);
                     const messageIndex = newHistory.findIndex(m => m.id === updateData.messageId);
                     if (messageIndex === -1) {
                          console.warn(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Message ID ${updateData.messageId} not found. Update dropped.`);
@@ -311,6 +342,7 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
                          return newHistory; // Return the original array reference if no change occurred
                     }
                 }
+                // --- End case for historyUpdateMessageStatus ---
 
                 case 'historyAddContentPart': {
                     console.log(`[$activeChatHistory handleUpdate] Adding content part to message ID: ${updateData.messageId}`);
