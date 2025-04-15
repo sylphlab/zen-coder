@@ -125,7 +125,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     private readonly _historyManager: HistoryManager; // Store the passed instance
     private readonly _configResolver: ConfigResolver;
     private readonly _modelResolver: ModelResolver;
-    private _streamProcessor?: StreamProcessor;
+    // No _streamProcessor instance here
     private readonly _mcpManager: McpManager;
     private readonly _handlers: Map<string, RequestHandler>;
 
@@ -150,10 +150,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private _registerHandlers(): void {
-        if (!this._streamProcessor) {
-            console.error("Cannot register handlers: StreamProcessor not initialized.");
-            return;
-        }
+        // No need to get streamProcessor here, SendMessageHandler will get it from context
         const allHandlers: RequestHandler[] = [
             new GetChatSessionsHandler(),
             new GetAvailableProvidersHandler(),
@@ -184,7 +181,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new UnsubscribeHandler(),
             new OpenOrCreateProjectInstructionsFileHandler(),
             new UpdateLastLocationHandler(),
-            new SendMessageHandler(this._streamProcessor),
+            new SendMessageHandler(), // Correct: Constructor takes no args
             new StopGenerationHandler(this._aiService),
             new ExecuteToolActionHandler(),
             new OpenGlobalMcpConfigHandler(),
@@ -208,14 +205,12 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._view = webviewView;
         console.log("Resolving webview view...");
 
-        // Initialize StreamProcessor with the unified _historyManager and postMessageCallback
-        this._streamProcessor = new StreamProcessor(
-            this._historyManager, // Use the instance passed to the constructor
-            this.postMessageToWebview.bind(this)
-        );
-        this._registerHandlers();
+        // Remove incorrect StreamProcessor instantiation
+        // this._streamProcessor = ... // REMOVED
+
+        this._registerHandlers(); // Register handlers (which get dependencies via context)
         this._subscribeToServiceEvents();
-        console.log("StreamProcessor instantiated, handlers registered, and subscribed to service events.");
+        // console.log("StreamProcessor instantiated..."); // REMOVED
 
         webviewView.webview.options = {
             enableScripts: true,
@@ -288,6 +283,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                 providerStatusManager: this._aiService.providerStatusManager,
                 modelResolver: this._modelResolver,
                 mcpManager: this._mcpManager,
+                subscriptionManager: this._aiService.getSubscriptionManager(), // Add subscriptionManager
                 postMessage: this.postMessageToWebview.bind(this),
                 extensionContext: this._context
             };

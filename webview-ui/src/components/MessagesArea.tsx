@@ -1,6 +1,6 @@
 import { FunctionalComponent } from 'preact';
 // Add UiMessageContentPart, remove unused UiTextMessagePart
-import { UiMessage, SuggestedAction, UiToolCallPart, UiImagePart, UiMessageContentPart } from '../../../src/common/types';
+import { UiMessage, SuggestedAction, UiToolCallPart, UiImagePart, UiMessageContentPart } from '../../../src/common/types'; // Corrected path again
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
@@ -150,7 +150,7 @@ const Message: FunctionalComponent<MessageProps> = memo(({ message, isStreaming,
                      </div>
                  ) : (
                       /* Render actual content if not pending */
-                      Array.isArray(message.content) && message.content.map((part, index) => (
+                      Array.isArray(message.content) && message.content.map((part: UiMessageContentPart, index: number) => (
                            <MessageContentPart key={index} part={part} isStreaming={isStreaming && index === message.content.length - 1} />
                       ))
                  )}
@@ -187,7 +187,7 @@ const Message: FunctionalComponent<MessageProps> = memo(({ message, isStreaming,
 
 // --- Messages Area Component ---
 
-export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
+export const MessagesArea: FunctionalComponent<MessagesAreaProps> = memo(({ // Wrap with memo
     messages,
     suggestedActionsMap,
     isStreaming,
@@ -203,7 +203,7 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
 
     return (
         <div class={`p-4 ${className || ''}`}>
-            {messages.map((msg) => {
+            {messages.map((msg: UiMessage) => { // Add type to msg
                  const isLastMessage = msg.id === lastMessage?.id;
                 // Only pass suggested actions to the last assistant message
                  const actionsForThisMessage = (isLastMessage && msg.role === 'assistant') ? suggestedActionsMap[msg.id] : undefined;
@@ -224,4 +224,4 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
             <div ref={messagesEndRef} />
         </div>
     );
-};
+}); // Close memo wrapper

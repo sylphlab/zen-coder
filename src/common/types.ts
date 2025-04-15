@@ -23,7 +23,8 @@ export type UiMessageContentPart = UiTextMessagePart | UiToolCallPart | UiImageP
  * Represents a single message displayed in the UI chat history.
  */
 export interface UiMessage {
-    id: string; // Unique identifier for the message
+    id: string; // Unique identifier for the message (can be temporary on frontend initially)
+    tempId?: string; // Optional temporary ID used for optimistic updates reconciliation
     role: 'user' | 'assistant' | 'tool' | 'system'; // Add role property
     content: UiMessageContentPart[]; // Array of content parts (text, tool calls, images)
     timestamp: number; // When the message was created/received
@@ -41,11 +42,11 @@ export interface HistorySetDelta {
   chatId: string;
   history: UiMessage[];
 }
-
+// Delta payload for adding a message, now includes optional tempId
 export interface HistoryAddMessageDelta {
   type: 'historyAddMessage';
   chatId: string;
-  message: UiMessage;
+  message: UiMessage; // This message might contain tempId from the backend
 }
 
 export interface HistoryAppendChunkDelta {

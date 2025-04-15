@@ -6,6 +6,7 @@ import { ConfigResolver } from '../../ai/configResolver'; // Import ConfigResolv
 import { ModelResolver } from '../../ai/modelResolver';
 import { ProviderStatusManager } from '../../ai/providerStatusManager';
 import { McpManager } from '../../ai/mcpManager';
+import { SubscriptionManager } from '../../ai/subscriptionManager'; // Import SubscriptionManager
 
 /**
  * Context object passed to request handlers.
@@ -19,6 +20,7 @@ export interface HandlerContext {
     modelResolver: ModelResolver;
     providerStatusManager: ProviderStatusManager;
     mcpManager: McpManager;
+    subscriptionManager: SubscriptionManager; // Add SubscriptionManager
     postMessage: (message: any) => void; // Function to post messages back to webview
     extensionContext: vscode.ExtensionContext; // Add extension context
 }

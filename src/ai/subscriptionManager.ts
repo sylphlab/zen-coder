@@ -141,7 +141,13 @@ export class SubscriptionManager {
     public notifyChatHistoryUpdate(chatId: string, historyData: any): void {
         const topic = `chatHistoryUpdate/${chatId}`;
         if (this.hasSubscription(topic)) {
-            console.log(`[SubscriptionManager] Pushing ${topic}.`);
+            console.log(`[SubscriptionManager] Pushing ${topic}. Data type: ${historyData.type}`);
+            
+            // Debug message status updates specifically
+            if (historyData.type === 'historyUpdateMessageStatus') {
+                console.log(`[SubscriptionManager] MessageStatus update for message ${historyData.messageId}, status: ${historyData.status === undefined ? 'undefined' : historyData.status}`);
+            }
+            
             this._postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: historyData } });
         }
     }

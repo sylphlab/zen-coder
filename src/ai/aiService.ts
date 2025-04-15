@@ -18,6 +18,7 @@ import { HistoryManager } from '../historyManager';
 import { ProviderStatusManager } from './providerStatusManager';
 import { ToolManager } from './toolManager';
 import { SubscriptionManager } from './subscriptionManager';
+import { StreamProcessor } from '../streamProcessor'; // Import is correct
 import { AiStreamer } from './aiStreamer';
 import { ProviderManager } from './providerManager';
 import { ChatSessionManager } from '../session/chatSessionManager'; // Import ChatSessionManager
@@ -37,11 +38,17 @@ export class AiService {
     private readonly _toolManager: ToolManager;
     private readonly _subscriptionManager: SubscriptionManager;
     private readonly _configResolver: ConfigResolver;
+    private readonly _streamProcessor: StreamProcessor; // Instantiate StreamProcessor here
     private readonly _aiStreamer: AiStreamer;
     public readonly eventEmitter: EventEmitter;
     public readonly chatSessionManager: ChatSessionManager;
 
-    public get providerStatusManager(): ProviderStatusManager {
+    // Add getter for StreamProcessor
+    public get streamProcessor(): StreamProcessor {
+        return this._streamProcessor;
+    }
+
+    public get providerStatusManager(): ProviderStatusManager {25325555555555555555555555555555555555555555
         return this._providerStatusManager;
     }
     public get providerManager(): ProviderManager {
@@ -72,6 +79,9 @@ export class AiService {
         this._mcpManager = new McpManager(context, (msg) => this.postMessageCallback?.(msg));
         this._toolManager = new ToolManager(context, this._mcpManager);
         this._configResolver = new ConfigResolver(this.chatSessionManager);
+        // Instantiate StreamProcessor here, passing only historyManager
+        this._streamProcessor = new StreamProcessor(historyManager); // Pass only historyManager
+        // AiStreamer constructor takes 5 arguments
         this._aiStreamer = new AiStreamer(context, historyManager, this._toolManager, this._providerManager.providerMap, this._configResolver);
 
         this._mcpManager.eventEmitter.on('mcpStatusChanged', async () => {
@@ -88,7 +98,13 @@ export class AiService {
     public setPostMessageCallback(callback: (message: any) => void): void {
         this.postMessageCallback = callback;
         this.historyManager.setPostMessageCallback(callback); // Propagate to HistoryManager
-        console.log('AiService: postMessage callback registered for AiService and HistoryManager.');
+        this._subscriptionManager.setPostMessageCallback(callback); // <<< Propagate to SubscriptionManager
+        console.log('AiService: postMessage callback registered for AiService, HistoryManager, and SubscriptionManager.'); // Updated log
+    }
+
+    // Method to provide SubscriptionManager
+    public getSubscriptionManager(): SubscriptionManager {
+        return this._subscriptionManager;
     }
 
     // --- Delegated Methods ---
@@ -183,7 +199,12 @@ export class AiService {
         this._subscriptionManager.notifyChatSessionsUpdate(data);
     }
     public notifyChatHistoryUpdate(chatId: string, data: any) {
-        this._subscriptionManager.notifyChatHistoryUpdate(chatId, data);
+        // Ensure subscriptionManager is available before calling
+        if (this._subscriptionManager) {
+             this._subscriptionManager.notifyChatHistoryUpdate(chatId, data);
+        } else {
+             console.error("[AiService] Attempted to notifyChatHistoryUpdate, but subscriptionManager is not set.");
+        }
     }
 
 } // End of AiService class

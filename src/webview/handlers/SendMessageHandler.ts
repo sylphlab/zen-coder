@@ -4,29 +4,40 @@ import { RequestHandler, HandlerContext } from './RequestHandler';
 import { StreamProcessor } from '../../streamProcessor';
 import { UiMessageContentPart, ChatSession } from '../../common/types'; // Import ChatSession
 
-export class SendMessageHandler implements RequestHandler { // Implement RequestHandler
-    public readonly requestType = 'sendMessage'; // Change to requestType
-    private _streamProcessor: StreamProcessor; // Requires StreamProcessor instance
+export class SendMessageHandler implements RequestHandler {
+    public readonly requestType = 'sendMessage';
 
-    // We need to pass the StreamProcessor instance during construction or via context
-    constructor(streamProcessor: StreamProcessor) {
-        this._streamProcessor = streamProcessor;
-    }
+    // Constructor is empty
+    constructor() {}
 
     public async handle(message: any, context: HandlerContext): Promise<void> {
-        console.log("[SendMessageHandler] Handling sendMessage message...");
+        console.log("[SendMessageHandler] Handling sendMessage request...");
         let assistantUiMsgId: string | undefined;
-        let chatId: string | undefined; // Declare chatId here for broader scope
+        let chatId: string | undefined;
+
+        // Get dependencies from context
+        const streamProcessor = context.aiService.streamProcessor;
+        const subscriptionManager = context.aiService.getSubscriptionManager(); // Use getter
 
         try {
-            // Validate input and assign chatId to the higher-scoped variable
+            // Validate input (also get tempId)
+            const { tempId } = message; // Extract tempId from the payload
             const validationResult = this._validateInput(message, context);
-            chatId = validationResult.chatId ?? undefined; // Assign to higher scope, handle null
+            chatId = validationResult.chatId ?? undefined;
             const { userMessageContent, providerId, modelId } = validationResult;
-            if (!userMessageContent) return; // Validation failed, error posted in helper
+            if (!userMessageContent || !chatId || !providerId || !modelId) {
+                 console.error("[SendMessageHandler] Input validation failed.");
+                 // Error message already posted by _validateInput
+                 return;
+            }
+             if (!tempId) {
+                  console.error("[SendMessageHandler] Missing tempId in sendMessage payload.");
+                  // Optionally send an error back to the specific chat?
+                  return; // Stop processing if tempId is missing
+             }
 
-            // 1. Add user message (this now pushes a delta)
-            await context.historyManager.addUserMessage(chatId!, userMessageContent); // Add chatId
+            // 1. Add user message (pass tempId)
+            await context.historyManager.addUserMessage(chatId, userMessageContent, tempId); // Pass chatId and tempId
 
             // 2. Add assistant message frame (this now pushes a delta)
             assistantUiMsgId = await context.historyManager.addAssistantMessageFrame(chatId!);
@@ -37,31 +48,63 @@ export class SendMessageHandler implements RequestHandler { // Implement Request
             // 3. Prepare and initiate AI stream
             const { streamResult } = await this._prepareAndSendToAI(context, chatId!, providerId!, modelId!); // Don't need assistantId from here anymore
 
-            // 4. Process the AI response stream
-            await this._processAIResponse(streamResult, chatId!, assistantUiMsgId, context); // Pass the created assistantUiMsgId
+            // 4. Process the AI response stream and get the result
+            const streamProcessingResult = await streamProcessor.processStream(
+                streamResult.fullStream,
+                chatId,
+                assistantUiMsgId
+                // No notification callback passed here
+            );
 
-            // 5. Finalize history
-            // Finalize history for the specific chat
-            await this._finalizeHistory(chatId!, assistantUiMsgId, context); // Add chatId
+             console.log(`[SendMessageHandler|${chatId}] Stream processing completed. Result:`, streamProcessingResult);
+
+             // 5. Send final status notification AFTER processing
+             const finalDelta: { error?: any } = {};
+             if (streamProcessingResult.streamError) {
+                 finalDelta.error = streamProcessingResult.streamError;
+                 console.error(`[SendMessageHandler|${chatId}] Notifying UI of stream error for message ${assistantUiMsgId}:`, finalDelta.error);
+             } else {
+                 // Only log successful finish reason if no error occurred
+                 console.log(`[SendMessageHandler|${chatId}] Notifying UI of successful stream completion for message ${assistantUiMsgId}. Finish reason: ${streamProcessingResult.finishReason}`);
+             }
+
+             // Always send a final notification (error or undefined)
+             subscriptionManager.notifyChatHistoryUpdate(chatId, {
+                 type: 'historyUpdateMessageStatus',
+                 chatId: chatId,
+                 messageId: assistantUiMsgId,
+                 status: finalDelta.error ? 'error' : undefined
+             });
+
+
+            // 6. Finalize history (reconcile text, extract suggested actions)
+            await this._finalizeHistory(chatId, assistantUiMsgId, context);
 
         } catch (error: any) {
             console.error("[SendMessageHandler] Error processing AI stream:", error);
             vscode.window.showErrorMessage(`Failed to get AI response: ${error.message}`);
-            // Post a generic error message to the UI
-            context.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, an error occurred: ${error.message}` });
-            // Attempt to reconcile history even on error, using null for finalCoreMessage
-            if (assistantUiMsgId) {
+            // Notify UI about the error
+            if (chatId && assistantUiMsgId) {
+                 console.error(`[SendMessageHandler|${chatId}] Notifying UI of stream processing error for message ${assistantUiMsgId}:`, error);
+                 subscriptionManager.notifyChatHistoryUpdate(chatId, {
+                     type: 'historyUpdateMessageStatus',
+                     chatId: chatId,
+                     messageId: assistantUiMsgId,
+                     status: 'error'
+                 });
+            } else {
+                 // If we don't have IDs, send a general error message
+                 context.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, an error occurred: ${error.message}` });
+            }
+
+            // Reconciliation is now handled in finalizeHistory, which might still be useful
+            // even after an error (e.g., to save partial text). Let finalize run.
+            if (chatId && assistantUiMsgId) {
                 try {
-                    console.warn(`[SendMessageHandler] Attempting to reconcile history for ${assistantUiMsgId} after error.`);
-                    // Reconcile history for the specific chat
-                    // Use the higher-scoped chatId, ensuring it's defined before calling
-                    if (chatId) {
-                        await context.historyManager.messageModifier.reconcileFinalAssistantMessage(chatId, assistantUiMsgId, null, context.postMessage); // Use messageModifier
-                    } else {
-                         console.error("[SendMessageHandler] Cannot reconcile history after error: chatId is undefined.");
-                    }
-                } catch (reconcileError) {
-                    console.error(`[SendMessageHandler] Error during post-error history reconciliation for ${assistantUiMsgId}:`, reconcileError);
+                     console.warn(`[SendMessageHandler|${chatId}] Attempting to finalize history for ${assistantUiMsgId} after error.`);
+                    await this._finalizeHistory(chatId, assistantUiMsgId, context);
+                } catch (finalizationError) {
+                    console.error(`[SendMessageHandler|${chatId}] Error during post-error history finalization for ${assistantUiMsgId}:`, finalizationError);
                 }
             }
         }
@@ -81,16 +124,17 @@ export class SendMessageHandler implements RequestHandler { // Implement Request
         }
         if (!providerId) {
             console.error("[SendMessageHandler] No providerId provided.");
-            context.postMessage({ type: 'addMessage', sender: 'assistant', text: 'Error: No provider ID specified.' });
+            context.postMessage({ type: 'pushUpdate', payload: { topic: `chatHistoryUpdate/${chatId}`, data: { type: 'messageStatus', messageId: 'error-no-provider', delta: { error: 'No provider ID specified.' } } } });
             return { chatId: null, userMessageContent: null, providerId: null, modelId: null };
         }
         if (!modelId) {
             console.error("[SendMessageHandler] No modelId provided.");
-            context.postMessage({ type: 'addMessage', sender: 'assistant', text: 'Error: No model ID specified.' });
+            context.postMessage({ type: 'pushUpdate', payload: { topic: `chatHistoryUpdate/${chatId}`, data: { type: 'messageStatus', messageId: 'error-no-model', delta: { error: 'No model ID specified.' } } } });
             return { chatId: null, userMessageContent: null, providerId: null, modelId: null };
         }
         if (!Array.isArray(userMessageContent) || userMessageContent.length === 0) {
              console.error("[SendMessageHandler] Invalid or empty content array received.");
+             context.postMessage({ type: 'pushUpdate', payload: { topic: `chatHistoryUpdate/${chatId}`, data: { type: 'messageStatus', messageId: 'error-no-content', delta: { error: 'Cannot send empty message.' } } } });
              return { chatId: null, userMessageContent: null, providerId: null, modelId: null };
         }
         const isValidContent = userMessageContent.every(part =>
@@ -99,6 +143,7 @@ export class SendMessageHandler implements RequestHandler { // Implement Request
          );
          if (!isValidContent) {
              console.error("[SendMessageHandler] Invalid content part structure received.");
+             context.postMessage({ type: 'pushUpdate', payload: { topic: `chatHistoryUpdate/${chatId}`, data: { type: 'messageStatus', messageId: 'error-invalid-content', delta: { error: 'Invalid message content structure.' } } } });
              return { chatId: null, userMessageContent: null, providerId: null, modelId: null };
          }
 
@@ -117,18 +162,12 @@ export class SendMessageHandler implements RequestHandler { // Implement Request
         return { streamResult };
     }
 
-    /** Processes the AI response stream using StreamProcessor. */
-    private async _processAIResponse(streamResult: StreamTextResult<any, any>, chatId: string, assistantUiMsgId: string, context: HandlerContext): Promise<void> {
-        // The old 'startAssistantMessage' postMessage is removed.
-        // HistoryManager.addAssistantMessageFrame now handles pushing the initial frame delta.
-        // Access the full stream via .fullStream
-        await this._streamProcessor.processStream(streamResult.fullStream, chatId, assistantUiMsgId);
-    }
+    // Removed _processAIResponse method - logic moved into handle
 
-    /** Finalizes the history after stream processing. */
+    /** Finalizes the history after stream processing (reconciles text, extracts actions). */
     private async _finalizeHistory(chatId: string, assistantUiMsgId: string, context: HandlerContext): Promise<void> {
         try {
-            console.log(`[SendMessageHandler] Stream processing finished for ${assistantUiMsgId}. Reconciling history.`);
+            console.log(`[SendMessageHandler|${chatId}] Finalizing history for message ${assistantUiMsgId}.`);
             // Reconcile history using accumulated text and null for finalCoreMessage via messageModifier
             await context.historyManager.messageModifier.reconcileFinalAssistantMessage(chatId, assistantUiMsgId, null, context.postMessage); // Use messageModifier
 // Get the updated session data AFTER reconciliation via ChatSessionManager

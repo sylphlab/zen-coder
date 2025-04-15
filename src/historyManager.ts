@@ -58,7 +58,8 @@ export class HistoryManager {
         return chat ? [...chat.history] : [];
     }
 
-    public addUserMessage = async (chatId: string, content: UiMessageContentPart[]): Promise<string> => { // Arrow function
+    // Modified to accept optional tempId
+    public addUserMessage = async (chatId: string, content: UiMessageContentPart[], tempId?: string): Promise<string> => {
         const chat = this._sessionManager.getChatSession(chatId);
         if (!chat) {
             console.warn(`[HistoryManager] Chat session not found: ${chatId} (addUserMessage)`);
@@ -69,8 +70,10 @@ export class HistoryManager {
             return '';
         }
 
+        const finalId = `user-${Date.now()}-${Math.random().toString(16).slice(2)}`; // Generate final ID
         const userUiMessage: UiMessage = {
-            id: `user-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+            id: finalId, // Use final ID here
+            tempId: tempId, // Include tempId if provided
             role: 'user',
             content: content,
             timestamp: Date.now()
@@ -78,12 +81,12 @@ export class HistoryManager {
         chat.history.push(userUiMessage);
         await this._sessionManager.touchChatSession(chatId); // Triggers save and session update delta
 
-        // Use SubscriptionManager to push delta
+        // Use SubscriptionManager to push delta (message now includes tempId if passed)
         const delta: HistoryAddMessageDelta = { type: 'historyAddMessage', chatId, message: userUiMessage };
         this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
-        console.log(`[HistoryManager] Pushed user message delta via SubscriptionManager: ${userUiMessage.id}`);
+        console.log(`[HistoryManager] Pushed user message delta via SubscriptionManager: ID=${finalId}, TempID=${tempId}`);
 
-        return userUiMessage.id;
+        return finalId; // Return the final generated ID
     }
 
     public addAssistantMessageFrame = async (chatId: string): Promise<string> => { // Arrow function

@@ -12,7 +12,8 @@ import {
     HistoryAddContentPartDelta,
     UiMessageContentPart,
     UiToolCallPart,
-    HistoryUpdateMessageStatusDelta // Import the new delta type
+    HistoryUpdateMessageStatusDelta, // Import the new delta type
+    UiTextMessagePart // Ensure this is imported
 } from '../../../src/common/types'; // Adjust path as needed, added delta types
 import { listen, requestData } from '../utils/communication';
 import { router } from './router';
@@ -87,14 +88,12 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
         requestType: 'getChatHistory',
         payload: (): GetChatHistoryPayload | null => {
             const route = router.get();
-            // Safely access chatId
             const chatId = (route && 'params' in route && route.params && 'chatId' in route.params) ? route.params.chatId : undefined;
             console.log(`[$activeChatHistory fetch.payload] Calculating payload. ChatId: ${chatId}`);
             return chatId ? { chatId } : null; // Return null if no chatId, preventing fetch
         },
         transformResponse: (response) => {
              console.log(`[$activeChatHistory fetch.transformResponse] Transforming fetch response. Length: ${response.history?.length ?? 'null'}`);
-            // Extract the history array from the response
             return response.history ?? null;
         }
     },
@@ -102,324 +101,304 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
     subscribe: {
         topic: (): string | null => {
             const route = router.get();
-            // Safely access chatId
             const chatId = (route && 'params' in route && route.params && 'chatId' in route.params) ? route.params.chatId : undefined;
              console.log(`[$activeChatHistory subscribe.topic] Calculating topic. ChatId: ${chatId}`);
             return chatId ? `chatHistoryUpdate/${chatId}` : null; // Dynamic topic based on chatId
         },
-        // Correct the currentState type to match the modified createStore signature
         handleUpdate: (currentState: UiMessage[] | null | 'loading', updateData: ChatHistoryUpdateData): UiMessage[] | null => {
-            // --- Explicitly log parameter received ---
-             // Note: createStore actually passes null if the state is 'loading' or 'error'
             console.log(`[$activeChatHistory handleUpdate ENTRY] Received update type: ${updateData.type}. CurrentState type: ${typeof currentState}. Is array? ${Array.isArray(currentState)}. Length: ${Array.isArray(currentState) ? currentState.length : 'N/A'}`);
-             // --- Ensure no .get() call is happening here ---
             console.log(`[$activeChatHistory handleUpdate] NO .get() CALL HERE. Using received currentState.`);
-
-            // Explicitly handle 'loading' state passed from createStore (which actually passes null for loading/error)
-            // Initialize history as empty array if currentState is null or loading
             const history: UiMessage[] = (currentState === 'loading' || currentState === null) ? [] : currentState;
+            let newHistory = [...history]; // Start with a mutable copy
 
+            const route = router.get();
+            const currentRouteChatId = (route && 'params' in route && route.params && 'chatId' in route.params) ? route.params.chatId : 'unknown';
 
             switch (updateData.type) {
-                case 'historySet': { // Added block scope
+                case 'historySet': {
                     console.log(`[$activeChatHistory handleUpdate - historySet] Setting full history. Length: ${updateData.history?.length ?? 'null'}`);
-                    let setHistoryState = updateData.history ? [...updateData.history] : []; // Ensure array even if null
-                    // Check buffer for any messages added while history was loading/null
+                    let setHistoryState = updateData.history ? [...updateData.history] : [];
                     for (let i = 0; i < setHistoryState.length; i++) {
                         const msg = setHistoryState[i];
-                        // Check both role and buffer for assistant messages
                         if (msg.role === 'assistant' && chunkBuffer.has(msg.id)) {
                             const bufferedChunks = chunkBuffer.get(msg.id)!;
                             console.log(`[handleUpdate - historySet] Found ${bufferedChunks.length} buffered chunks for initially set message ${msg.id}. Applying now.`);
                             msg.content = Array.isArray(msg.content) ? msg.content : [];
-                            let currentText = '';
-                            if (msg.content.length > 0 && msg.content[0].type === 'text') {
-                                currentText = msg.content[0].text;
-                            }
+                            const textPartIndex = msg.content.findIndex(p => p.type === 'text');
+                            let currentText = textPartIndex !== -1 ? (msg.content[textPartIndex] as UiTextMessagePart).text : '';
                             const combinedText = currentText + bufferedChunks.join('');
-                            if (msg.content.length > 0 && msg.content[0].type === 'text') {
-                                msg.content[0].text = combinedText;
+                            if (textPartIndex !== -1) {
+                                (msg.content[textPartIndex] as UiTextMessagePart).text = combinedText;
                             } else {
-                                msg.content = [{ type: 'text', text: combinedText }, ...msg.content.filter(p => p.type !== 'text')];
+                                msg.content.unshift({ type: 'text', text: combinedText });
                             }
-                             // Clear pending status if chunks were applied
                             if (msg.status === 'pending') {
-                                delete msg.status;
+                                msg.status = undefined;
                             }
                             chunkBuffer.delete(msg.id);
                         }
-                         // Clear any lingering pending status if history is set (unless explicitly set by backend)
                          if (msg.status === 'pending' && !updateData.history.find(h => h.id === msg.id)?.status) {
-                              delete msg.status;
+                              msg.status = undefined;
                          }
                     }
                     console.log(`[$activeChatHistory handleUpdate - historySet] Returning new state after potential buffer apply:`, setHistoryState?.map(m => m.id));
-                    return setHistoryState; // Return new state (guaranteed array)
+                    return setHistoryState;
                 }
                 case 'historyAddMessage': {
-                     // Use chatId from outer scope for logging
-                    const route = router.get();
-                    const chatId = (route && 'params' in route && route.params && 'chatId' in route.params) ? route.params.chatId : 'unknown';
-                    console.log(`[$activeChatHistory|${chatId} handleUpdate - historyAddMessage] START. Adding message ID: ${updateData.message.id}. Message Role: ${updateData.message.role}`); // Added chatId
+                    console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] START. Message ID: ${updateData.message.id}. TempID: ${updateData.message.tempId}. Role: ${updateData.message.role}`);
                     const incomingMessage = updateData.message;
-                    const newHistory = [...history]; // Create mutable copy
 
-                    const existingIndex = newHistory.findIndex(m => m.id === incomingMessage.id);
-                    if (existingIndex !== -1) {
-                        // If it's the Assistant frame arriving and the existing one is 'pending', replace it.
-                        if (incomingMessage.role === 'assistant' && newHistory[existingIndex].status === 'pending') {
-                            console.log(`[$activeChatHistory|${chatId} handleUpdate - historyAddMessage] Replacing existing pending message ${newHistory[existingIndex].id} with real frame ${incomingMessage.id}`); // Added chatId and context
-                            let messageToAdd = { ...incomingMessage }; // Copy backend message
-                            // Apply buffered chunks using the *new* real ID
-                            if (chunkBuffer.has(messageToAdd.id)) {
-                                const bufferedChunks = chunkBuffer.get(messageToAdd.id)!;
-                                console.log(`[$activeChatHistory|${chatId} handleUpdate - historyAddMessage] Found ${bufferedChunks.length} buffered chunks for ${messageToAdd.id}. Applying to replaced frame.`); // Added chatId
-                                messageToAdd.content = Array.isArray(messageToAdd.content) ? messageToAdd.content : [];
-                                let currentText = '';
-                                if (messageToAdd.content.length > 0 && messageToAdd.content[0].type === 'text') {
-                                    currentText = messageToAdd.content[0].text;
-                                }
-                                const combinedText = currentText + bufferedChunks.join('');
-                                if (messageToAdd.content.length > 0 && messageToAdd.content[0].type === 'text') {
-                                    messageToAdd.content = [{ ...messageToAdd.content[0], text: combinedText }, ...messageToAdd.content.slice(1)];
-                                } else {
-                                    messageToAdd.content = [{ type: 'text', text: combinedText }, ...messageToAdd.content.filter(p => p.type !== 'text')];
-                                }
-                                // Clear pending status since we applied chunks or got the real frame
-                                delete messageToAdd.status; // Pending status removed as we have the real frame + chunks
-                                chunkBuffer.delete(messageToAdd.id);
-                            }
-                            // Replace the existing pending message with the real one
-                            newHistory[existingIndex] = messageToAdd;
-                            console.log(`[$activeChatHistory|${chatId} handleUpdate - historyAddMessage] Calculated state after REPLACING existing pending message:`, newHistory.map(m => m.id)); // Added chatId
+                    // 1. Handle User Message Reconciliation
+                    if (incomingMessage.role === 'user' && incomingMessage.tempId) {
+                        const optimisticIndex = newHistory.findIndex(m => m.tempId === incomingMessage.tempId);
+                        if (optimisticIndex !== -1) {
+                            console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Reconciling optimistic user message (tempId: ${incomingMessage.tempId}) with final ID: ${incomingMessage.id}`);
+                            const targetMessage = newHistory[optimisticIndex]; // Get reference
+                            targetMessage.id = incomingMessage.id;
+                            targetMessage.timestamp = incomingMessage.timestamp;
+                            delete targetMessage.tempId; // Clean up tempId
+                            console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Calculated state after RECONCILING optimistic user message:`, newHistory.map(m => ({ id: m.id, tempId: m.tempId })));
                             return newHistory;
                         } else {
-                             console.warn(`[$activeChatHistory|${chatId} handleUpdate - historyAddMessage] Message ID ${incomingMessage.id} already exists and is not a replaceable pending message. Skipping add.`); // Added chatId
-                            return newHistory; // Return current state
+                             console.warn(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Received user message delta with tempId ${incomingMessage.tempId}, but no matching optimistic message found.`);
+                             // Fall through to default add
                         }
                     }
 
-                    // Check if this message is replacing an OPTIMISTIC 'pending' message (added by handleSend)
-                     // Check if this message is replacing an OPTIMISTIC 'pending' message (added by handleSend)
+                     // 2. Handle Assistant Message Reconciliation (Replacing Optimistic Pending)
                      if (incomingMessage.role === 'assistant' && newHistory.length > 0) {
-                         const lastMessage = newHistory[newHistory.length - 1];
-                         // Check if the last message is an assistant message marked as 'pending' (the optimistic one)
+                         const lastMessageIndex = newHistory.length - 1;
+                         const lastMessage = newHistory[lastMessageIndex];
                          if (lastMessage.role === 'assistant' && lastMessage.status === 'pending' && lastMessage.id.startsWith('pending-assistant-')) {
-                             console.log(`[$activeChatHistory|${chatId} handleUpdate - historyAddMessage] Replacing OPTIMISTIC pending message ${lastMessage.id} with real frame ${incomingMessage.id}`); // Added chatId and context
-                             let messageToAdd = { ...incomingMessage }; // Copy backend message
+                             console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Updating OPTIMISTIC pending message ${lastMessage.id} with real frame ID ${incomingMessage.id}`);
+                             const targetMessage = newHistory[lastMessageIndex]; // Get reference
 
-                             // Apply buffered chunks using the *new* real ID
-                             if (chunkBuffer.has(messageToAdd.id)) {
-                                 const bufferedChunks = chunkBuffer.get(messageToAdd.id)!;
-                                 console.log(`[$activeChatHistory|${chatId} handleUpdate - historyAddMessage] Found ${bufferedChunks.length} buffered chunks for ${messageToAdd.id}. Applying to OPTIMISTIC replaced frame.`); // Added chatId
-                                 messageToAdd.content = Array.isArray(messageToAdd.content) ? messageToAdd.content : [];
-                                 let currentText = '';
-                                 if (messageToAdd.content.length > 0 && messageToAdd.content[0].type === 'text') {
-                                     currentText = messageToAdd.content[0].text;
-                                 }
+                             targetMessage.id = incomingMessage.id; // Update ID
+                             targetMessage.timestamp = incomingMessage.timestamp; // Update timestamp
+                             targetMessage.status = 'pending'; // Ensure status is 'pending'
+
+                             // Apply buffered chunks immediately if they exist for the *new* ID
+                             if (chunkBuffer.has(targetMessage.id)) {
+                                 const bufferedChunks = chunkBuffer.get(targetMessage.id)!;
+                                 console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Applying ${bufferedChunks.length} buffered chunks immediately to updated message ${targetMessage.id}.`);
+
+                                 // Ensure content exists and find/update text part
+                                 targetMessage.content = Array.isArray(targetMessage.content) ? targetMessage.content : [];
+                                 const textPartIndex = targetMessage.content.findIndex(p => p.type === 'text');
+                                 let currentText = textPartIndex !== -1 ? (targetMessage.content[textPartIndex] as UiTextMessagePart).text : '';
                                  const combinedText = currentText + bufferedChunks.join('');
-                                 if (messageToAdd.content.length > 0 && messageToAdd.content[0].type === 'text') {
-                                     messageToAdd.content = [{ ...messageToAdd.content[0], text: combinedText }, ...messageToAdd.content.slice(1)];
+
+                                  if (textPartIndex !== -1) {
+                                     (targetMessage.content[textPartIndex] as UiTextMessagePart).text = combinedText;
                                  } else {
-                                     messageToAdd.content = [{ type: 'text', text: combinedText }, ...messageToAdd.content.filter(p => p.type !== 'text')];
+                                     targetMessage.content.unshift({ type: 'text', text: combinedText });
                                  }
-                                 // Clear pending status since we applied chunks or got the real frame
-                                delete messageToAdd.status; // Pending status removed as we have the real frame + chunks
-                                 chunkBuffer.delete(messageToAdd.id);
+                                 targetMessage.status = undefined; // Remove pending status as content is now added
+                                 chunkBuffer.delete(targetMessage.id);
+                                 console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Applied buffered chunks and removed pending status for ${targetMessage.id}.`);
+                             } else {
+                                 console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] No buffered chunks for ${targetMessage.id}, keeping status as pending.`);
                              }
-                             // Replace the last element (the pending one) with the real one
-                             newHistory[newHistory.length - 1] = messageToAdd;
-                             console.log(`[$activeChatHistory|${chatId} handleUpdate - historyAddMessage] Calculated state after REPLACING OPTIMISTIC pending message:`, newHistory.map(m => m.id)); // Added chatId
-                             return newHistory;
+                             console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Calculated state after UPDATING optimistic message:`, newHistory.map(m => ({ id: m.id, status: m.status })));
+                             return newHistory; // Return updated history
                          }
                      }
 
-                    // Default add (User message or Assistant frame not replacing pending)
-                    let messageToAdd = { ...incomingMessage }; // Make a copy
-                     // Apply buffer just in case (e.g., if historySet missed it)
+                    // 3. Check for duplicate ID before default add
+                    const existingIndex = newHistory.findIndex(m => m.id === incomingMessage.id);
+                    if (existingIndex !== -1) {
+                         console.warn(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddMessage] Message ID ${incomingMessage.id} already exists (and not reconciled). Skipping add.`);
+                         return newHistory;
+                    }
+
+                    // 4. Default Add
+                    let messageToAdd = { ...incomingMessage };
                      if (messageToAdd.role === 'assistant' && chunkBuffer.has(messageToAdd.id)) {
                           const bufferedChunks = chunkBuffer.get(messageToAdd.id)!;
                           console.log(`[handleUpdate] Found ${bufferedChunks.length} buffered chunks for ${messageToAdd.id} during normal add. Applying now.`);
                           messageToAdd.content = Array.isArray(messageToAdd.content) ? messageToAdd.content : [];
-                          let currentText = '';
-                          if (messageToAdd.content.length > 0 && messageToAdd.content[0].type === 'text') {
-                              currentText = messageToAdd.content[0].text;
-                          }
+                          const textPartIndex = messageToAdd.content.findIndex(p => p.type === 'text');
+                          let currentText = textPartIndex !== -1 ? (messageToAdd.content[textPartIndex] as UiTextMessagePart).text : '';
                           const combinedText = currentText + bufferedChunks.join('');
-                          if (messageToAdd.content.length > 0 && messageToAdd.content[0].type === 'text') {
-                               messageToAdd.content = [{ ...messageToAdd.content[0], text: combinedText }, ...messageToAdd.content.slice(1)];
-                          } else {
-                              messageToAdd.content = [{ type: 'text', text: combinedText }, ...messageToAdd.content.filter(p => p.type !== 'text')];
-                          }
-                           // Clear pending status if chunks were applied
+                           if (textPartIndex !== -1) {
+                               (messageToAdd.content[textPartIndex] as UiTextMessagePart).text = combinedText;
+                           } else {
+                               messageToAdd.content.unshift({ type: 'text', text: combinedText });
+                           }
                           if (messageToAdd.status === 'pending') {
-                               delete messageToAdd.status;
+                               messageToAdd.status = undefined;
                           }
                           chunkBuffer.delete(messageToAdd.id);
-                     }
-
-                    const finalState = [...newHistory, messageToAdd];
-                    console.log(`[$activeChatHistory handleUpdate - historyAddMessage] Calculated state after ADDING message ${messageToAdd.id}:`, finalState.map(m => m.id));
-                    return finalState;
+                          }
+                    newHistory.push(messageToAdd);
+                    console.log(`[$activeChatHistory handleUpdate - historyAddMessage] Calculated state after ADDING message ${messageToAdd.id}:`, newHistory.map(m => ({ id: m.id, tempId: m.tempId })));
+                    return newHistory;
                 }
                 case 'historyAppendChunk': {
-                    // Use chatId from outer scope for logging
-                    const route = router.get();
-                    const chatId = (route && 'params' in route && route.params && 'chatId' in route.params) ? route.params.chatId : 'unknown';
-                    console.log(`[$activeChatHistory|${chatId} handleUpdate - historyAppendChunk] START. Appending chunk to message ID: ${updateData.messageId}. Chunk: "${updateData.textChunk}"`); // Added chatId
-                    let messageIndex = history.findIndex(m => m.id === updateData.messageId);
+                    console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAppendChunk] START. Appending chunk to message ID: ${updateData.messageId}. Chunk: "${updateData.textChunk}"`);
+                    let messageIndex = newHistory.findIndex(m => m.id === updateData.messageId);
 
                     if (messageIndex === -1) {
-                        // Message frame hasn't arrived yet OR doesn't exist, buffer the chunk
                         if (!chunkBuffer.has(updateData.messageId)) {
                             chunkBuffer.set(updateData.messageId, []);
                         }
                         chunkBuffer.get(updateData.messageId)!.push(updateData.textChunk);
-                        console.log(`[$activeChatHistory|${chatId} handleUpdate - historyAppendChunk] Buffering chunk for ${updateData.messageId}. Buffer size: ${chunkBuffer.get(updateData.messageId)!.length}`); // Added chatId
-                        return history; // Return original state, chunk is buffered
+                        console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAppendChunk] Buffering chunk for ${updateData.messageId}. Buffer size: ${chunkBuffer.get(updateData.messageId)!.length}`);
+                        return newHistory; // State unchanged yet
                     }
 
-                    // Message exists, append chunk directly
-                    const targetMessage = history[messageIndex];
-                    const newHistory = [...history]; // Create mutable copy
+                    // Message exists, modify it in the copied array
+                    const messageToUpdate = newHistory[messageIndex];
+                    const wasPending = messageToUpdate.status === 'pending';
 
-                    // Ensure content is an array before processing
-                    const currentContent = Array.isArray(targetMessage.content) ? targetMessage.content : [];
-                    const lastPart = currentContent[currentContent.length - 1];
+                    // Ensure content is an array
+                    messageToUpdate.content = Array.isArray(messageToUpdate.content) ? messageToUpdate.content : [];
+                    const textPartIndex = messageToUpdate.content.findIndex(p => p.type === 'text');
 
-                    let newContent: UiMessageContentPart[];
-                    if (lastPart && lastPart.type === 'text') {
-                        newContent = [
-                            ...currentContent.slice(0, -1),
-                            { ...lastPart, text: lastPart.text + updateData.textChunk }
-                        ];
+                    if (textPartIndex !== -1) {
+                        (messageToUpdate.content[textPartIndex] as UiTextMessagePart).text += updateData.textChunk;
                     } else {
-                        newContent = [...currentContent, { type: 'text', text: updateData.textChunk }];
+                        // Add new text part, even if chunk is empty initially
+                        messageToUpdate.content.push({ type: 'text', text: updateData.textChunk });
                     }
 
-                    // Update the message, clearing 'pending' status on first non-empty chunk
-                    const updatedMessage = {
-                         ...targetMessage,
-                         content: newContent,
-                     // Clear pending status if it was pending and we got a non-empty chunk
-                     status: targetMessage.status === 'pending' && updateData.textChunk.trim() !== '' ? undefined : targetMessage.status
-                };
-                 if (updatedMessage.status === undefined && targetMessage.status === 'pending') {
-                     console.log(`[$activeChatHistory|${chatId} handleUpdate - historyAppendChunk] Cleared pending status for message ${updatedMessage.id} upon receiving first chunk.`); // Added log
-                 }
+                     // Clear pending status if it was pending (receiving *any* chunk means streaming has started)
+                    if (wasPending) {
+                         messageToUpdate.status = undefined;
+                         console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAppendChunk] Cleared pending status for message ${messageToUpdate.id} upon receiving chunk.`);
+                    }
 
-                newHistory[messageIndex] = updatedMessage;
-                return newHistory; // Return new state
+                    return newHistory; // Return the modified array
                 }
-                 case 'historyUpdateMessageStatus': { // Handle the new delta type
-                     // Use chatId from outer scope for logging
-                    const route = router.get();
-                    const chatId = (route && 'params' in route && route.params && 'chatId' in route.params) ? route.params.chatId : 'unknown';
-                    console.log(`[$activeChatHistory|${chatId} handleUpdate - historyUpdateMessageStatus] START. Updating status for message ID: ${updateData.messageId} to '${updateData.status ?? 'undefined'}'`); // Added chatId
-                    const messageIndex = history.findIndex(m => m.id === updateData.messageId);
+                 case 'historyUpdateMessageStatus': {
+                    console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] START. Updating status for message ID: ${updateData.messageId} to '${updateData.status ?? 'undefined'}' from ${typeof updateData.status}`);
+                    const messageIndex = newHistory.findIndex(m => m.id === updateData.messageId);
                     if (messageIndex === -1) {
-                         // It's possible the message (especially an optimistic pending one) was removed due to an error before this status update arrived.
-                         console.warn(`[$activeChatHistory|${chatId} handleUpdate - historyUpdateMessageStatus] Message ID ${updateData.messageId} not found. Update dropped.`); // Added chatId
-                        return history; // Return original state
+                         console.warn(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Message ID ${updateData.messageId} not found. Update dropped.`);
+                        return newHistory; // Return original array reference
                     }
-                    const newHistory = [...history];
-                    const updatedMessage = { ...newHistory[messageIndex] };
 
-                    if (updateData.status) {
-                        updatedMessage.status = updateData.status;
-                    } else {
-                        // Remove status if undefined in payload (e.g., stream finished successfully)
-                        delete updatedMessage.status;
+                    const messageToUpdate = newHistory[messageIndex];
+                    const currentStatus = messageToUpdate.status;
+                    const newStatus = updateData.status;
+
+                    // Create a new object for the update to ensure immutability detection
+                    const updatedMessage = { ...messageToUpdate };
+                    let statusChanged = false;
+
+                    if (newStatus === undefined) {
+                        // **Final Simplified Logic**: If the final status update requests undefined, ALWAYS clear the status.
+                        if (currentStatus !== undefined) {
+                             updatedMessage.status = undefined;
+                             console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Cleared final status for message ${updatedMessage.id} (was ${currentStatus}). Update from server with status=${updateData.status}`);
+                             statusChanged = true;
+                        } else {
+                             console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Status for message ${updatedMessage.id} is already undefined. No change.`);
+                        }
+                    } else if (currentStatus !== newStatus) { // Update if the new status is different (e.g., setting 'error')
+                        updatedMessage.status = newStatus;
+                         console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Set status to '${newStatus}' for message ${updatedMessage.id}.`);
+                         statusChanged = true;
                     }
-                    newHistory[messageIndex] = updatedMessage;
-                    console.log(`[$activeChatHistory|${chatId} handleUpdate - historyUpdateMessageStatus] Calculated new state for message ${updatedMessage.id}: status='${updatedMessage.status ?? 'undefined'}'`); // Added chatId and more detail
-                    return newHistory; // Return new state
+
+                    // Only update the array if the status actually changed
+                    if (statusChanged) {
+                        newHistory[messageIndex] = updatedMessage;
+                        console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Final state for message ${updatedMessage.id}: status='${updatedMessage.status ?? 'undefined'}'`);
+                        return newHistory; // Return the modified array
+                    } else {
+                         console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Status for message ${messageToUpdate.id} did not change from '${currentStatus}'.`);
+                         return newHistory; // Return the original array reference if no change occurred
+                    }
                 }
 
                 case 'historyAddContentPart': {
                     console.log(`[$activeChatHistory handleUpdate] Adding content part to message ID: ${updateData.messageId}`);
-                    const messageIndex = history.findIndex(m => m.id === updateData.messageId);
+                    const messageIndex = newHistory.findIndex(m => m.id === updateData.messageId);
                     if (messageIndex === -1) {
                         console.warn(`[handleUpdate] Message ID ${updateData.messageId} not found for addContentPart. Update dropped.`);
-                        return history; // Return original state
+                        return newHistory;
                     }
-                    const targetMessage = history[messageIndex];
-                     // Ensure content is an array before adding
-                    const content = Array.isArray(targetMessage.content) ? [...targetMessage.content, updateData.part] : [updateData.part];
-
-                    const newHistory = [...history];
-                    newHistory[messageIndex] = { ...targetMessage, content };
-                     // Clear pending status if it was pending and we added a real content part (like a tool call)
-                    if (newHistory[messageIndex].status === 'pending') {
-                        delete newHistory[messageIndex].status;
+                    const messageToUpdate = newHistory[messageIndex];
+                    const content = Array.isArray(messageToUpdate.content) ? [...messageToUpdate.content, updateData.part] : [updateData.part];
+                    messageToUpdate.content = content;
+                    // Clear pending if adding a content part (implies streaming started)
+                    if (messageToUpdate.status === 'pending') {
+                        messageToUpdate.status = undefined;
+                        console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyAddContentPart] Cleared pending status for message ${messageToUpdate.id}.`);
                     }
                     console.log(`[$activeChatHistory handleUpdate - historyAddContentPart] Calculated new state.`);
-                    return newHistory; // Return new state
+                    return newHistory;
                 }
 
 
                 case 'historyUpdateToolCall': {
                     console.log(`[$activeChatHistory handleUpdate] Updating tool call ID: ${updateData.toolCallId} in message ID: ${updateData.messageId}`);
-                    const messageIndex = history.findIndex(m => m.id === updateData.messageId);
+                    const messageIndex = newHistory.findIndex(m => m.id === updateData.messageId);
                     if (messageIndex === -1) {
                         console.warn(`[handleUpdate] Message ID ${updateData.messageId} not found for updateToolCall. Update dropped.`);
-                        return history; // Return original state
+                        return newHistory;
                     }
-                    const targetMessage = history[messageIndex];
-                     // Ensure content is an array before searching
-                    const content = Array.isArray(targetMessage.content) ? [...targetMessage.content] : [];
+                     const messageToUpdate = newHistory[messageIndex];
+                     const content = Array.isArray(messageToUpdate.content) ? [...messageToUpdate.content] : [];
                     const toolCallIndex = content.findIndex(p => p.type === 'tool-call' && p.toolCallId === updateData.toolCallId);
 
                     if (toolCallIndex === -1) {
                         console.warn(`[handleUpdate] Tool call ID ${updateData.toolCallId} not found in message ID ${updateData.messageId}. Update dropped.`);
-                        return history; // Return original state
+                        return newHistory;
                     }
 
-                    // Update the specific tool call part immutably
+                    const originalToolCall = content[toolCallIndex] as UiToolCallPart;
                     const updatedToolCall = {
-                        ...(content[toolCallIndex] as UiToolCallPart), // Cast is safe due to findIndex check
-                        status: updateData.status ?? (content[toolCallIndex] as UiToolCallPart).status,
-                        result: updateData.result ?? (content[toolCallIndex] as UiToolCallPart).result,
-                        progress: updateData.progress ?? (content[toolCallIndex] as UiToolCallPart).progress,
+                        ...originalToolCall,
+                        status: updateData.status ?? originalToolCall.status,
+                        result: updateData.result ?? originalToolCall.result,
+                        progress: updateData.progress ?? originalToolCall.progress,
                     };
-                    // If status is complete or error, clear progress
                     if (updatedToolCall.status === 'complete' || updatedToolCall.status === 'error') {
                          updatedToolCall.progress = undefined;
                     }
+                    content[toolCallIndex] = updatedToolCall;
+                    messageToUpdate.content = content;
 
-                    const newContent = [...content];
-                    newContent[toolCallIndex] = updatedToolCall;
-
-                    const newHistory = [...history];
-                    // Also clear message 'pending' status if a tool call finishes
-                     const messageStatus = (updatedToolCall.status === 'complete' || updatedToolCall.status === 'error') && targetMessage.status === 'pending'
-                        ? undefined
-                        : targetMessage.status;
-
-                    newHistory[messageIndex] = { ...targetMessage, content: newContent, status: messageStatus };
+                    const wasPending = messageToUpdate.status === 'pending';
+                    if (wasPending && (updatedToolCall.status === 'complete' || updatedToolCall.status === 'error')) {
+                         messageToUpdate.status = undefined;
+                         console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateToolCall] Cleared pending status for message ${messageToUpdate.id} upon tool call completion/error.`);
+                    }
                      console.log(`[$activeChatHistory handleUpdate - historyUpdateToolCall] Calculated new state.`);
-                    return newHistory; // Return new state
+                    return newHistory;
                 }
 
                 case 'historyDeleteMessage': {
                     console.log(`[$activeChatHistory handleUpdate - historyDeleteMessage] Deleting message ID: ${updateData.messageId}`);
-                    const newState = history.filter(m => m.id !== updateData.messageId);
+                    const filteredHistory = newHistory.filter(m => m.id !== updateData.messageId);
                      console.log(`[$activeChatHistory handleUpdate - historyDeleteMessage] Calculated new state.`);
-                    return newState; // Return new state
+                    return filteredHistory;
                 }
                 case 'historyClear': {
                     console.log(`[$activeChatHistory handleUpdate - historyClear] Clearing history.`);
-                    return []; // Return new state (empty array)
+                    return [];
                 }
                 default:
                     console.warn(`[$activeChatHistory handleUpdate] Received unhandled update type:`, updateData);
-                    return history; // Return original state
+                    return newHistory;
             }
+// --- DEBUG: Log full message state after every handleUpdate call ---
+try {
+  const debugHistory = Array.isArray(newHistory) ? newHistory : [];
+  console.log('[DEBUG][$activeChatHistory handleUpdate END] Message state:', debugHistory.map(m => ({
+    id: m.id,
+    status: m.status,
+    tempId: m.tempId,
+    role: m.role,
+    contentLength: Array.isArray(m.content) ? m.content.length : 0
+  })));
+} catch (e) {
+  console.error('[DEBUG][$activeChatHistory handleUpdate END] Error logging message state:', e);
+}
         }
     },
-    // Store depends on the router to recalculate payload and topic
     dependsOn: [router],
-    initialData: null // Explicitly null, createStore handles 'loading'
+    initialData: null
 });
-
-// Removed the old onMount implementation for $activeChatHistory

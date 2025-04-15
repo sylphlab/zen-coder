@@ -181,7 +181,8 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
 
             // 2. Optimistic Updates
             const timestamp = Date.now(); // Use consistent timestamp
-            const optimisticUserId = `user-${generateUniqueId()}`; // Generate unique ID locally
+            const tempId = generateUniqueId(); // Generate temporary ID for reconciliation
+            // Use tempId as the initial ID for optimistic update
             const optimisticAssistantId = `pending-assistant-${timestamp}`; // Temporary ID for pending message
 
             const currentHistoryState = $activeChatHistory.get();
@@ -189,7 +190,8 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
 
             if (Array.isArray(currentHistoryState)) {
                 const optimisticUserMessage: UiMessage = {
-                    id: optimisticUserId,
+                    id: tempId, // Use tempId as the initial ID
+                    tempId: tempId, // Also store it in the tempId field
                     role: 'user',
                     content: optimisticContentParts, // Use parts with full data URI for UI
                     timestamp: timestamp
@@ -218,8 +220,8 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
             clearSelectedImages();
             if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-            // 4. Prepare Backend Payload
-            const backendPayload = { chatId, content: contentParts, providerId, modelId };
+            // 4. Prepare Backend Payload (Include tempId)
+            const backendPayload = { chatId, content: contentParts, providerId, modelId, tempId };
 
             // 5. Send to Backend
             try {
@@ -231,7 +233,7 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
                  const latestState = $activeChatHistory.get();
                  if (Array.isArray(latestState)) {
                       console.log(`[ChatView|${chatId}] Rolling back optimistic messages due to send error.`); // Added chatId
-                      $activeChatHistory.set(latestState.filter(m => m.id !== optimisticUserId && m.id !== optimisticAssistantId));
+                      $activeChatHistory.set(latestState.filter(m => m.id !== tempId && m.id !== optimisticAssistantId)); // Filter using tempId for user msg
                  }
             }
         } else {
