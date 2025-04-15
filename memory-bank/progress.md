@@ -22,6 +22,11 @@
 - **Image Upload (Partial):** Basic UI, data sending logic exists. Backend needs review/update. Display works.
 - **Message Actions:** Copy/Delete per message implemented.
 - **UI Basics:** Markdown/Syntax Highlighting, basic UnoCSS styling.
+- **Fixed MCP Server Settings UI:**
+    - Implemented optimistic updates for the "Retry Connection" button in `webview-ui/src/stores/mcpStores.ts`.
+    - Corrected UI logic in `webview-ui/src/components/settings/McpServerSettings.tsx` to show "Retrying..." status per-server using local state and disable buttons correctly during a retry.
+    - Added and registered backend handlers (`OpenGlobalMcpConfigHandler`, `OpenProjectMcpConfigHandler`) for the "Configure Global/Project Servers" buttons in `src/extension.ts`.
+    - Modified backend logic in `src/ai/mcpManager.ts` to force reconnection attempt on retry, even if previously considered connected.
 
 ## What's Left
 - **Testing (Manual - Post-Refactor):** Crucial next step.
@@ -43,8 +48,7 @@
 - Active chat ID is determined solely by the route parameter.
 
 ## Known Issues / TODOs
-- **Tool Toggles UI:** Tool toggle buttons don't visually update immediately after clicking, despite backend confirmation and notification. Added deep cloning in `createFetcherStore` as a potential fix for reactivity. Requires testing.
 - **Suggested Actions:** Currently use temporary local state in `ChatView`; needs proper Nanostore/PubSub implementation.
-- **Testing:** Major refactoring requires thorough manual testing, including verifying the settings page fixes (input *and* toggle UI update).
+- **Testing:** Major refactoring requires thorough manual testing.
 - **Image Upload:** Backend processing needs verification/completion.
 - **(Previous Known Issues Still Apply where relevant, e.g., filesystem test linter issue)**

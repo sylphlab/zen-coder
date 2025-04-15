@@ -38,12 +38,9 @@ export function CustomInstructionsSettings(): JSX.Element {
 
     const handleGlobalInstructionsChange = (e: Event) => {
         setGlobalInstructions((e.target as HTMLTextAreaElement).value);
-        console.log('[CustomInstructionsSettings] Global input change:', (e.target as HTMLTextAreaElement).value);
-        setGlobalInstructions((e.target as HTMLTextAreaElement).value);
     };
 
     const handleProjectInstructionsChange = (e: Event) => {
-        console.log('[CustomInstructionsSettings] Project input change:', (e.target as HTMLTextAreaElement).value);
         setProjectInstructions((e.target as HTMLTextAreaElement).value);
     };
 

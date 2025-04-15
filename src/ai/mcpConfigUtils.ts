@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path'; // Import path module
 
 // --- Interfaces ---
 
@@ -44,19 +45,38 @@ export async function readMcpConfigFile(uri: vscode.Uri): Promise<{ [serverName:
 }
 
 /**
+ * Gets the expected URI for the global MCP configuration file.
+ */
+export function getGlobalMcpConfigUri(context: vscode.ExtensionContext): vscode.Uri {
+    return vscode.Uri.joinPath(context.globalStorageUri, 'settings', 'mcp_settings.json');
+}
+
+/**
+ * Gets the expected URI for the project-specific MCP configuration file (in the first workspace folder).
+ * Returns undefined if no workspace is open.
+ */
+export function getProjectMcpConfigUri(): vscode.Uri | undefined {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+        return vscode.Uri.joinPath(workspaceFolders[0].uri, '.zen', 'mcp_servers.json');
+    }
+    return undefined;
+}
+
+
+/**
  * Loads global and project-specific MCP configurations and merges them.
  * Project configurations override global configurations.
  */
 export async function loadAndMergeMcpConfigs(context: vscode.ExtensionContext): Promise<{ [serverName: string]: McpServerConfig }> {
     console.log("[McpConfigUtils] Loading and merging MCP server configurations...");
-    const globalConfigUri = vscode.Uri.joinPath(context.globalStorageUri, 'settings', 'mcp_settings.json');
+    const globalConfigUri = getGlobalMcpConfigUri(context);
     const globalConfigs = await readMcpConfigFile(globalConfigUri);
     console.log(`[McpConfigUtils] Read ${Object.keys(globalConfigs).length} servers from global config: ${globalConfigUri.fsPath}`);
 
     let projectConfigs: { [serverName: string]: McpServerConfig } = {};
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders && workspaceFolders.length > 0) {
-        const projectConfigUri = vscode.Uri.joinPath(workspaceFolders[0].uri, '.zen', 'mcp_servers.json');
+    const projectConfigUri = getProjectMcpConfigUri();
+    if (projectConfigUri) {
         projectConfigs = await readMcpConfigFile(projectConfigUri);
         console.log(`[McpConfigUtils] Read ${Object.keys(projectConfigs).length} servers from project config: ${projectConfigUri.fsPath}`);
     }
@@ -80,20 +100,20 @@ export function setupMcpConfigWatchers(
     const watchers: vscode.Disposable[] = [];
 
     // Watch global config file
-    const globalSettingsDirUri = vscode.Uri.joinPath(context.globalStorageUri, 'settings');
-    const globalConfigPath = vscode.Uri.joinPath(globalSettingsDirUri, 'mcp_settings.json').fsPath;
-    const globalWatcherPattern = new vscode.RelativePattern(globalSettingsDirUri, 'mcp_settings.json');
+    const globalConfigUri = getGlobalMcpConfigUri(context);
+    const globalSettingsDirUri = vscode.Uri.joinPath(globalConfigUri, '..'); // Get parent directory
+    const globalWatcherPattern = new vscode.RelativePattern(globalSettingsDirUri, path.basename(globalConfigUri.fsPath));
     const globalMcpConfigWatcher = vscode.workspace.createFileSystemWatcher(globalWatcherPattern);
     globalMcpConfigWatcher.onDidChange(reloadCallback);
     globalMcpConfigWatcher.onDidCreate(reloadCallback);
     globalMcpConfigWatcher.onDidDelete(reloadCallback);
     watchers.push(globalMcpConfigWatcher);
-    console.log(`[McpConfigUtils] Watching global MCP config: ${globalConfigPath}`);
+    console.log(`[McpConfigUtils] Watching global MCP config: ${globalConfigUri.fsPath}`); // Use globalConfigUri.fsPath
 
     // Watch project config file
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders && workspaceFolders.length > 0) {
-        const projectConfigPattern = new vscode.RelativePattern(workspaceFolders[0], '.zen/mcp_servers.json');
+    const projectConfigUri = getProjectMcpConfigUri();
+    if (projectConfigUri) {
+        const projectConfigPattern = new vscode.RelativePattern(vscode.Uri.joinPath(projectConfigUri, '../..'), '.zen/mcp_servers.json'); // Adjust relative pattern base
         const mcpConfigWatcher = vscode.workspace.createFileSystemWatcher(projectConfigPattern);
         mcpConfigWatcher.onDidChange(reloadCallback);
         mcpConfigWatcher.onDidCreate(reloadCallback);

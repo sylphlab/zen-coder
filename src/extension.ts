@@ -57,6 +57,8 @@ import { GetModelsForProviderHandler } from './webview/handlers/GetModelsForProv
 import { GetLastLocationHandler } from './webview/handlers/GetLastLocationHandler'; // Import new handler
 import { SubscribeHandler } from './webview/handlers/SubscribeHandler';
 import { UnsubscribeHandler } from './webview/handlers/UnsubscribeHandler';
+import { OpenGlobalMcpConfigHandler } from './webview/handlers/OpenGlobalMcpConfigHandler'; // Import new handler
+import { OpenProjectMcpConfigHandler } from './webview/handlers/OpenProjectMcpConfigHandler'; // Import new handler
 
 let aiServiceInstance: AiService | undefined = undefined;
 
@@ -181,6 +183,9 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new SendMessageHandler(this._streamProcessor),
             new StopGenerationHandler(this._aiService), // requestType added in handler file
             new ExecuteToolActionHandler(), // requestType added in handler file
+            // MCP Config Handlers
+            new OpenGlobalMcpConfigHandler(),
+            new OpenProjectMcpConfigHandler(),
         ];
 
         allHandlers.forEach(handler => {

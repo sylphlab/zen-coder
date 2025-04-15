@@ -54,14 +54,14 @@ export const $setToolAuthorization = createMutationStore<
   // and returns the { optimisticState, revertState } object directly.
   getOptimisticUpdate: (payload: SetToolAuthPayload, currentData: AllToolsStatusInfo | null): OptimisticUpdateResult<AllToolsStatusInfo | null> => {
     if (!currentData) {
-      console.warn('[Optimistic Update] No current tool status data to update.');
+      // console.warn('[Optimistic Update] No current tool status data to update.'); // Removed log
       return { optimisticState: null, revertState: null }; // Return the required structure
     }
 
     // Store original state for revert - ensure deep clone
     const revertState = JSON.parse(JSON.stringify(currentData));
 
-    console.log('[Optimistic Update] Applying update for setToolAuthorization:', payload);
+    // console.log('[Optimistic Update] Applying update for setToolAuthorization:', payload); // Removed log
     const newAuthConfig = payload.config;
     // Deep clone the current data to create the next state
     const nextData: AllToolsStatusInfo = JSON.parse(JSON.stringify(currentData));
@@ -76,7 +76,7 @@ export const $setToolAuthorization = createMutationStore<
         const category = nextData.find(cat => cat.id === categoryId);
         if (category) {
           const newStatus = newAuthConfig.categories[categoryId];
-          console.log(`[Optimistic Update] Setting category ${categoryId} to ${newStatus}`);
+          // console.log(`[Optimistic Update] Setting category ${categoryId} to ${newStatus}`); // Removed log
           category.status = newStatus;
           updatedCategoryStatuses[categoryId] = newStatus; // Track for recalculation
         }
@@ -88,7 +88,7 @@ export const $setToolAuthorization = createMutationStore<
           const category = nextData.find(cat => cat.id === categoryId);
           if (category) {
               const newStatus = newAuthConfig.mcpServers[serverName];
-              console.log(`[Optimistic Update] Setting MCP category ${categoryId} to ${newStatus}`);
+              // console.log(`[Optimistic Update] Setting MCP category ${categoryId} to ${newStatus}`); // Removed log
               category.status = newStatus;
               updatedCategoryStatuses[categoryId] = newStatus; // Track for recalculation
           }
@@ -106,7 +106,7 @@ export const $setToolAuthorization = createMutationStore<
             // Apply payload override if it exists for this tool
             if (newAuthConfig.overrides && tool.id in newAuthConfig.overrides) {
                 toolConfiguredStatus = newAuthConfig.overrides[tool.id]!;
-                console.log(`[Optimistic Update] Setting tool ${tool.id} override to ${toolConfiguredStatus}`);
+                // console.log(`[Optimistic Update] Setting tool ${tool.id} override to ${toolConfiguredStatus}`); // Removed log
                 tool.status = toolConfiguredStatus; // Update the tool's configured status in nextData
             }
 
@@ -114,13 +114,13 @@ export const $setToolAuthorization = createMutationStore<
             // and the category's (potentially updated) final status.
             const newResolvedStatus = resolveToolStatus(toolConfiguredStatus, categoryFinalStatus);
             if (tool.resolvedStatus !== newResolvedStatus) {
-                console.log(`[Optimistic Update] Recalculating resolved status for ${tool.id}: ${tool.resolvedStatus} -> ${newResolvedStatus}`);
+                // console.log(`[Optimistic Update] Recalculating resolved status for ${tool.id}: ${tool.resolvedStatus} -> ${newResolvedStatus}`); // Removed log
                 tool.resolvedStatus = newResolvedStatus; // Update resolved status in nextData
             }
         }
     }
 
-    console.log('[Optimistic Update] Finished applying optimistic update. Final nextData:', JSON.stringify(nextData).substring(0, 500) + '...'); // Log final state
+    // console.log('[Optimistic Update] Finished applying optimistic update. Final nextData:', JSON.stringify(nextData).substring(0, 500) + '...'); // Removed log
     // Return the required structure { optimisticState, revertState }
     return { optimisticState: nextData, revertState: revertState };
   },

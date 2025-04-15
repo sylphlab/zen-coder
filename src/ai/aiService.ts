@@ -819,10 +819,7 @@ export class AiService {
         const topic = 'allToolsStatusUpdate'; // *** Use the correct topic name ***
         if (this._hasSubscription(topic)) {
             try {
-                console.log(`[AiService] Preparing to push update for topic: ${topic}`);
                 const latestStatusInfo = await this.getResolvedToolStatusInfo();
-                console.log(`[AiService] Fetched latest tool status for push:`, JSON.stringify(latestStatusInfo).substring(0, 500) + '...'); // Log fetched data (truncated)
-                console.log(`[AiService] Pushing ${topic} update.`);
                 this.postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: latestStatusInfo } }); // Push the data directly
             } catch (error) {
                 console.error(`[AiService] Error fetching/pushing tool status for notification (${topic}):`, error);

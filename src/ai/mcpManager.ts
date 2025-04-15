@@ -222,30 +222,21 @@ export class McpManager {
             this._mcpConnectionErrors.set(serverName, "Configuration not found.");
         } else if (config.disabled) {
             console.log(`[McpManager] Retry skipped: Server ${serverName} is disabled.`);
-            // Should not happen if UI disables button, but handle anyway
-        } else if (this._activeMcpClients.has(serverName)) {
-            console.log(`[McpManager] Retry skipped: Server ${serverName} is already connected.`);
-            // If already connected, try fetching tools again in case it failed initially
-            const client = this._activeMcpClients.get(serverName);
-            if (client && !this._mcpServerTools.has(serverName)) {
-                 try {
-                     console.log(`[McpManager] Client ${serverName} already connected, attempting to fetch tools again...`);
-                     const tools = await (client as any).tools(); // Cast client to any to access tools()
-                     this._mcpServerTools.set(serverName, tools);
-                     this._mcpConnectionErrors.delete(serverName); // Clear error on success
-                     console.log(`[McpManager] Fetched and stored ${Object.keys(tools).length} tools for ${serverName} after retry.`);
-                     success = true; // Tool fetch successful
-                 } catch (toolError: any) {
-                     const errorMsg = `Failed to fetch tools: ${toolError.message || toolError}`;
-                     console.error(`[McpManager] Retry: Client ${serverName} connected, but failed again to fetch tools:`, toolError);
-                     this._mcpConnectionErrors.set(serverName, errorMsg);
-                     success = false; // Indicate tool fetch failed even though connected
-                 }
-            } else {
-                success = true; // Already connected and tools likely already fetched (or failed previously)
-            }
         } else {
-            // Attempt connection using the helper
+            // Force close existing client if it exists, before attempting reconnection
+            if (this._activeMcpClients.has(serverName)) {
+                console.log(`[McpManager] Closing existing client for ${serverName} before retry...`);
+                const clientToClose = this._activeMcpClients.get(serverName);
+                this._activeMcpClients.delete(serverName);
+                this._mcpServerTools.delete(serverName); // Remove tools as well
+                try {
+                    await clientToClose?.close();
+                    console.log(`[McpManager] Existing client for ${serverName} closed.`);
+                } catch (e) {
+                    console.error(`[McpManager] Error closing existing client ${serverName} during retry:`, e);
+                }
+            }
+            // Now, always attempt connection using the helper
             success = await this._connectAndFetchTools(serverName, config);
         }
 

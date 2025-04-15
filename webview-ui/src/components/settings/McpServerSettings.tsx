@@ -1,4 +1,4 @@
-import { useCallback } from 'preact/hooks';
+import { useCallback, useState } from 'preact/hooks'; // Import useState
 import { useStore } from '@nanostores/react';
 import { JSX } from 'preact/jsx-runtime';
 import { McpServerStatus } from '../../../../src/ai/mcpManager';
@@ -14,11 +14,14 @@ export function McpServerSettings(): JSX.Element {
     const mcpServersData = useStore($mcpStatus);
     const { mutate: openGlobalMutate, loading: isOpeningGlobal } = useStore($openGlobalMcpConfig);
     const { mutate: openProjectMutate, loading: isOpeningProject } = useStore($openProjectMcpConfig);
-    const { mutate: retryMutate, loading: isRetrying } = useStore($retryMcpConnection);
+    const { mutate: retryMutate /* , loading: isRetrying - global loading state no longer used for button */ } = useStore($retryMcpConnection);
+
+    // --- Local State ---
+    const [retryingServerName, setRetryingServerName] = useState<string | null>(null); // Track which server is retrying
 
     const isLoading = mcpServersData === null;
 
-    // --- Handlers with useCallback (kept due to try/catch logic) ---
+    // --- Handlers with useCallback ---
     const handleOpenGlobalMcpConfig = useCallback(async () => {
         console.log('Requesting to open global MCP config via mutation store');
         try {
@@ -41,12 +44,16 @@ export function McpServerSettings(): JSX.Element {
 
     const handleRetryConnection = useCallback(async (serverName: string) => {
         console.log(`Requesting retry for MCP server: ${serverName} via mutation store`);
+        setRetryingServerName(serverName); // Set local state *before* mutation
         try {
             await retryMutate({ serverName });
             console.log(`Retry request sent for ${serverName}.`);
+            // Optimistic update will change status, actual status comes via subscription
         } catch (error) {
-             console.error(`Error requesting retry for ${serverName}:`, error);
-             // TODO: Display error
+            console.error(`Error requesting retry for ${serverName}:`, error);
+            // TODO: Display error
+        } finally {
+            setRetryingServerName(null); // Clear local state *after* mutation finishes
         }
     }, [retryMutate]);
 
@@ -84,7 +91,12 @@ export function McpServerSettings(): JSX.Element {
                             let statusText = '';
                             let statusColor = '';
                             let showRetryButton = false;
-                            const isCurrentlyRetrying = isRetrying; // Global loading state
+                            // Use local state to determine if *this* button's server is retrying
+                            const isThisServerRetryingLocal = retryingServerName === serverName;
+                            // Also check optimistic state from store in case component re-renders before local state clears
+                            const isThisServerRetryingOptimistic = lastError === 'Retrying...';
+                            const isCurrentlyRetrying = isThisServerRetryingLocal || isThisServerRetryingOptimistic;
+
                             const toolCount = tools ? Object.keys(tools).length : 0;
 
                             if (!enabled) {
@@ -104,11 +116,23 @@ export function McpServerSettings(): JSX.Element {
                                 showRetryButton = true;
                             }
 
-                            if (lastError === 'Retrying...') {
+                            // Optimistic/Local state overrides display text/color
+                            if (isCurrentlyRetrying) {
                                 statusText = 'Retrying...';
                                 statusColor = 'text-yellow-600 dark:text-yellow-400';
-                                showRetryButton = false;
+                                showRetryButton = false; // Don't show retry button while retrying this specific one
+                            } else if (lastError && lastError !== 'Retrying...') { // Handle non-retry errors after checking retry state
+                                if (!isConnected) { // Connection Failed
+                                     statusText = 'Connection Failed';
+                                     statusColor = 'text-red-600 dark:text-red-400';
+                                     showRetryButton = true;
+                                } else { // Connected but Tool Fetch Failed
+                                     statusText += ' - Tool fetch failed';
+                                     statusColor = 'text-yellow-600 dark:text-yellow-400';
+                                     showRetryButton = true;
+                                }
                             }
+
 
                             return (
                                 <li key={serverName} class="p-3 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm flex items-center justify-between space-x-4">
@@ -121,10 +145,10 @@ export function McpServerSettings(): JSX.Element {
                                         )}
                                     </div>
                                     {showRetryButton && (
-                                         <button
-                                             onClick={() => handleRetryConnection(serverName)} // Use arrow function wrapper for parameter
+                                     <button
+                                             onClick={() => handleRetryConnection(serverName)}
                                              class={`flex-shrink-0 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isCurrentlyRetrying ? 'animate-pulse' : ''}`}
-                                             disabled={isCurrentlyRetrying}
+                                             disabled={retryingServerName !== null} // Disable ALL buttons if *any* retry is in progress via local state
                                              aria-label={`Retry connection for ${serverName}`}
                                          >
                                              {isCurrentlyRetrying ? 'Retrying...' : 'Retry'}

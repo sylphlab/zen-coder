@@ -18,7 +18,8 @@ export const $mcpStatus = createFetcherStore<McpConfiguredStatusPayload | null>(
 );
 
 // --- Mutation Stores for MCP Actions ---
-import { createMutationStore } from './utils/createMutationStore';
+import { createMutationStore, OptimisticUpdateResult } from './utils/createMutationStore';
+import { McpServerStatus } from '../../../src/ai/mcpManager'; // Import McpServerStatus
 
 // Open Global MCP Config File
 export const $openGlobalMcpConfig = createMutationStore<
@@ -43,10 +44,37 @@ export const $openProjectMcpConfig = createMutationStore<
 // Retry MCP Connection
 type RetryMcpConnectionPayload = { serverName: string };
 export const $retryMcpConnection = createMutationStore<
-  undefined, any, RetryMcpConnectionPayload, void
+  undefined, // Result type (no specific result needed)
+  McpConfiguredStatusPayload | null, // Type of the store being updated ($mcpStatus)
+  RetryMcpConnectionPayload, // Payload type for the mutation
+  void // Return type of performMutation
 >({
   performMutation: async (payload: RetryMcpConnectionPayload) => {
     await requestData<void>('retryMcpConnection', payload);
-    // State update will happen via $mcpStatus subscription
+    // Actual state update will happen via $mcpStatus subscription push
   },
+  getOptimisticUpdate: (
+    payload: RetryMcpConnectionPayload,
+    currentDataState: McpConfiguredStatusPayload | null // Use the provided current state
+  ): OptimisticUpdateResult<McpConfiguredStatusPayload | null> => {
+    if (!currentDataState || !currentDataState[payload.serverName]) {
+      // If no current state or server not found, don't apply optimistic update
+      return { optimisticState: currentDataState, revertState: currentDataState };
+    }
+
+    // Create a deep copy for the optimistic state
+    const optimisticState: McpConfiguredStatusPayload = JSON.parse(JSON.stringify(currentDataState));
+
+    // Update the specific server's state optimistically
+    const serverToUpdate = optimisticState[payload.serverName] as McpServerStatus;
+    serverToUpdate.isConnected = false; // Assume disconnection while retrying
+    serverToUpdate.lastError = 'Retrying...'; // Set status text
+    serverToUpdate.tools = {}; // Clear tools while retrying
+
+    // Return the optimistic state and the original state for reverting
+    return {
+      optimisticState: optimisticState,
+      revertState: currentDataState, // Revert back to the state before the optimistic update
+    };
+  }
 });
