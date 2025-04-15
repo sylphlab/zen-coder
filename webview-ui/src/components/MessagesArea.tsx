@@ -22,12 +22,14 @@ interface MessagesAreaProps {
 const renderContentPart = (part: UiMessageContentPart, index: number) => {
     switch (part.type) {
         case 'text':
-            return (
-                <div key={`text-${index}`} className="prose dark:prose-invert prose-sm max-w-none">
-                     <ReactMarkdown
-                         remarkPlugins={[remarkGfm]}
-                         components={{
-                             code({ node, className, children, ...props }) {
+             return (
+                 <div key={`text-${index}`} className="prose dark:prose-invert prose-sm max-w-none">
+                      <ReactMarkdown
+                         // Add key based on text content to force re-render on change
+                         key={`md-${index}-${part.text.slice(-20)}`} // Use index and part of text
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                              code({ node, className, children, ...props }) {
                                  const match = /language-(\w+)/.exec(String(className || ''));
                                  const language = match ? match[1] : undefined;
                                  const codeText = String(children).replace(/\n$/, '');
