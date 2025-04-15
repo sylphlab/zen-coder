@@ -42,21 +42,21 @@ export class AiStreamer {
         if (!providerId || !modelId) {
             const errorMsg = `Missing providerId (${providerId}) or modelId (${modelId})`;
             console.error(`[AiStreamer] ${errorMsg}`);
-            vscode.window.showErrorMessage(`錯誤：未指定 AI 提供者或模型。`);
+            vscode.window.showErrorMessage(`Error: AI provider or model not specified.`); // English error
             return null;
         }
 
         const provider = this.providerMap.get(providerId);
         if (!provider) {
             console.error(`[AiStreamer] Internal error: Provider implementation not found for ID: ${providerId}`);
-            vscode.window.showErrorMessage(`內部錯誤：找不到 Provider ${providerId} 的實作。`);
+            vscode.window.showErrorMessage(`Internal Error: Provider implementation not found for ID: ${providerId}.`); // English error
             return null;
         }
 
         const isEnabled = provider.isEnabled();
         if (!isEnabled) {
             console.warn(`[AiStreamer] Provider ${providerId} is disabled.`);
-            vscode.window.showWarningMessage(`AI Provider '${provider.name}' 已停用。請在設定中啟用佢。`);
+            vscode.window.showWarningMessage(`AI Provider '${provider.name}' is disabled. Please enable it in settings.`); // English error
             return null;
         }
 
@@ -65,12 +65,12 @@ export class AiStreamer {
             try {
                 apiKey = await provider.getApiKey(this.context.secrets);
                 if (!apiKey) {
-                    vscode.window.showErrorMessage(`Provider ${provider.name} 缺少 API Key。請在設定中加入。`);
+                    vscode.window.showErrorMessage(`Provider ${provider.name} is missing an API Key. Please add it in settings.`); // English error
                     return null; // Stop if API key is missing and required
                 }
             } catch (error: any) {
                 console.error(`[AiStreamer] Error fetching API key for ${provider.name}:`, error);
-                vscode.window.showErrorMessage(`獲取 Provider ${provider.name} 的 API Key 時出錯: ${error.message}`);
+                vscode.window.showErrorMessage(`Error getting API Key for Provider ${provider.name}: ${error.message}`); // English error
                 return null;
             }
         }
@@ -81,7 +81,7 @@ export class AiStreamer {
             return modelInstance;
         } catch (error: any) {
             console.error(`[AiStreamer] Error creating model instance via provider '${provider.id}' for model '${modelId}':`, error);
-            vscode.window.showErrorMessage(`創建模型實例時出錯 (${provider.name}): ${error.message}`);
+            vscode.window.showErrorMessage(`Error creating model instance (${provider.name}): ${error.message}`); // English error
             return null;
         }
     }
@@ -125,20 +125,33 @@ export class AiStreamer {
      */
     public async getAiResponseStream(chatId: string): Promise<StreamTextResult<ToolSet, undefined>> {
         const effectiveConfig: EffectiveChatConfig = this.configResolver.getChatEffectiveConfig(chatId);
+        // *** ADDED LOGGING ***
+        console.log(`[AiStreamer] Effective config resolved for chat ${chatId}:`, JSON.stringify(effectiveConfig));
+
         const effectiveProviderId = effectiveConfig.providerId;
-        const combinedModelId = effectiveConfig.chatModelId;
-        const effectiveModelId = combinedModelId?.includes(':') ? combinedModelId.split(':').slice(1).join(':') : combinedModelId;
+        // Directly use modelId from the resolved config
+        const effectiveModelId = effectiveConfig.modelId;
+
+        // Removed the complex logic that tried to parse chatModelId
+
+        console.log(`[AiStreamer] Attempting to get instance for Provider: ${effectiveProviderId}, Model: ${effectiveModelId}`); // Existing LOGGING
 
         if (!effectiveProviderId || !effectiveModelId) {
             const errorMsg = `[AiStreamer] Could not determine effective provider/model for chat ${chatId}. Provider: ${effectiveProviderId}, Model: ${effectiveModelId}`;
             console.error(errorMsg);
-            vscode.window.showErrorMessage(`無法確定聊天 ${chatId} 的有效 AI 提供者或模型。請檢查聊天設定或預設設定。`);
+            // English error message
+            vscode.window.showErrorMessage(`Could not determine effective AI provider or model for chat ${chatId}. Please check chat or default settings.`);
             throw new Error(errorMsg);
         }
 
         const modelInstance = await this._getProviderInstance(effectiveProviderId, effectiveModelId);
         if (!modelInstance) {
-            throw new Error(`Failed to get model instance for chat ${chatId}.`);
+            // Specific error for instance creation failure
+             const instanceErrorMsg = `Failed to get model instance for Provider: ${effectiveProviderId}, Model: ${effectiveModelId}. Check provider implementation and API key status.`;
+             console.error(`[AiStreamer] ${instanceErrorMsg}`);
+             // English error message
+             vscode.window.showErrorMessage(`Failed to create model instance for ${effectiveProviderId} / ${effectiveModelId}. Check Provider implementation and API key status.`);
+            throw new Error(instanceErrorMsg); // Throw more specific error
         }
 
         const uiHistory = this.historyManager.getHistory(chatId);
@@ -221,7 +234,7 @@ export class AiStreamer {
                      console.log(`[AiStreamer] Stream aborted for chat ${chatId}. Reason: ${error.message}`);
                 }
             } else {
-                vscode.window.showErrorMessage(`與 AI 互動時出錯: ${error.message}`);
+                vscode.window.showErrorMessage(`Error interacting with AI: ${error.message}`); // English error
             }
             // Clear active state ONLY if this error belongs to the currently tracked stream
             if (this.activeAbortController?.signal === abortSignal) {

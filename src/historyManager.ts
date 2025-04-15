@@ -89,7 +89,14 @@ export class HistoryManager {
         return finalId; // Return the final generated ID
     }
 
-    public addAssistantMessageFrame = async (chatId: string): Promise<string> => { // Arrow function
+    // Modified to accept model/provider info for optimistic display
+    public addAssistantMessageFrame = async (
+        chatId: string,
+        providerId?: string,
+        providerName?: string,
+        modelId?: string,
+        modelName?: string
+    ): Promise<string> => { // Arrow function
         const chat = this._sessionManager.getChatSession(chatId);
         if (!chat) {
             console.warn(`[HistoryManager] Chat session not found: ${chatId} (addAssistantMessageFrame)`);
@@ -101,15 +108,21 @@ export class HistoryManager {
             id: assistantUiMsgId,
             role: 'assistant',
             content: [],
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            status: 'pending', // Start in pending state
+            // Add model/provider info if available
+            providerId: providerId,
+            providerName: providerName,
+            modelId: modelId,
+            modelName: modelName
         };
         chat.history.push(initialAssistantUiMessage);
         await this._sessionManager.touchChatSession(chatId); // Triggers save and session update delta
 
-        // Use SubscriptionManager to push delta
+        // Use SubscriptionManager to push delta (including model info)
         const delta: HistoryAddMessageDelta = { type: 'historyAddMessage', chatId, message: initialAssistantUiMessage };
         this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
-        console.log(`[HistoryManager] Pushed assistant message frame delta via SubscriptionManager: ${assistantUiMsgId}`);
+        console.log(`[HistoryManager] Pushed assistant message frame delta (with model info) via SubscriptionManager: ${assistantUiMsgId}`);
 
 
         return assistantUiMsgId;

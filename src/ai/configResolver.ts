@@ -2,10 +2,11 @@ import * as vscode from 'vscode';
 import { ChatSessionManager } from '../session/chatSessionManager';
 import { DefaultChatConfig } from '../common/types'; // Only import DefaultChatConfig
 
-// Define EffectiveChatConfig locally as it was previously in HistoryManager
+// Define EffectiveChatConfig locally
 export interface EffectiveChatConfig {
-    chatModelId?: string;
+    // Removed chatModelId
     providerId?: string;
+    modelId?: string; // Added modelId directly
     imageModelId?: string;
     optimizeModelId?: string;
 }
@@ -64,18 +65,14 @@ export class ConfigResolver {
             effectiveConfig.optimizeModelId = chat?.config.optimizeModelId ?? defaults.defaultOptimizeModelId;
         }
 
+        // Directly assign the resolved provider and model IDs
         effectiveConfig.providerId = finalProviderId;
+        effectiveConfig.modelId = finalModelId; // Assign finalModelId directly
 
-        // Combine providerId and modelId into the chatModelId format (e.g., "anthropic:model-name")
-        if (finalProviderId && finalModelId) {
-            effectiveConfig.chatModelId = `${finalProviderId}:${finalModelId}`;
-        } else {
-            effectiveConfig.chatModelId = undefined; // Set to undefined if either part is missing
-            if (finalProviderId || finalModelId) {
-                 console.warn(`[ConfigResolver] Inconsistent chat model config for chat ${chatId}. Provider: ${finalProviderId}, Model: ${finalModelId}. Setting chatModelId to undefined.`);
-            }
-        }
-        // console.log(`[ConfigResolver] Effective config for chat ${chatId}:`, effectiveConfig); // Optional logging
+        // Removed the logic that created chatModelId
+
+        // *** ADDED DETAILED LOGGING ***
+        console.log(`[ConfigResolver] FINAL Effective config for chat ${chatId}:`, JSON.stringify(effectiveConfig));
         return effectiveConfig;
     }
 }

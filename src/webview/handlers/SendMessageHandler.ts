@@ -56,16 +56,7 @@ export class SendMessageHandler implements RequestHandler {
             // 1. Add user message (pass userMessageTempId)
             await context.historyManager.addUserMessage(chatId, userMessageContent, userMessageTempId); // Pass chatId and userMessageTempId
 
-            // 2. Add assistant message frame (this now pushes a delta)
-            assistantUiMsgId = await context.historyManager.addAssistantMessageFrame(chatId!);
-            if (!assistantUiMsgId) {
-                throw new Error("Failed to add assistant message frame.");
-            }
-
-            // 3. Prepare and initiate AI stream
-            const { streamResult } = await this._prepareAndSendToAI(context, chatId, providerId, modelId); // Pass validated IDs
-
-            // --- Get Provider and Model Names (ONCE) ---
+            // --- Get Provider and Model Names (EARLIER) ---
             // Use providerMap to get provider instance name
             const providerInstance = context.aiService.providerManager.providerMap.get(providerId);
             providerName = providerInstance?.name ?? providerId; // Assign to higher-scoped variable
@@ -76,7 +67,7 @@ export class SendMessageHandler implements RequestHandler {
             const modelInfo = providerStatus?.models.find(m => m.id === modelId);
             modelName = modelInfo?.name ?? modelId; // Assign to higher-scoped variable
             // *** ADDED LOGGING ***
-            console.log(`[SendMessageHandler|${chatId}] Fetched Model Info: ProviderStatus found=${!!providerStatus}, ModelInfo found=${!!modelInfo}, Resolved modelName='${modelName}' (from modelInfo.name='${modelInfo?.name}', fallback modelId='${modelId}')`);
+            console.log(`[SendMessageHandler|${chatId}] Fetched Model Info (Early): ProviderStatus found=${!!providerStatus}, ModelInfo found=${!!modelInfo}, Resolved modelName='${modelName}' (from modelInfo.name='${modelInfo?.name}', fallback modelId='${modelId}')`);
 
             // Ensure definite strings with fallbacks before passing
             const finalProviderId = providerId;
@@ -84,6 +75,21 @@ export class SendMessageHandler implements RequestHandler {
             const finalModelId = modelId;
             const finalModelName = modelName;
             // --- End Get Names ---
+
+            // 2. Add assistant message frame (pass names for optimistic display)
+            assistantUiMsgId = await context.historyManager.addAssistantMessageFrame(
+                chatId!,
+                finalProviderId,
+                finalProviderName,
+                finalModelId,
+                finalModelName
+            );
+            if (!assistantUiMsgId) {
+                throw new Error("Failed to add assistant message frame.");
+            }
+
+            // 3. Prepare and initiate AI stream
+            const { streamResult } = await this._prepareAndSendToAI(context, chatId, providerId, modelId); // Pass validated IDs
 
             // 4. Process the AI response stream and get the result
             const streamProcessingResult = await streamProcessor.processStream(

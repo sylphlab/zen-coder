@@ -84,11 +84,17 @@ export class DeepseekProvider implements AiProvider {
             }
 
             const models: ModelDefinition[] = jsonResponse.data
-                .map((model: any) => ({
-                    // ID should be just the model name part from the API
-                    id: model.id, // Let ModelResolver add the provider prefix
-                    name: model.id, // Use ID as name for DeepSeek display
-                }))
+                .map((model: any) => {
+                    // Assuming the DeepSeek API response object (`model`) has an 'id' field.
+                    // We will use this 'id' for both the internal model ID and the display name,
+                    // as a separate display name field might not be available or consistent.
+                    const modelId = model.id;
+                    return {
+                        id: modelId,
+                        name: modelId, // Use the ID as the name for consistency
+                    };
+                })
+                .filter((model: ModelDefinition): model is ModelDefinition => !!model.id) // Filter out any potential null/undefined IDs
                 .sort((a: ModelDefinition, b: ModelDefinition) => a.id.localeCompare(b.id));
 
             console.log(`[DeepseekProvider] Parsed ${models.length} models.`);
