@@ -189,8 +189,8 @@ export class AiService {
     public triggerToolStatusNotification() {
         this._subscriptionManager.notifyToolStatusChange();
     }
-    public triggerDefaultConfigNotification() {
-        this._subscriptionManager.notifyDefaultConfigChange();
+    public triggerDefaultConfigNotification(config: DefaultChatConfig) { // Add config parameter
+        this._subscriptionManager.notifyDefaultConfigChange(config); // Pass config along
     }
     public triggerCustomInstructionsNotification() {
         this._subscriptionManager.notifyCustomInstructionsChange();

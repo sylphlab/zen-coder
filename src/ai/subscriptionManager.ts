@@ -101,17 +101,20 @@ export class SubscriptionManager {
         }
     }
 
-    public async notifyDefaultConfigChange(): Promise<void> {
+    // Updated to accept the config directly
+    public notifyDefaultConfigChange(config: DefaultChatConfig): void {
         const topic = 'defaultConfigUpdate';
         if (this.hasSubscription(topic)) {
             try {
-                const aiService = this._aiServiceGetter();
-                const latestConfig = await aiService.getDefaultConfig();
-                console.log('[SubscriptionManager] Pushing defaultConfig update.');
-                this._postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: latestConfig } });
+                // No need to fetch, use the provided config
+                console.log('[SubscriptionManager] Pushing defaultConfig update with provided data:', config);
+                this._postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: config } });
             } catch (error) {
-                console.error('[SubscriptionManager] Error fetching/pushing default config:', error);
+                // Catch potential errors during message posting (though less likely)
+                console.error('[SubscriptionManager] Error pushing default config update:', error);
             }
+        } else {
+             console.log(`[SubscriptionManager] No active subscription for ${topic}, skipping defaultConfig push.`);
         }
     }
 

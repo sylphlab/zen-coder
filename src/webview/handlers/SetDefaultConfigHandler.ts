@@ -8,38 +8,53 @@ export class SetDefaultConfigHandler implements RequestHandler {
 
     // Return a simple success object or throw an error
     public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> {
-        if (!payload || typeof payload.config !== 'object' || payload.config === null) {
-            console.warn('[SetDefaultConfigHandler] Received invalid payload:', payload);
-            throw new Error('Invalid payload for setDefaultConfig request.'); // Throw error
+        // Validate payload structure
+        if (!payload || typeof payload !== 'object') {
+             console.warn('[SetDefaultConfigHandler] Received invalid payload structure:', payload);
+             throw new Error('Invalid payload structure for setDefaultConfig request.');
         }
 
-        const newConfig = payload.config as Partial<DefaultChatConfig>; // Use Partial for flexibility
-        console.log('[SetDefaultConfigHandler] Received request to update default config:', newConfig);
+        // Validate the config part of the payload
+        const configUpdate = payload as Partial<DefaultChatConfig>; // Use Partial for flexibility
+        console.log('[SetDefaultConfigHandler] Received request to update default config:', configUpdate);
 
         try {
             // Target the correct configuration section 'zencoder.defaults'
             const config = vscode.workspace.getConfiguration('zencoder.defaults');
             const updates: Promise<void>[] = [];
 
-            // Update only the settings that are present in the payload
-            // Use correct property names and setting IDs
-            if (newConfig.defaultProviderId !== undefined) {
-                updates.push(Promise.resolve(config.update('defaultProviderId', newConfig.defaultProviderId, vscode.ConfigurationTarget.Global)));
+            // Prepare updates based on the payload, wrapping in Promise.resolve
+            if (configUpdate.defaultProviderId !== undefined) {
+                updates.push(Promise.resolve(config.update('defaultProviderId', configUpdate.defaultProviderId, vscode.ConfigurationTarget.Global)));
             }
-            if (newConfig.defaultModelId !== undefined) {
-                updates.push(Promise.resolve(config.update('defaultModelId', newConfig.defaultModelId, vscode.ConfigurationTarget.Global)));
+            if (configUpdate.defaultModelId !== undefined) {
+                updates.push(Promise.resolve(config.update('defaultModelId', configUpdate.defaultModelId, vscode.ConfigurationTarget.Global)));
             }
-            if (newConfig.defaultImageModelId !== undefined) {
-                updates.push(Promise.resolve(config.update('imageModelId', newConfig.defaultImageModelId, vscode.ConfigurationTarget.Global)));
+            if (configUpdate.defaultImageModelId !== undefined) {
+                updates.push(Promise.resolve(config.update('imageModelId', configUpdate.defaultImageModelId, vscode.ConfigurationTarget.Global)));
             }
-            if (newConfig.defaultOptimizeModelId !== undefined) {
-                updates.push(Promise.resolve(config.update('optimizeModelId', newConfig.defaultOptimizeModelId, vscode.ConfigurationTarget.Global)));
+            if (configUpdate.defaultOptimizeModelId !== undefined) {
+                updates.push(Promise.resolve(config.update('optimizeModelId', configUpdate.defaultOptimizeModelId, vscode.ConfigurationTarget.Global)));
             }
 
+            // Wait for all updates to complete
             await Promise.all(updates);
-            console.log('[SetDefaultConfigHandler] Successfully updated default config settings.');
-            // Explicitly trigger the notification
-            context.aiService.triggerDefaultConfigNotification();
+            console.log('[SetDefaultConfigHandler] Successfully updated default config settings in VS Code.');
+
+            // --- Fetch the complete, updated config state ---
+            // Re-read the configuration section after updates
+            const updatedConfig = vscode.workspace.getConfiguration('zencoder.defaults');
+            const finalConfig: DefaultChatConfig = {
+                defaultProviderId: updatedConfig.get<string>('defaultProviderId'),
+                defaultModelId: updatedConfig.get<string>('defaultModelId'),
+                defaultImageModelId: updatedConfig.get<string>('imageModelId'),
+                defaultOptimizeModelId: updatedConfig.get<string>('optimizeModelId'),
+            };
+            console.log('[SetDefaultConfigHandler] Final config state after update:', finalConfig);
+
+            // Explicitly trigger the notification with the final state
+            context.aiService.triggerDefaultConfigNotification(finalConfig); // Pass the final state
+
             return { success: true }; // Return success
         } catch (error: any) {
             console.error('[SetDefaultConfigHandler] Error updating default config settings:', error);
