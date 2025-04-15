@@ -6,7 +6,9 @@ import {
     UiToolCallPart,
     SuggestedActionsPayload, // Import payload type
     SUGGESTED_ACTIONS_TOPIC_PREFIX, // Import topic prefix
-    SuggestedAction // Import SuggestedAction type
+    SuggestedAction, // Import SuggestedAction type
+    HistoryAppendChunkDelta, // <-- Import the delta type
+    HistoryUpdateMessageStatusDelta // <-- Import status delta type
 } from '../common/types';
 import { ChatSessionManager } from '../session/chatSessionManager';
 import { SubscriptionManager } from '../ai/subscriptionManager'; // Import SubscriptionManager
@@ -47,6 +49,16 @@ export class MessageModifier {
                 message.content.push({ type: 'text', text: textDelta });
             }
             // Save is deferred until reconcileFinalAssistantMessage
+
+            // Notify frontend about the chunk
+            const delta: HistoryAppendChunkDelta = {
+                type: 'historyAppendChunk',
+                chatId,
+                messageId: assistantMessageId,
+                textChunk: textDelta, // Corrected property name
+            };
+            this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
+            // console.log(`[MessageModifier appendTextChunk] Pushed chunk delta for Msg ${assistantMessageId}`); // Optional: Add logging if needed
         }
     }
 
@@ -148,6 +160,16 @@ export class MessageModifier {
         await this._sessionManager.touchChatSession(chatId);
         console.log(`[MessageModifier reconcile] Chat ${chatId}, Msg ${assistantMessageId}: touchChatSession completed.`);
 
+
+        // Push final status update (clear pending) via SubscriptionManager
+        const statusDelta: HistoryUpdateMessageStatusDelta = {
+            type: 'historyUpdateMessageStatus',
+            chatId: chatId,
+            messageId: assistantMessageId,
+            status: undefined // Clear the 'pending' status
+        };
+        this._subscriptionManager.notifyChatHistoryUpdate(chatId, statusDelta);
+        console.log(`[MessageModifier reconcile] Pushed final status update (clear pending) for Msg ${assistantMessageId}.`);
 
         // Push suggested actions update via SubscriptionManager
         const payload: SuggestedActionsPayload = {
