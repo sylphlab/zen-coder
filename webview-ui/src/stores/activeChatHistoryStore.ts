@@ -1,5 +1,18 @@
-import { atom, onMount } from 'nanostores'; // Keep onMount for $activeChatSession
-import { UiMessage, ChatSession } from '../../../src/common/types';
+import { atom, onMount, WritableAtom } from 'nanostores'; // Keep onMount for $activeChatSession
+import {
+    UiMessage,
+    ChatSession,
+    ChatHistoryUpdateData, // Import the union type for updates
+    HistorySetDelta,
+    HistoryAddMessageDelta,
+    HistoryAppendChunkDelta,
+    HistoryUpdateToolCallDelta,
+    HistoryDeleteMessageDelta,
+    HistoryClearDelta,
+    HistoryAddContentPartDelta,
+    UiMessageContentPart,
+    UiToolCallPart
+} from '../../../src/common/types'; // Adjust path as needed, added delta types
 import { listen, requestData } from '../utils/communication';
 import { router } from './router';
 import { StandardStore, createStore } from './utils/createStore'; // Import createStore and StandardStore
@@ -56,14 +69,13 @@ onMount($activeChatSession, () => {
 
 
 // --- Active Chat History Store (Refactored using createStore) ---
-// Fetches initial history and subscribes to updates based on the current router chatId.
-type ChatHistoryUpdatePayload = UiMessage[] | null; // Update data is the array itself
-
+// Fetches initial history and subscribes to delta updates based on the current router chatId.
+// Update data is now the delta payload union type
 export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
     UiMessage[],                  // TData: Store holds array of messages
     GetChatHistoryResponse,       // TResponse: Raw response from fetch ('getChatHistory')
     GetChatHistoryPayload,        // PPayload: Payload for fetch ({ chatId })
-    ChatHistoryUpdatePayload      // UUpdateData: Type alias for UiMessage[] | null
+    ChatHistoryUpdateData         // UUpdateData: Now the delta union type
 >({
     key: 'activeChatHistory',
     // Fetch configuration depends on the router
@@ -91,38 +103,119 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
              console.log(`[$activeChatHistory subscribe.topic] Calculating topic. ChatId: ${chatId}`);
             return chatId ? `chatHistoryUpdate/${chatId}` : null; // Dynamic topic based on chatId
         },
-        handleUpdate: (currentHistory, updateData: ChatHistoryUpdatePayload) => {
-            const newHistory = updateData;
-            console.log(`[$activeChatHistory subscribe.handleUpdate] Received update. Data length: ${newHistory?.length ?? 'null'}`);
+        handleUpdate: (currentState: UiMessage[] | null, updateData: ChatHistoryUpdateData): UiMessage[] | null => { // Correct signature
+            // --- Explicitly log parameter received ---
+            console.log(`[$activeChatHistory handleUpdate ENTRY] Received update type: ${updateData.type}. CurrentState is array? ${Array.isArray(currentState)}. CurrentState length: ${currentState?.length ?? 'null'}`);
+            // --- Ensure no .get() call is happening here ---
+            console.log(`[$activeChatHistory handleUpdate] NO .get() CALL HERE. Using received currentState.`);
 
-            // Check if it's potentially a streaming update for the last message
-            if (Array.isArray(currentHistory) && Array.isArray(newHistory) && currentHistory.length === newHistory.length && newHistory.length > 0) {
-                const lastCurrentMsg = currentHistory[currentHistory.length - 1];
-                const lastNewMsg = newHistory[newHistory.length - 1];
+            const history: UiMessage[] = currentState ?? []; // Use currentState passed in
 
-                // If last message ID is the same, and roles match (likely assistant streaming), update only the last message
-                if (lastCurrentMsg.id === lastNewMsg.id && lastCurrentMsg.role === lastNewMsg.role && lastNewMsg.role === 'assistant') {
-                    console.log(`[$activeChatHistory subscribe.handleUpdate] Detected streaming update for message ID: ${lastNewMsg.id}. Replacing last message object.`);
-                    // Log content for debugging
-                    console.log(`[$activeChatHistory subscribe.handleUpdate] Current last msg content:`, JSON.stringify(lastCurrentMsg.content));
-                    console.log(`[$activeChatHistory subscribe.handleUpdate] New last msg content:`, JSON.stringify(lastNewMsg.content));
-                    // Create a new history array, replacing only the last message with the updated one
-                    // Ensure a new object reference for the updated message to trigger re-renders
-                    const updatedHistory = [...currentHistory.slice(0, -1), { ...lastNewMsg }]; // Creates shallow copy of lastNewMsg
-                    console.log(`[$activeChatHistory subscribe.handleUpdate] Returning updated history with replaced last message.`);
-                    return updatedHistory;
-                } else {
-                     // Add logging for when the ID/role check fails but lengths match
-                     console.log(`[$activeChatHistory subscribe.handleUpdate] Lengths match, but IDs/Roles differ: currentId=${lastCurrentMsg.id}, newId=${lastNewMsg.id}, currentRole=${lastCurrentMsg.role}, newRole=${lastNewMsg.role}`);
+            switch (updateData.type) {
+                case 'historySet':
+                    console.log(`[$activeChatHistory handleUpdate] Setting full history. Length: ${updateData.history?.length ?? 'null'}`);
+                    return updateData.history ? [...updateData.history] : null; // Return new state
+
+                case 'historyAddMessage': {
+                    console.log(`[$activeChatHistory handleUpdate] Adding message ID: ${updateData.message.id}`);
+                    const newState = [...history, updateData.message];
+                    console.log(`[$activeChatHistory handleUpdate] Calculated state after adding ${updateData.message.id}:`, newState.map(m => m.id));
+                    return newState; // Return new state
                 }
-            } else {
-                 // Add logging for when the length check fails
-                 console.log(`[$activeChatHistory subscribe.handleUpdate] Length check failed or not arrays: isArray(current)=${Array.isArray(currentHistory)}, isArray(new)=${Array.isArray(newHistory)}, currentLen=${currentHistory?.length ?? 'null'}, newLen=${newHistory?.length ?? 'null'}`);
-            }
+                case 'historyAppendChunk': {
+                    console.log(`[$activeChatHistory handleUpdate] Appending chunk to message ID: ${updateData.messageId}`);
+                    const messageIndex = history.findIndex(m => m.id === updateData.messageId);
 
-            // Otherwise, assume it's a full history replace (initial load, user message added, message deleted, stream finished etc.)
-            console.log(`[$activeChatHistory subscribe.handleUpdate] Fallback: Performing full history replace.`);
-            return newHistory ? [...newHistory] : null; // Ensure new array reference for full replace
+                    if (messageIndex === -1) {
+                        console.error(`[handleUpdate] CRITICAL: Message ID ${updateData.messageId} not found for appendChunk. Update dropped.`);
+                        return history; // Return original state
+                    }
+
+                    const targetMessage = history[messageIndex];
+                    const currentContent = Array.isArray(targetMessage.content) ? targetMessage.content : [];
+                    const lastPart = currentContent[currentContent.length - 1];
+
+                    // Removed the duplicate declarations below
+
+                    let newContent: UiMessageContentPart[];
+                    if (lastPart && lastPart.type === 'text') {
+                        newContent = [
+                            ...currentContent.slice(0, -1),
+                            { ...lastPart, text: lastPart.text + updateData.textChunk }
+                        ];
+                    } else {
+                        newContent = [...currentContent, { type: 'text', text: updateData.textChunk }];
+                    }
+
+                    const newHistory = [...history];
+                    newHistory[messageIndex] = { ...targetMessage, content: newContent };
+                    return newHistory; // Return new state
+                }
+
+                case 'historyAddContentPart': {
+                    console.log(`[$activeChatHistory handleUpdate] Adding content part to message ID: ${updateData.messageId}`);
+                    const messageIndex = history.findIndex(m => m.id === updateData.messageId);
+                    if (messageIndex === -1) {
+                        console.warn(`[handleUpdate] Message ID ${updateData.messageId} not found for addContentPart. Update dropped.`);
+                        return history; // Return original state
+                    }
+                    const targetMessage = history[messageIndex];
+                    const content = Array.isArray(targetMessage.content) ? [...targetMessage.content, updateData.part] : [updateData.part];
+
+                    const newHistory = [...history];
+                    newHistory[messageIndex] = { ...targetMessage, content };
+                    return newHistory; // Return new state
+                }
+
+
+                case 'historyUpdateToolCall': {
+                    console.log(`[$activeChatHistory handleUpdate] Updating tool call ID: ${updateData.toolCallId} in message ID: ${updateData.messageId}`);
+                    const messageIndex = history.findIndex(m => m.id === updateData.messageId);
+                    if (messageIndex === -1) {
+                        console.warn(`[handleUpdate] Message ID ${updateData.messageId} not found for updateToolCall. Update dropped.`);
+                        return history; // Return original state
+                    }
+                    const targetMessage = history[messageIndex];
+                    const content = Array.isArray(targetMessage.content) ? [...targetMessage.content] : [];
+                    const toolCallIndex = content.findIndex(p => p.type === 'tool-call' && p.toolCallId === updateData.toolCallId);
+
+                    if (toolCallIndex === -1) {
+                        console.warn(`[handleUpdate] Tool call ID ${updateData.toolCallId} not found in message ID ${updateData.messageId}. Update dropped.`);
+                        return history; // Return original state
+                    }
+
+                    // Update the specific tool call part immutably
+                    const updatedToolCall = {
+                        ...(content[toolCallIndex] as UiToolCallPart), // Cast is safe due to findIndex check
+                        status: updateData.status ?? (content[toolCallIndex] as UiToolCallPart).status,
+                        result: updateData.result ?? (content[toolCallIndex] as UiToolCallPart).result,
+                        progress: updateData.progress ?? (content[toolCallIndex] as UiToolCallPart).progress,
+                    };
+                    // If status is complete or error, clear progress
+                    if (updatedToolCall.status === 'complete' || updatedToolCall.status === 'error') {
+                         updatedToolCall.progress = undefined;
+                    }
+
+                    const newContent = [...content];
+                    newContent[toolCallIndex] = updatedToolCall;
+
+                    const newHistory = [...history];
+                    newHistory[messageIndex] = { ...targetMessage, content: newContent };
+                    return newHistory; // Return new state
+                }
+
+                case 'historyDeleteMessage':
+                    console.log(`[$activeChatHistory handleUpdate] Deleting message ID: ${updateData.messageId}`);
+                    return history.filter(m => m.id !== updateData.messageId); // Return new state
+
+                case 'historyClear':
+                    console.log(`[$activeChatHistory handleUpdate] Clearing history.`);
+                    return []; // Return new state (empty array)
+
+                default:
+                    console.warn(`[$activeChatHistory handleUpdate] Received unhandled update type:`, updateData);
+                    return history; // Return original state
+            }
         }
     },
     // Store depends on the router to recalculate payload and topic

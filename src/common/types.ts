@@ -30,6 +30,102 @@ export interface UiMessage {
     // sender property is deprecated, use role instead
 }
 
+// ================== Delta Update Payloads ==================
+
+// ----- History Deltas -----
+
+export interface HistorySetDelta {
+  type: 'historySet';
+  chatId: string;
+  history: UiMessage[];
+}
+
+export interface HistoryAddMessageDelta {
+  type: 'historyAddMessage';
+  chatId: string;
+  message: UiMessage;
+}
+
+export interface HistoryAppendChunkDelta {
+  type: 'historyAppendChunk';
+  chatId: string;
+  messageId: string; // ID of the message being appended to
+  textChunk: string;
+}
+
+export interface HistoryAddContentPartDelta { // Added this new delta type
+  type: 'historyAddContentPart';
+  chatId: string;
+  messageId: string;
+  part: UiMessageContentPart; // The new part to add (e.g., a tool call)
+}
+
+export interface HistoryUpdateToolCallDelta {
+  type: 'historyUpdateToolCall';
+  chatId: string;
+  messageId: string;
+  toolCallId: string;
+  status?: UiToolCallPart['status'];
+  result?: any;
+  progress?: string;
+}
+
+export interface HistoryDeleteMessageDelta {
+  type: 'historyDeleteMessage';
+  chatId: string;
+  messageId: string;
+}
+
+export interface HistoryClearDelta {
+  type: 'historyClear';
+  chatId: string;
+}
+
+export type ChatHistoryUpdateData =
+  | HistorySetDelta
+  | HistoryAddMessageDelta
+  | HistoryAppendChunkDelta
+  | HistoryAddContentPartDelta // Add the new type to the union
+  | HistoryUpdateToolCallDelta
+  | HistoryDeleteMessageDelta
+  | HistoryClearDelta;
+
+
+// ----- Session Deltas -----
+
+export interface SessionSetDelta {
+  type: 'sessionSet';
+  sessions: ChatSession[];
+}
+
+export interface SessionAddDelta {
+  type: 'sessionAdd';
+  session: ChatSession;
+}
+
+export interface SessionDeleteDelta {
+  type: 'sessionDelete';
+  sessionId: string;
+}
+
+export interface SessionUpdateDelta {
+  type: 'sessionUpdate';
+  sessionId: string;
+  name?: string;
+  config?: ChatConfig;
+  lastModified?: number;
+}
+
+export type ChatSessionsUpdateData =
+  | SessionSetDelta
+  | SessionAddDelta
+  | SessionDeleteDelta
+  | SessionUpdateDelta;
+
+
+// ================== Existing Types ==================
+
+
 /**
  * Represents the status of an AI provider, including whether its
  * API key is set and if it's enabled in the settings.

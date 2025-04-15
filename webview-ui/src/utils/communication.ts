@@ -70,23 +70,23 @@ const handleResponse = (message: WebviewResponseMessage): void => {
 };
 
 /**
- * Notifies subscribers for a given topic when a pushUpdate message is received. (Simplified)
+ * Notifies subscribers for a given topic when a pushUpdate message is received.
  */
-const notifySubscribers = (topic?: string, data?: any): void => {
+ const notifySubscribers = (topic?: string, data?: any): void => {
      if (!topic) {
          console.warn("[Communication FP] notifySubscribers called without a topic.");
          return;
      }
      console.log(`[Communication FP] Notifying subscribers for topic: "${topic}"`);
-     const callbacks = topicCallbacks.get(topic); // Get Set of callbacks for the topic
+     const callbacks = topicCallbacks.get(topic); // Get Set of callbacks
      if (callbacks && callbacks.size > 0) {
          console.log(`[Communication FP] Found ${callbacks.size} callbacks for topic "${topic}". Executing...`);
-         // Create a copy of the callbacks before iterating, in case a callback modifies the Set during iteration
+         // Create a copy before iterating
          const callbacksToExecute = Array.from(callbacks);
          callbacksToExecute.forEach((callback) => {
              try {
                  console.log(`[Communication FP]   Executing callback for topic "${topic}"...`);
-                 callback(data); // Execute each callback
+                 callback(data); // Execute callback with just data
              } catch (error) {
                  console.error(`[Communication FP]   Error in subscription callback for topic "${topic}":`, error);
              }
@@ -172,12 +172,12 @@ export function requestData<T = any>(requestType: string, payload?: any): Promis
 }
 
 /**
- * Creates a subscription to a topic pushed from the backend. (Simplified)
+ * Creates a subscription to a topic pushed from the backend.
  * Uses requestData to send 'subscribe' and 'unsubscribe' requests.
- * Returns a function to unsubscribe. (Refined)
+ * Returns a function to unsubscribe.
  */
 export function listen(topic: string, callback: (data: any) => void): () => Promise<void> {
-     // Ensure listener is initialized lazily
+    // Ensure listener is initialized lazily
     if (!isListenerInitialized) {
          console.warn("[Communication FP] listen called before initializeListener. Initializing lazily.");
          initializeListener();
@@ -203,7 +203,6 @@ export function listen(topic: string, callback: (data: any) => void): () => Prom
             })
             .catch(error => {
                 console.error(`[Communication FP] Backend subscription failed for topic: ${topic}`, error);
-                // If subscribe fails, remove the topic entry if it's still empty (no other listeners added meanwhile)
                 const currentSet = topicCallbacks.get(topic);
                 if (currentSet && currentSet.size === 0) {
                      topicCallbacks.delete(topic);
@@ -224,7 +223,7 @@ export function listen(topic: string, callback: (data: any) => void): () => Prom
 
         const callbacks = topicCallbacks.get(topic);
         if (callbacks) {
-            callbacks.delete(callback);
+            callbacks.delete(callback); // Delete the specific callback
             console.log(`[Communication FP] Removed listener callback for topic: "${topic}". Remaining: ${callbacks.size}`);
 
             // If last callback removed, unsubscribe from backend

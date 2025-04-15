@@ -55,7 +55,6 @@ export class AiStreamer {
         const isEnabled = provider.isEnabled();
         if (!isEnabled) {
             console.warn(`[AiStreamer] Provider ${providerId} is disabled.`);
-            // Notify the user more explicitly
             vscode.window.showWarningMessage(`AI Provider '${provider.name}' 已停用。請在設定中啟用佢。`);
             return null;
         }
@@ -92,7 +91,6 @@ export class AiStreamer {
     private async _loadCustomInstructions(): Promise<string> {
         let combinedInstructions = '';
         try {
-            // Try reading global setting
             const globalInstructions = vscode.workspace.getConfiguration('zencoder').get<string>('customInstructions.global');
             if (globalInstructions?.trim()) {
                 combinedInstructions += globalInstructions.trim();
@@ -101,7 +99,6 @@ export class AiStreamer {
             console.error('[AiStreamer] Error reading global custom instructions setting:', error);
         }
 
-        // Try reading project-specific setting
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (workspaceFolders?.[0]) {
             const projectInstructionUri = vscode.Uri.joinPath(workspaceFolders[0].uri, '.zen', 'custom_instructions.md');
@@ -109,11 +106,10 @@ export class AiStreamer {
                 const fileContent = await vscode.workspace.fs.readFile(projectInstructionUri);
                 const projectInstructions = Buffer.from(fileContent).toString('utf8');
                 if (projectInstructions?.trim()) {
-                    if (combinedInstructions) { combinedInstructions += '\n\n---\n\n'; } // Separator if both exist
+                    if (combinedInstructions) { combinedInstructions += '\n\n---\n\n'; }
                     combinedInstructions += projectInstructions.trim();
                 }
             } catch (error: any) {
-                // Only log error if it's not a simple "file not found"
                 if (error.code !== 'FileNotFound') {
                     console.error(`[AiStreamer] Error reading project custom instructions file ${projectInstructionUri.fsPath}:`, error);
                 }
@@ -127,11 +123,10 @@ export class AiStreamer {
      * Prepares messages, loads instructions, enables tools, and calls the AI SDK.
      */
     public async getAiResponseStream(chatId: string): Promise<StreamTextResult<ToolSet, undefined>> {
-        // Use ConfigResolver to get effective config
         const effectiveConfig: EffectiveChatConfig = this.configResolver.getChatEffectiveConfig(chatId);
         const effectiveProviderId = effectiveConfig.providerId;
-        const combinedModelId = effectiveConfig.chatModelId; // Use chatModelId directly (includes provider)
-        const effectiveModelId = combinedModelId?.includes(':') ? combinedModelId.split(':').slice(1).join(':') : combinedModelId; // Extract model part only if needed by _getProviderInstance
+        const combinedModelId = effectiveConfig.chatModelId;
+        const effectiveModelId = combinedModelId?.includes(':') ? combinedModelId.split(':').slice(1).join(':') : combinedModelId;
 
         if (!effectiveProviderId || !effectiveModelId) {
             const errorMsg = `[AiStreamer] Could not determine effective provider/model for chat ${chatId}. Provider: ${effectiveProviderId}, Model: ${effectiveModelId}`;
@@ -142,11 +137,9 @@ export class AiStreamer {
 
         const modelInstance = await this._getProviderInstance(effectiveProviderId, effectiveModelId);
         if (!modelInstance) {
-            // Error already shown in _getProviderInstance
             throw new Error(`Failed to get model instance for chat ${chatId}.`);
         }
 
-        // Use utility function for history translation
         const uiHistory = this.historyManager.getHistory(chatId);
         const messagesForApi: CoreMessage[] = translateUiHistoryToCoreMessages(uiHistory);
         const customInstructions = await this._loadCustomInstructions();
@@ -155,18 +148,21 @@ export class AiStreamer {
                 messagesForApi.unshift({ role: 'system', content: customInstructions });
             } else {
                 console.warn("[AiStreamer] Existing system message found, custom instructions not prepended.");
-                // Optionally merge or replace existing system message here if desired
             }
         }
 
         const enabledTools = this.toolManager.prepareToolSet();
         console.log('[AiStreamer] Enabled tools being passed to AI:', Object.keys(enabledTools));
 
-        // Abort any previous stream before starting a new one
+        // --- Explicitly abort and clear previous controller ---
         if (this.activeAbortController) {
-            this.activeAbortController.abort('New stream started');
-            console.log('[AiStreamer] Previous stream aborted.');
+            console.log('[AiStreamer] Aborting previous active stream before starting new one.');
+            this.activeAbortController.abort('New stream initiated by user');
+            this.activeAbortController = null; // Nullify immediately
         }
+        // --- End Abort ---
+
+        // Create a new controller for the current stream
         this.activeAbortController = new AbortController();
         const abortSignal = this.activeAbortController.signal;
 
@@ -176,12 +172,11 @@ export class AiStreamer {
                 model: modelInstance,
                 messages: messagesForApi,
                 tools: enabledTools,
-                maxSteps: 100, // Consider making configurable
+                maxSteps: 100,
                 abortSignal: abortSignal,
                 experimental_continueSteps: true,
                 onFinish: ({ finishReason, usage }) => {
                     console.log(`[AiStreamer] streamText finished for chat ${chatId}. Reason: ${finishReason}, Usage: ${JSON.stringify(usage)}`);
-                    // Clear the controller only if this specific stream finished (not aborted by a newer one)
                     if (this.activeAbortController?.signal === abortSignal) {
                         this.activeAbortController = null;
                     }
@@ -198,31 +193,33 @@ export class AiStreamer {
                         const newToolCall = result.toolCalls.find(tc => tc.toolName === toolCall.toolName);
                         if (newToolCall) {
                             console.log(`[AiStreamer] Tool call ${toolCall.toolName} repaired for chat ${chatId}.`);
-                            // Ensure the repaired call structure matches expectations
                             return { toolCallType: 'function', toolCallId: toolCall.toolCallId, toolName: toolCall.toolName, args: newToolCall.args };
                         }
                          console.error(`[AiStreamer] Failed to repair tool call ${toolCall.toolName} for chat ${chatId} - AI did not return a new call.`);
                     } catch (repairError: any) {
                          console.error(`[AiStreamer] Error during tool call repair attempt for ${toolCall.toolName}:`, repairError);
                     }
-                    return null; // Indicate repair failed
+                    return null;
                 },
             });
             return streamTextResult;
         } catch (error: any) {
             console.error(`[AiStreamer] Error during streamText execution for chat ${chatId}:`, error);
             if (error.name === 'AbortError') {
-                console.log(`[AiStreamer] Stream aborted for chat ${chatId}.`);
+                // Check if the error message indicates it was aborted due to a new stream
+                if (error.message === 'New stream initiated by user') {
+                     console.log(`[AiStreamer] Previous stream for chat ${chatId} correctly aborted by new stream request.`);
+                } else {
+                     console.log(`[AiStreamer] Stream aborted for chat ${chatId}. Reason: ${error.message}`);
+                }
             } else {
                 vscode.window.showErrorMessage(`與 AI 互動時出錯: ${error.message}`);
             }
-            // Ensure controller is cleared on error too, if it's the one that errored
             if (this.activeAbortController?.signal === abortSignal) {
                 this.activeAbortController = null;
             }
-            throw error; // Re-throw to be handled by the caller
+            throw error;
         }
-        // 'finally' block removed as clearing the controller is handled in onFinish and catch
     }
 
     /**

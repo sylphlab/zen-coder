@@ -25,20 +25,22 @@ export class SendMessageHandler implements RequestHandler { // Implement Request
             const { userMessageContent, providerId, modelId } = validationResult;
             if (!userMessageContent) return; // Validation failed, error posted in helper
 
-            // Add user message
-            // Add user message to the specific chat
+            // 1. Add user message (this now pushes a delta)
             await context.historyManager.addUserMessage(chatId!, userMessageContent); // Add chatId
 
-            // Prepare and send to AI
-            // Prepare and send to AI for the specific chat
-            const { streamResult, assistantId } = await this._prepareAndSendToAI(context, chatId!, providerId!, modelId!); // Add chatId
-            assistantUiMsgId = assistantId; // Store the ID
+            // 2. Add assistant message frame (this now pushes a delta)
+            assistantUiMsgId = await context.historyManager.addAssistantMessageFrame(chatId!);
+            if (!assistantUiMsgId) {
+                throw new Error("Failed to add assistant message frame.");
+            }
 
-            // Process the response
-            // Process the response for the specific chat
-            await this._processAIResponse(streamResult, chatId!, assistantUiMsgId, context); // Add chatId
+            // 3. Prepare and initiate AI stream
+            const { streamResult } = await this._prepareAndSendToAI(context, chatId!, providerId!, modelId!); // Don't need assistantId from here anymore
 
-            // Finalize history
+            // 4. Process the AI response stream
+            await this._processAIResponse(streamResult, chatId!, assistantUiMsgId, context); // Pass the created assistantUiMsgId
+
+            // 5. Finalize history
             // Finalize history for the specific chat
             await this._finalizeHistory(chatId!, assistantUiMsgId, context); // Add chatId
 
@@ -103,25 +105,22 @@ export class SendMessageHandler implements RequestHandler { // Implement Request
         return { chatId, userMessageContent, providerId, modelId };
     }
 
-    /** Prepares data and calls the AI service. */
-    private async _prepareAndSendToAI(context: HandlerContext, chatId: string, providerId: string, modelId: string): Promise<{ streamResult: StreamTextResult<any, any>, assistantId: string }> {
+    /** Prepares data and calls the AI service. Returns the stream result. */
+    private async _prepareAndSendToAI(context: HandlerContext, chatId: string, providerId: string, modelId: string): Promise<{ streamResult: StreamTextResult<any, any> }> {
         // Get history for the specific chat
         const coreMessagesForAi = context.historyManager.translateUiHistoryToCoreMessages(chatId);
         console.log(`[SendMessageHandler] Translated ${context.historyManager.getHistory(chatId).length} UI messages to ${coreMessagesForAi.length} CoreMessages for chat ${chatId}.`);
 
-        // Add frame to the specific chat
-        const assistantId = await context.historyManager.addAssistantMessageFrame(chatId);
-
         // Call AI service for the specific chat
-        const streamResult = await context.aiService.getAiResponseStream(chatId);
-        return { streamResult, assistantId };
+        // Note: We now pass providerId and modelId explicitly if needed, or AiService resolves defaults
+        const streamResult = await context.aiService.getAiResponseStream(chatId); // Assuming AiService uses chatId to get config including provider/model
+        return { streamResult };
     }
 
-    /** Processes the AI response stream. */
+    /** Processes the AI response stream using StreamProcessor. */
     private async _processAIResponse(streamResult: StreamTextResult<any, any>, chatId: string, assistantUiMsgId: string, context: HandlerContext): Promise<void> {
-        // Include chatId in the message to UI
-        context.postMessage({ type: 'startAssistantMessage', payload: { chatId: chatId, sender: 'assistant', messageId: assistantUiMsgId } });
-        // Pass chatId to stream processor
+        // The old 'startAssistantMessage' postMessage is removed.
+        // HistoryManager.addAssistantMessageFrame now handles pushing the initial frame delta.
         await this._streamProcessor.process(streamResult, chatId, assistantUiMsgId);
     }
 

@@ -70,14 +70,15 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
     const { mutate: updateConfigMutate, loading: isUpdatingConfig } = useStore($updateChatConfig);
 
     // --- Use the store for messages ---
-    const messages = useStore($activeChatHistory); // Now UiMessage[] | null
-    const isHistoryLoading = messages === null; // History is loading if null
+    const messages = useStore($activeChatHistory); // Now UiMessage[] | null | 'loading' | 'error'
+    // Log the messages state received from the store hook
+    console.log(`[ChatView useStore($activeChatHistory)] Received messages state:`, Array.isArray(messages) ? `Array(${messages.length}) IDs: ${messages.slice(-3).map(m => m.id).join(', ')}` : messages);
+    const isHistoryLoading = messages === 'loading' || messages === null; // History is loading if 'loading' or null
 
     // --- Nanostores Derived State ---
     // Use the dedicated store for streaming status, handling non-boolean states
     const isStreamingStoreValue = useStore($isStreamingResponse);
     const isStreaming = typeof isStreamingStoreValue === 'boolean' ? isStreamingStoreValue : false;
-    // const isStreaming = isSending; // REMOVED: Use the loading state from $sendMessage
 
     // --- Local UI State ---
     const [inputValue, _setInputValue] = useState('');
@@ -109,11 +110,11 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
     // Handle 'loading'/'error' states for both session and default config
     const effectiveConfig = useMemo(() => {
         // Check if session is loaded and is a ChatSession object
-        const session = (typeof currentChatSession === 'object' && currentChatSession !== null)
+        const session = (typeof currentChatSession === 'object' && currentChatSession !== null && currentChatSession !== 'loading') // Exclude 'loading'
             ? currentChatSession
             : null;
         // Check if defaultConfig is loaded and is an object
-        const defaults: DefaultChatConfig | null = (typeof defaultConfig === 'object' && defaultConfig !== null)
+        const defaults: DefaultChatConfig | null = (typeof defaultConfig === 'object' && defaultConfig !== null && defaultConfig !== 'loading' && defaultConfig !== 'error') // Exclude 'loading'/'error'
             ? defaultConfig
             : null;
         return calculateEffectiveConfig(session, defaults);
@@ -193,7 +194,8 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
 
     // --- Render Logic ---
     // Updated loading check based on new stores
-    if (isLoadingSessionData || isHistoryLoading) {
+    const isLoading = isLoadingSessionData || isHistoryLoading; // Combine loading states
+    if (isLoading) {
         console.log(`[ChatView Render] Loading... isLoadingSession=${isLoadingSessionData}, isHistoryLoading=${isHistoryLoading}`);
         return (
             <div class="chat-container flex flex-col flex-1 h-full p-4 overflow-hidden">

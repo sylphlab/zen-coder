@@ -1,5 +1,13 @@
-// import { map } from 'nanostores'; // No longer needed
-import { ChatSession, DefaultChatConfig } from '../../../src/common/types';
+import { atom, WritableAtom } from 'nanostores'; // Import WritableAtom
+import {
+    ChatSession,
+    DefaultChatConfig,
+    ChatSessionsUpdateData, // Import the union type for updates
+    SessionSetDelta,
+    SessionAddDelta,
+    SessionDeleteDelta,
+    SessionUpdateDelta
+} from '../../../src/common/types'; // Import Delta types
 // Import the new createStore utility
 import { createStore, StandardStore } from './utils/createStore';
 import { createMutationStore } from './utils/createMutationStore';
@@ -23,15 +31,12 @@ type ChatSessionsPayload = {
  * Atom created using the new standard `createStore` utility.
  * It holds `ChatSession[] | null | 'loading' | 'error'`.
  */
-// Define the type for the update data pushed via pubsub (assuming full list for now)
-type ChatSessionsUpdate = ChatSession[];
-
-// Use createStore
+// Update data is now the delta payload union type
 export const $chatSessions: StandardStore<ChatSession[]> = createStore<
-    ChatSession[], // TData: The data type we want in the store
+    ChatSession[],           // TData: The data type we want in the store
     GetChatSessionsResponse, // TResponse: The raw response type from the fetch request
-    {}, // PPayload: Payload for fetch (none needed for getChatSessions)
-    ChatSessionsUpdate // UUpdateData: Type for data pushed via pubsub
+    {},                      // PPayload: Payload for fetch (none needed for getChatSessions)
+    ChatSessionsUpdateData   // UUpdateData: Now the delta union type
 >({
     key: 'chatSessions',
     fetch: {
@@ -41,10 +46,52 @@ export const $chatSessions: StandardStore<ChatSession[]> = createStore<
     },
     subscribe: {
         topic: () => 'chatSessionsUpdate', // Static topic for session list updates
-        // handleUpdate assumes the backend pushes the complete new list
-        handleUpdate: (_currentState, updateData) => {
-            // Sort by lastModified descending before setting
-            return updateData ? [...updateData].sort((a, b) => b.lastModified - a.lastModified) : null;
+        handleUpdate: (currentState: ChatSession[] | null, updateData: ChatSessionsUpdateData): ChatSession[] | null => { // Correct signature
+            console.log(`[$chatSessions handleUpdate] Received update. Type: ${updateData.type}`);
+            console.log(`[$chatSessions handleUpdate] Received current state. Length: ${currentState?.length ?? 'null'}`);
+            const sessions = currentState ?? []; // Use currentState
+            let newSessions: ChatSession[];
+
+            switch (updateData.type) {
+                case 'sessionSet':
+                    console.log(`[$chatSessions handleUpdate] Setting full list. Length: ${updateData.sessions?.length ?? 'null'}`);
+                    newSessions = updateData.sessions ? [...updateData.sessions] : [];
+                    break;
+                case 'sessionAdd':
+                    console.log(`[$chatSessions handleUpdate] Adding session ID: ${updateData.session.id}`);
+                    // Avoid adding duplicates
+                    newSessions = sessions.filter(s => s.id !== updateData.session.id);
+                    newSessions.push(updateData.session);
+                    break;
+                case 'sessionDelete':
+                    console.log(`[$chatSessions handleUpdate] Deleting session ID: ${updateData.sessionId}`);
+                    newSessions = sessions.filter(s => s.id !== updateData.sessionId);
+                    break;
+                case 'sessionUpdate': {
+                    console.log(`[$chatSessions handleUpdate] Updating session ID: ${updateData.sessionId}`);
+                    const index = sessions.findIndex(s => s.id === updateData.sessionId);
+                    if (index !== -1) {
+                        const updatedSession = {
+                            ...sessions[index],
+                            ...(updateData.name !== undefined && { name: updateData.name }),
+                            ...(updateData.config !== undefined && { config: updateData.config }),
+                            ...(updateData.lastModified !== undefined && { lastModified: updateData.lastModified }),
+                        };
+                        newSessions = [...sessions];
+                        newSessions[index] = updatedSession;
+                    } else {
+                        console.warn(`[$chatSessions handleUpdate] Session ID ${updateData.sessionId} not found for update.`);
+                        newSessions = sessions; // Keep original list
+                    }
+                    break;
+                }
+                default:
+                     console.warn(`[$chatSessions handleUpdate] Received unhandled update type:`, updateData);
+                    newSessions = sessions; // Keep original list
+            }
+
+            // Always sort and return the new state
+            return newSessions.sort((a, b) => b.lastModified - a.lastModified);
         },
     },
     initialData: [], // Start with an empty array
@@ -72,11 +119,11 @@ export const $defaultConfig: StandardStore<DefaultChatConfig> = createStore<
     subscribe: {
         topic: () => 'defaultConfigUpdate', // Static topic
         // Assume backend pushes the complete new DefaultChatConfig object
-        handleUpdate: (_currentState, updateData) => {
+        handleUpdate: (_currentState: DefaultChatConfig | null, updateData: DefaultConfigUpdate): DefaultChatConfig | null => { // Correct signature
             console.log('[$defaultConfig handleUpdate] Received updateData:', updateData);
             const result = updateData ?? null;
             console.log('[$defaultConfig handleUpdate] Returning:', result);
-            return result;
+            return result; // Return new state
         },
     },
     // No initial data, starts as 'loading'
@@ -96,20 +143,20 @@ export const $isStreamingResponse: StandardStore<boolean> = createStore<
     StreamingStatusUpdate     // UUpdateData: { streaming: boolean }
 >({
     key: 'isStreamingResponse',
-    // Add a minimal fetch config even though it's not used, as createStore likely requires it
+    // Add a minimal fetch config to satisfy the type, even though it's not actively used for initial data.
     fetch: {
-        requestType: 'internal_unused_streaming_status', // Dummy type, won't be called
-        transformResponse: () => null, // Corrected: Return null to satisfy type
-        // No fetch payload needed
+        requestType: 'internal_unused_streaming_status', // Dummy type
+        transformResponse: () => false, // Return a default value matching TData
     },
     subscribe: {
-        topic: () => STREAMING_STATUS_TOPIC, // Use the imported topic constant
-        // Assume backend pushes { streaming: boolean }
-        handleUpdate: (_currentState, updateData) => {
-            console.log('[$isStreamingResponse handleUpdate] Received updateData:', updateData);
-            const result = updateData?.streaming ?? false; // Default to false if updateData is null/undefined
-            console.log('[$isStreamingResponse handleUpdate] Returning:', result);
-            return result;
+         topic: () => STREAMING_STATUS_TOPIC, // Use the imported topic constant
+         // Assume backend pushes { streaming: boolean }
+         handleUpdate: (_currentState: boolean | null, updateData: StreamingStatusUpdate): boolean => { // Correct signature, ensure boolean return
+             console.log('[$isStreamingResponse handleUpdate] Received updateData:', updateData);
+             // Ensure we always return a boolean, even if updateData is unexpected or nullish
+             const result = typeof updateData?.streaming === 'boolean' ? updateData.streaming : false;
+             console.log('[$isStreamingResponse handleUpdate] Returning:', result);
+             return result; // Return boolean state
         },
     },
     initialData: false, // Start with streaming as false

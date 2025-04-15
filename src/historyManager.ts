@@ -1,24 +1,20 @@
 import * as vscode from 'vscode';
-import { CoreMessage } from 'ai'; // Removed unused ToolCallPart, ToolResultPart
+import { CoreMessage } from 'ai';
 import {
     UiMessage,
     UiMessageContentPart,
     UiToolCallPart,
-    // ChatSession, // No longer needed directly
-    // ChatConfig, // No longer needed directly here
-    // WorkspaceChatState, // No longer managing full state here
-    // DefaultChatConfig, // Config handled by ConfigResolver
-    // AvailableModel // No longer needed here
+    HistoryClearDelta,
+    HistoryDeleteMessageDelta,
+    HistoryAddMessageDelta,
 } from './common/types';
 import {
-    // parseAndValidateSuggestedActions, // Moved to MessageModifier
-    // reconstructUiContent, // Moved to MessageModifier
     translateUserMessageToCore,
     translateAssistantMessageToCore,
-    translateUiHistoryToCoreMessages // Keep utility import
+    translateUiHistoryToCoreMessages
 } from './utils/historyUtils';
 import { ChatSessionManager } from './session/chatSessionManager';
-import { MessageModifier } from './history/messageModifier'; // Corrected import path
+import { MessageModifier } from './history/messageModifier';
 
 /**
  * Manages reading chat history, adding new message frames, deleting messages/history,
@@ -26,40 +22,36 @@ import { MessageModifier } from './history/messageModifier'; // Corrected import
  * to MessageModifier. Relies on ChatSessionManager for session data access.
  */
 export class HistoryManager {
-    private readonly _sessionManager: ChatSessionManager; // Instance of the session manager
-    private readonly _messageModifier: MessageModifier; // Instance of MessageModifier
+    private readonly _sessionManager: ChatSessionManager;
+    private readonly _messageModifier: MessageModifier;
+    private _postMessageCallback?: (message: any) => void;
 
-    // Inject ChatSessionManager and create MessageModifier
     constructor(sessionManager: ChatSessionManager) {
         this._sessionManager = sessionManager;
-        this._messageModifier = new MessageModifier(sessionManager); // Create MessageModifier instance
+        this._messageModifier = new MessageModifier(sessionManager);
+        console.log(`[HistoryManager constructor] Instance created. Callback initially: ${typeof this._postMessageCallback}`);
     }
 
-    // --- Public Accessor for MessageModifier ---
+    // Use arrow function for setter to ensure consistent 'this' if needed elsewhere
+    public setPostMessageCallback = (callback: (message: any) => void): void => {
+        console.log(`[HistoryManager setPostMessageCallback START] Current callback type: ${typeof this._postMessageCallback}. Received callback type: ${typeof callback}`);
+        this._postMessageCallback = callback;
+        console.log(`[HistoryManager setPostMessageCallback END] Internal _postMessageCallback type after assignment: ${typeof this._postMessageCallback}. Is set? ${!!this._postMessageCallback}`);
+    }
+
     public get messageModifier(): MessageModifier {
         return this._messageModifier;
     }
 
     // --- History Reading and Frame Creation ---
 
-    /**
-     * Gets the history for a specific chat session.
-     * @param chatId - The ID of the chat session.
-     * @returns A copy of the history as an array of UiMessage objects, or an empty array if chat not found.
-     */
-    public getHistory(chatId: string): UiMessage[] {
+    public getHistory = (chatId: string): UiMessage[] => { // Arrow function
         const chat = this._sessionManager.getChatSession(chatId);
-        // Return a copy to prevent accidental mutation outside this manager
         return chat ? [...chat.history] : [];
     }
 
-    /**
-     * Adds a user message frame to the specified chat session's history and saves.
-     * @param chatId - The ID of the chat session.
-     * @param content - An array of content parts (text and/or images).
-     * @returns The ID of the added message, or an empty string if the chat session is not found or content is invalid.
-     */
-    public async addUserMessage(chatId: string, content: UiMessageContentPart[]): Promise<string> {
+    public addUserMessage = async (chatId: string, content: UiMessageContentPart[]): Promise<string> => { // Arrow function
+        console.log(`[HistoryManager addUserMessage START] Checking callback. Is set? ${!!this._postMessageCallback}. Type: ${typeof this._postMessageCallback}`);
         const chat = this._sessionManager.getChatSession(chatId);
         if (!chat) {
             console.warn(`[HistoryManager] Chat session not found: ${chatId} (addUserMessage)`);
@@ -78,15 +70,22 @@ export class HistoryManager {
         };
         chat.history.push(userUiMessage);
         await this._sessionManager.touchChatSession(chatId);
+
+        if (this._postMessageCallback) {
+            console.log(`[HistoryManager addUserMessage] Callback IS set. Pushing delta...`);
+            const delta: HistoryAddMessageDelta = { type: 'historyAddMessage', chatId, message: userUiMessage };
+            const topic = `chatHistoryUpdate/${chatId}`;
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic, data: delta } });
+             console.log(`[HistoryManager] Pushed user message delta: ${userUiMessage.id}`);
+        } else {
+            console.warn(`[HistoryManager] Cannot push user message delta, postMessageCallback not set.`);
+        }
+
         return userUiMessage.id;
     }
 
-    /**
-     * Adds an initial, empty assistant message frame to the specified chat session's history and saves.
-     * @param chatId - The ID of the chat session.
-     * @returns The ID of the created message frame, or an empty string if the chat session is not found.
-     */
-    public async addAssistantMessageFrame(chatId: string): Promise<string> {
+    public addAssistantMessageFrame = async (chatId: string): Promise<string> => { // Arrow function
+        console.log(`[HistoryManager addAssistantMessageFrame START] Checking callback. Is set? ${!!this._postMessageCallback}. Type: ${typeof this._postMessageCallback}`);
         const chat = this._sessionManager.getChatSession(chatId);
         if (!chat) {
             console.warn(`[HistoryManager] Chat session not found: ${chatId} (addAssistantMessageFrame)`);
@@ -102,47 +101,61 @@ export class HistoryManager {
         };
         chat.history.push(initialAssistantUiMessage);
         await this._sessionManager.touchChatSession(chatId);
+
+        if (this._postMessageCallback) {
+             console.log(`[HistoryManager addAssistantMessageFrame] Callback IS set. Pushing delta...`);
+             const delta: HistoryAddMessageDelta = { type: 'historyAddMessage', chatId, message: initialAssistantUiMessage };
+             const topic = `chatHistoryUpdate/${chatId}`;
+             this._postMessageCallback({ type: 'pushUpdate', payload: { topic, data: delta } });
+             console.log(`[HistoryManager] Pushed assistant message frame delta: ${assistantUiMsgId}`);
+        } else {
+             console.warn(`[HistoryManager] Cannot push assistant message frame delta, postMessageCallback not set.`);
+        }
+
         return assistantUiMsgId;
     }
 
-    // --- Message Content Modification Methods Removed (Now in MessageModifier) ---
-    /*
-    public async appendTextChunk(...) { ... }
-    public async addToolCall(...) { ... }
-    public async updateToolStatus(...) { ... }
-    public async reconcileFinalAssistantMessage(...) { ... }
-    */
-
     // --- History Deletion ---
 
-    /**
-     * Clears the history for a specific chat session.
-     * @param chatId - The ID of the chat session to clear.
-     */
-    public async clearHistory(chatId: string): Promise<void> {
+    public clearHistory = async (chatId: string): Promise<void> => { // Arrow function
+        console.log(`[HistoryManager clearHistory] Checking callback. Is set? ${!!this._postMessageCallback}. Type: ${typeof this._postMessageCallback}`);
         const chat = this._sessionManager.getChatSession(chatId);
-        if (!chat) { return; }
-        chat.history = []; // Modify history array
+        if (!chat || !this._postMessageCallback) {
+            console.warn(`[HistoryManager clearHistory] Chat not found or callback not set for chat ${chatId}.`);
+            return;
+        }
+
+        chat.history = [];
         await this._sessionManager.touchChatSession(chatId);
-        console.log(`[HistoryManager] Cleared history for chat: ${chat.name} (ID: ${chatId})`);
+
+        const delta: HistoryClearDelta = { type: 'historyClear', chatId };
+        const topic = `chatHistoryUpdate/${chatId}`;
+        console.log(`[HistoryManager clearHistory] Callback IS set. Pushing delta...`);
+        this._postMessageCallback({ type: 'pushUpdate', payload: { topic, data: delta } });
+
+        console.log(`[HistoryManager] Cleared history for chat: ${chat.name} (ID: ${chatId}) and pushed delta.`);
     }
 
-    /**
-     * Deletes a specific message from a chat session's history.
-     * @param chatId - The ID of the chat session.
-     * @param messageId - The ID of the message to delete.
-     */
-    public async deleteMessageFromHistory(chatId: string, messageId: string): Promise<void> {
+    public deleteMessageFromHistory = async (chatId: string, messageId: string): Promise<void> => { // Arrow function
+        console.log(`[HistoryManager deleteMessageFromHistory] Checking callback. Is set? ${!!this._postMessageCallback}. Type: ${typeof this._postMessageCallback}`);
         const chat = this._sessionManager.getChatSession(chatId);
-        if (!chat) { return; }
+        if (!chat || !this._postMessageCallback) {
+            console.warn(`[HistoryManager deleteMessageFromHistory] Chat not found or callback not set for chat ${chatId}.`);
+             return;
+        }
 
         const initialLength = chat.history.length;
-        // Modify history array
-        chat.history = chat.history.filter((msg: UiMessage) => msg.id !== messageId); // Add explicit type
+        chat.history = chat.history.filter((msg: UiMessage) => msg.id !== messageId);
 
         if (chat.history.length < initialLength) {
             await this._sessionManager.touchChatSession(chatId);
-            console.log(`[HistoryManager] Deleted message ${messageId} from chat ${chatId}.`);
+
+            const delta: HistoryDeleteMessageDelta = { type: 'historyDeleteMessage', chatId, messageId };
+            const topic = `chatHistoryUpdate/${chatId}`;
+            console.log(`[HistoryManager deleteMessageFromHistory] Callback IS set. Pushing delta...`);
+            this._postMessageCallback({ type: 'pushUpdate', payload: { topic, data: delta } });
+
+            console.log(`[HistoryManager] Deleted message ${messageId} from chat ${chatId} and pushed delta.`);
         } else {
             console.warn(`[HistoryManager] Message ${messageId} not found in chat ${chatId} for deletion.`);
         }
@@ -150,43 +163,23 @@ export class HistoryManager {
 
     // --- Translation & Retrieval ---
 
-    /**
-     * Translates the UI history of a specific chat session (UiMessage[]) into the format
-     * required by the Vercel AI SDK (CoreMessage[]). Delegates to utility function.
-     * @param chatId - The ID of the chat session.
-     * @returns An array of CoreMessage objects, or an empty array if chat not found.
-     */
-    public translateUiHistoryToCoreMessages(chatId: string): CoreMessage[] {
+    public translateUiHistoryToCoreMessages = (chatId: string): CoreMessage[] => { // Arrow function
         const chatHistory = this.getHistory(chatId);
-        // Use the imported utility function
         return translateUiHistoryToCoreMessages(chatHistory);
     }
 
-    /**
-     * Gets a specific message from a chat session's history.
-     * @param chatId The ID of the chat session.
-     * @param messageId The ID of the message to retrieve.
-     * @returns The UiMessage object or null if not found.
-     */
-    public getMessage(chatId: string, messageId: string): UiMessage | null {
+    public getMessage = (chatId: string, messageId: string): UiMessage | null => { // Arrow function
         const chat = this._sessionManager.getChatSession(chatId);
-        return chat?.history.find((msg: UiMessage) => msg.id === messageId) ?? null; // Add explicit type
+        return chat?.history.find((msg: UiMessage) => msg.id === messageId) ?? null;
     }
 
-    /**
-     * Finds the assistant message containing a specific tool call ID.
-     * @param chatId The ID of the chat session.
-     * @param toolCallId The ID of the tool call to find.
-     * @returns The UiMessage object or null if not found.
-     */
-    public findMessageByToolCallId(chatId: string, toolCallId: string): UiMessage | null {
+    public findMessageByToolCallId = (chatId: string, toolCallId: string): UiMessage | null => { // Arrow function
         const chat = this._sessionManager.getChatSession(chatId);
         if (!chat) return null;
 
         for (const message of chat.history) {
             if (message.role === 'assistant' && Array.isArray(message.content)) {
                 for (const part of message.content) {
-                    // Ensure part has toolCallId before accessing
                     if (part.type === 'tool-call' && part.toolCallId === toolCallId) {
                         return message;
                     }

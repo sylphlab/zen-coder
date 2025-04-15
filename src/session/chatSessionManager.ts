@@ -1,19 +1,32 @@
 import * as vscode from 'vscode';
-import { ChatSession, WorkspaceChatState, ChatConfig } from '../common/types';
+import {
+    ChatSession,
+    WorkspaceChatState,
+    ChatConfig,
+    SessionAddDelta,
+    SessionDeleteDelta,
+    SessionUpdateDelta
+} from '../common/types'; // Added Delta types
 import { WorkspaceStateManager } from '../state/workspaceStateManager';
+import { SubscriptionManager } from '../ai/subscriptionManager'; // Added SubscriptionManager import
 import { v4 as uuidv4 } from 'uuid';
+
+const CHAT_SESSIONS_TOPIC = 'chatSessionsUpdate'; // Define the topic constant
 
 /**
  * Manages the lifecycle and metadata of chat sessions within the workspace.
  * Handles loading/saving the overall workspace state via WorkspaceStateManager.
+ * Notifies subscribers about changes via SubscriptionManager.
  */
 export class ChatSessionManager {
     private _workspaceState: WorkspaceChatState;
     private readonly _stateManager: WorkspaceStateManager;
+    private readonly _subscriptionManager: SubscriptionManager; // Added SubscriptionManager instance
 
-    constructor(context: vscode.ExtensionContext) {
+    constructor(context: vscode.ExtensionContext, subscriptionManager: SubscriptionManager) { // Added subscriptionManager param
         this._stateManager = new WorkspaceStateManager(context);
         this._workspaceState = this._stateManager.loadState();
+        this._subscriptionManager = subscriptionManager; // Store SubscriptionManager
     }
 
     /** Helper to save the current state using the state manager. */
@@ -22,7 +35,7 @@ export class ChatSessionManager {
     }
 
     /**
-     * Creates a new chat session and saves the updated state.
+     * Creates a new chat session, saves the updated state, and pushes a delta update.
      * @param name - Optional name for the new chat.
      * @returns The newly created ChatSession.
      */
@@ -39,14 +52,19 @@ export class ChatSessionManager {
         };
         this._workspaceState.chats[newChatId] = newChat;
         this._workspaceState.lastActiveChatId = newChatId; // Make new chat active
-        await this.saveState(true);
-        console.log(`[ChatSessionManager] Created new chat session: ${newChat.name} (ID: ${newChatId})`);
+        await this.saveState(true); // Save the change
+
+        // Push delta update
+        const delta: SessionAddDelta = { type: 'sessionAdd', session: newChat };
+        this._subscriptionManager.notifyChatSessionsUpdate(delta); // Use specific notifier
+
+        console.log(`[ChatSessionManager] Created new chat session: ${newChat.name} (ID: ${newChatId}) and pushed delta.`);
         return newChat;
     }
 
     /**
-     * Deletes a chat session by its ID and saves the updated state.
-     * Adjusts the last active chat ID if necessary.
+     * Deletes a chat session by its ID, saves the updated state, pushes a delta update,
+     * and adjusts the last active chat ID if necessary.
      * @param chatId - The ID of the chat session to delete.
      */
     public async deleteChatSession(chatId: string): Promise<void> {
@@ -56,8 +74,7 @@ export class ChatSessionManager {
         }
 
         const deletedChatName = this._workspaceState.chats[chatId].name;
-        delete this._workspaceState.chats[chatId];
-        console.log(`[ChatSessionManager] Deleted chat session: ${deletedChatName} (ID: ${chatId})`);
+        delete this._workspaceState.chats[chatId]; // Modify state
 
         if (this._workspaceState.lastActiveChatId === chatId) {
             const remainingChatIds = Object.keys(this._workspaceState.chats);
@@ -65,7 +82,13 @@ export class ChatSessionManager {
             console.log(`[ChatSessionManager] Reset last active chat ID to: ${this._workspaceState.lastActiveChatId}`);
         }
 
-        await this.saveState(true);
+        await this.saveState(true); // Save the change
+
+        // Push delta update
+        const delta: SessionDeleteDelta = { type: 'sessionDelete', sessionId: chatId };
+        this._subscriptionManager.notifyChatSessionsUpdate(delta); // Use specific notifier
+
+        console.log(`[ChatSessionManager] Deleted chat session: ${deletedChatName} (ID: ${chatId}) and pushed delta.`);
     }
 
     /**
@@ -86,11 +109,11 @@ export class ChatSessionManager {
     }
 
     /**
-     * Updates properties (name, config) of a specific chat session and saves state.
+     * Updates properties (name, config) of a specific chat session, saves state, and pushes a delta update.
      * @param chatId - The ID of the chat session to update.
-     * @param updates - An object containing the properties to update.
+     * @param updates - An object containing the properties to update (name, config).
      */
-    public async updateChatSession(chatId: string, updates: Partial<Pick<ChatSession, 'name' | 'config' | 'lastModified'>>): Promise<void> {
+    public async updateChatSession(chatId: string, updates: Partial<Pick<ChatSession, 'name' | 'config'>>): Promise<void> { // Only allow name/config updates here
         const chat = this.getChatSession(chatId);
         if (!chat) {
             console.warn(`[ChatSessionManager] Attempted to update non-existent chat session: ${chatId}`);
@@ -98,29 +121,36 @@ export class ChatSessionManager {
         }
 
         let changed = false;
+        const deltaUpdate: Partial<SessionUpdateDelta> = { type: 'sessionUpdate', sessionId: chatId };
+
         if (updates.name !== undefined && chat.name !== updates.name) {
             chat.name = updates.name;
+            deltaUpdate.name = chat.name; // Include in delta
             changed = true;
         }
         if (updates.config !== undefined) {
-            chat.config = { ...chat.config, ...updates.config };
-            changed = true;
+            // Perform a shallow merge for config updates
+            const newConfig = { ...chat.config, ...updates.config };
+            // Basic check if config actually changed (doesn't handle deep equality)
+            if (JSON.stringify(chat.config) !== JSON.stringify(newConfig)) {
+                chat.config = newConfig;
+                deltaUpdate.config = chat.config; // Include in delta
+                changed = true;
+            }
         }
-        // Allow explicit update of lastModified if provided (e.g., when history changes)
-        if (updates.lastModified !== undefined && chat.lastModified !== updates.lastModified) {
-            chat.lastModified = updates.lastModified;
-            changed = true;
-        } else if (changed) {
-            // Otherwise, update lastModified only if name/config changed
-            chat.lastModified = Date.now();
-        }
-
 
         if (changed) {
+            chat.lastModified = Date.now(); // Update timestamp if name/config changed
+            deltaUpdate.lastModified = chat.lastModified; // Include in delta
             await this.saveState(); // Save if any changes occurred
-            console.log(`[ChatSessionManager] Updated chat session: ${chat.name} (ID: ${chatId})`);
+
+            // Push delta update
+            this._subscriptionManager.notifyChatSessionsUpdate(deltaUpdate as SessionUpdateDelta); // Use specific notifier, assert type
+
+            console.log(`[ChatSessionManager] Updated chat session: ${chat.name} (ID: ${chatId}) and pushed delta.`);
         }
     }
+
 
     /**
      * Gets the ID of the last active chat session, validating its existence.
@@ -134,6 +164,7 @@ export class ChatSessionManager {
              this._workspaceState.lastActiveChatId = newActiveId;
              if (newActiveId !== null) {
                 await this.saveState(true); // Save the correction
+                // Optionally push an update for lastActiveChatId if needed elsewhere? Topic: 'activeChatIdUpdate'?
              }
              return newActiveId;
         }
@@ -153,6 +184,7 @@ export class ChatSessionManager {
             this._workspaceState.lastActiveChatId = chatId;
             await this.saveState();
             console.log(`[ChatSessionManager] Set last active chat ID to: ${chatId}`);
+            // Optionally push an update for lastActiveChatId? Topic: 'activeChatIdUpdate'?
         }
     }
 
@@ -171,21 +203,26 @@ export class ChatSessionManager {
         if (typeof location === 'string' && this._workspaceState.lastLocation !== location) {
             this._workspaceState.lastLocation = location;
             await this.saveState();
+             // Optionally push an update for lastLocation? Topic: 'lastLocationUpdate'?
         }
     }
 
     /**
-     * Directly updates the timestamp of a chat session (used by HistoryManager when history changes).
-     * This avoids triggering a full 'updateChatSession' just for the timestamp.
+     * Directly updates the timestamp of a chat session (used by HistoryManager when history changes)
+     * and pushes a delta update for the timestamp.
      * @param chatId The ID of the chat session.
      */
     public async touchChatSession(chatId: string): Promise<void> {
          const chat = this.getChatSession(chatId);
          if (chat) {
              const now = Date.now();
-             if (chat.lastModified !== now) { // Avoid saving if timestamp hasn't changed (unlikely but possible)
+             if (chat.lastModified !== now) { // Avoid saving if timestamp hasn't changed
                  chat.lastModified = now;
-                 await this.saveState();
+                 await this.saveState(); // Save the change
+
+                 // Push delta update for lastModified
+                 const delta: SessionUpdateDelta = { type: 'sessionUpdate', sessionId: chatId, lastModified: now };
+                 this._subscriptionManager.notifyChatSessionsUpdate(delta); // Use specific notifier
              }
          }
     }
