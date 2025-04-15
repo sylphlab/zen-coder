@@ -26,7 +26,9 @@
     - Implemented optimistic updates for the "Retry Connection" button in `webview-ui/src/stores/mcpStores.ts`.
     - Corrected UI logic in `webview-ui/src/components/settings/McpServerSettings.tsx` to show "Retrying..." status per-server using local state and disable buttons correctly during a retry.
     - Added and registered backend handlers (`OpenGlobalMcpConfigHandler`, `OpenProjectMcpConfigHandler`) for the "Configure Global/Project Servers" buttons in `src/extension.ts`.
-    - Modified backend logic in `src/ai/mcpManager.ts` to force reconnection attempt on retry, even if previously considered connected.
+    - Modified backend logic in `src/ai/mcpManager.ts` to force reconnection attempt on retry and emit `mcpStatusChanged` events.
+    - Corrected `McpManager` to push status updates via the correct `pushUpdate` mechanism (`mcpStatus` topic).
+    - Updated `AiService` to listen for `mcpStatusChanged` from `McpManager` and trigger `_notifyToolStatusChange`, ensuring MCP tools appear in the main toggle list.
 
 ## What's Left
 - **Testing (Manual - Post-Refactor):** Crucial next step.

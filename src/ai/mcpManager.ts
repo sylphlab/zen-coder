@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { EventEmitter } from 'events'; // Import EventEmitter
 import { ToolSet, experimental_createMCPClient } from 'ai';
 import { Experimental_StdioMCPTransport } from 'ai/mcp-stdio';
 
@@ -21,6 +22,7 @@ export interface McpServerStatus {
 // --- McpManager Class ---
 
 export class McpManager {
+    public readonly eventEmitter: EventEmitter; // Add EventEmitter instance
     private _configWatchers: vscode.Disposable[] = []; // Store watcher disposables
     private _mergedMcpConfigs: { [serverName: string]: McpServerConfig } = {};
     private _activeMcpClients: Map<string, any> = new Map(); // { serverName: clientInstance }
@@ -32,6 +34,7 @@ export class McpManager {
         private context: vscode.ExtensionContext,
         private _postMessageCallback?: (message: any) => void // Renamed for clarity
     ) {
+        this.eventEmitter = new EventEmitter(); // Initialize EventEmitter
         // Initial load of MCP configs using imported function
         loadAndMergeMcpConfigs(context).then(configs => {
             this._mergedMcpConfigs = configs;
@@ -81,8 +84,9 @@ export class McpManager {
 
         await Promise.all(clientPromises);
         console.log(`[McpManager] MCP client initialization complete. Active clients: ${this._activeMcpClients.size}`);
-        // Notify UI after initial connections attempt
-        this._notifyWebviewOfStatusUpdate(); // Use helper to notify if subscribed
+        // Notify internal listeners and UI after initial connections attempt
+        this.eventEmitter.emit('mcpStatusChanged'); // Emit internal event
+        this._notifyWebviewOfStatusUpdate(); // Notify UI if subscribed
     }
 
     /**
@@ -241,8 +245,9 @@ export class McpManager {
         }
 
         // Notify UI immediately after retry attempt
-        console.log(`[McpManager] Retry attempt for ${serverName} finished. Success: ${success}. Notifying UI.`);
-        this._notifyWebviewOfStatusUpdate(); // Use helper to notify if subscribed
+        console.log(`[McpManager] Retry attempt for ${serverName} finished. Success: ${success}. Notifying listeners and UI.`);
+        this.eventEmitter.emit('mcpStatusChanged'); // Emit internal event
+        this._notifyWebviewOfStatusUpdate(); // Notify UI if subscribed
     }
 
 
@@ -297,8 +302,12 @@ export class McpManager {
     private _notifyWebviewOfStatusUpdate(): void {
         if (this._isWebviewSubscribed && this._postMessageCallback) {
             const status = this.getMcpServerConfiguredStatus();
-            console.log(`[McpManager] Notifying subscribed webview of MCP status update for ${Object.keys(status).length} servers.`);
-            this._postMessageCallback({ type: 'updateMcpConfiguredStatus', payload: status });
+            console.log(`[McpManager] Notifying subscribed webview of MCP status update for ${Object.keys(status).length} servers via pushUpdate.`);
+            // Send update using the standard 'pushUpdate' mechanism
+            this._postMessageCallback({
+                type: 'pushUpdate',
+                payload: { topic: 'mcpStatus', data: status } // Correct topic and structure
+            });
         } else {
             // console.log("[McpManager] Webview not subscribed, skipping MCP status update notification.");
         }

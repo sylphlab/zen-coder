@@ -119,6 +119,11 @@ export class AiService {
         console.log(`[AiService] Initialized ${this.allProviders.length} providers.`);
 
         this._mcpManager = new McpManager(context, (msg) => this.postMessageCallback?.(msg));
+        // Listen for MCP status changes to trigger tool list updates
+        this._mcpManager.eventEmitter.on('mcpStatusChanged', async () => {
+            console.log('[AiService] Received mcpStatusChanged event from McpManager. Notifying tool status change.');
+            await this._notifyToolStatusChange();
+        });
     }
 
     public async initialize(): Promise<void> {
