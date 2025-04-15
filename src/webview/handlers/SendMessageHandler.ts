@@ -54,7 +54,7 @@ export class SendMessageHandler implements RequestHandler { // Implement Request
                     // Reconcile history for the specific chat
                     // Use the higher-scoped chatId, ensuring it's defined before calling
                     if (chatId) {
-                        await context.historyManager.reconcileFinalAssistantMessage(chatId, assistantUiMsgId, null, context.postMessage);
+                        await context.historyManager.messageModifier.reconcileFinalAssistantMessage(chatId, assistantUiMsgId, null, context.postMessage); // Use messageModifier
                     } else {
                          console.error("[SendMessageHandler] Cannot reconcile history after error: chatId is undefined.");
                     }
@@ -129,10 +129,10 @@ export class SendMessageHandler implements RequestHandler { // Implement Request
     private async _finalizeHistory(chatId: string, assistantUiMsgId: string, context: HandlerContext): Promise<void> {
         try {
             console.log(`[SendMessageHandler] Stream processing finished for ${assistantUiMsgId}. Reconciling history.`);
-            // Reconcile history using accumulated text and null for finalCoreMessage
-            await context.historyManager.reconcileFinalAssistantMessage(chatId, assistantUiMsgId, null, context.postMessage);
-// Get the updated session data AFTER reconciliation
-const updatedSession = context.historyManager.getChatSession(chatId);
+            // Reconcile history using accumulated text and null for finalCoreMessage via messageModifier
+            await context.historyManager.messageModifier.reconcileFinalAssistantMessage(chatId, assistantUiMsgId, null, context.postMessage); // Use messageModifier
+// Get the updated session data AFTER reconciliation via ChatSessionManager
+const updatedSession = context.chatSessionManager.getChatSession(chatId); // Use chatSessionManager
 if (updatedSession) {
     // Trigger a push update for the specific chat session
     const topic = `chatSessionUpdate/${chatId}`;

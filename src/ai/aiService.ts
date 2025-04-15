@@ -17,9 +17,11 @@ import * as path from 'path';
 import { HistoryManager } from '../historyManager';
 import { ProviderStatusManager } from './providerStatusManager';
 import { ToolManager } from './toolManager';
-import { SubscriptionManager } from './subscriptionManager'; // Import SubscriptionManager
-import { AiStreamer } from './aiStreamer'; // Import AiStreamer
-import { ProviderManager } from './providerManager'; // Import ProviderManager
+import { SubscriptionManager } from './subscriptionManager';
+import { AiStreamer } from './aiStreamer';
+import { ProviderManager } from './providerManager';
+import { ChatSessionManager } from '../session/chatSessionManager'; // Import ChatSessionManager
+import { ConfigResolver } from './configResolver'; // Import ConfigResolver
 
 // Define ApiProviderKey based on provider IDs
 // This might be better placed in ProviderManager or types.ts if widely used
@@ -44,11 +46,12 @@ export class AiService {
     private readonly _providerStatusManager: ProviderStatusManager; // Keep for now, ProviderManager uses it
     private readonly _toolManager: ToolManager;
     private readonly _subscriptionManager: SubscriptionManager;
+    private readonly _configResolver: ConfigResolver; // Add ConfigResolver instance
     private readonly _aiStreamer: AiStreamer;
     public readonly eventEmitter: EventEmitter;
+    public readonly chatSessionManager: ChatSessionManager; // Expose ChatSessionManager
 
     // Public getter for ProviderStatusManager
-    // TODO: Review if this getter is still needed externally or if access should go via ProviderManager
     public get providerStatusManager(): ProviderStatusManager {
         return this._providerStatusManager;
     }
@@ -56,15 +59,25 @@ export class AiService {
     public get providerManager(): ProviderManager {
         return this._providerManager;
     }
+    // Public getter for ConfigResolver
+    public get configResolver(): ConfigResolver {
+        return this._configResolver;
+    }
+    // Public getter for ToolManager
+    public get toolManager(): ToolManager {
+        return this._toolManager;
+    }
 
     constructor(
         context: vscode.ExtensionContext,
         historyManager: HistoryManager,
-        providerStatusManager: ProviderStatusManager // Inject ProviderStatusManager
+        providerStatusManager: ProviderStatusManager,
+        chatSessionManager: ChatSessionManager // Inject ChatSessionManager
     ) {
         this.context = context;
         this.historyManager = historyManager;
-        this._providerStatusManager = providerStatusManager; // Keep injecting for now
+        this._providerStatusManager = providerStatusManager;
+        this.chatSessionManager = chatSessionManager; // Store ChatSessionManager
         this.eventEmitter = new EventEmitter();
 
         // Instantiate managers, injecting dependencies and callbacks
@@ -74,10 +87,11 @@ export class AiService {
         this._providerManager = new ProviderManager(context, providerStatusManager, this._subscriptionManager.notifyProviderStatusChange.bind(this._subscriptionManager));
         this._mcpManager = new McpManager(context, (msg) => this.postMessageCallback?.(msg));
         this._toolManager = new ToolManager(context, this._mcpManager);
-        // AiStreamer needs the providerMap from ProviderManager
-        this._aiStreamer = new AiStreamer(context, historyManager, this._toolManager, this._providerManager.providerMap);
+        this._configResolver = new ConfigResolver(this.chatSessionManager); // Instantiate ConfigResolver
+        // Pass ConfigResolver to AiStreamer
+        this._aiStreamer = new AiStreamer(context, historyManager, this._toolManager, this._providerManager.providerMap, this._configResolver);
 
-        // Listen for MCP status changes to trigger tool list updates via SubscriptionManager
+        // Listen for MCP status changes to trigger tool list updates
         this._mcpManager.eventEmitter.on('mcpStatusChanged', async () => {
             console.log('[AiService] Received mcpStatusChanged event from McpManager.');
             // No direct notification here; McpManager pushes via its own callback,
@@ -135,11 +149,16 @@ export class AiService {
                 projectInstructions = Buffer.from(fileContent).toString('utf-8');
             } catch (error) {
                 console.log(`Project custom instructions file not found or failed to read: ${projectPath}`);
-                projectPath = null;
-            }
+            projectPath = null; // Explicitly nullify path if read fails
         }
-        return { global: globalInstructions, project: projectInstructions, projectPath: projectPath };
     }
+    // Ensure the returned object matches the expected shape (string/undefined)
+    return {
+        global: globalInstructions ?? '', // Default to empty string if undefined/null
+        project: projectInstructions ?? undefined, // Use undefined if null/undefined
+        projectPath: projectPath // Already null if read failed
+    };
+}
 
 
     public async getDefaultConfig(): Promise<DefaultChatConfig> {
@@ -209,20 +228,19 @@ export class AiService {
 
     // --- Notification Triggers ---
     // Provider status notifications are triggered by ProviderManager via callback to SubscriptionManager.
-    // The triggerProviderStatusNotification method is removed as it's likely redundant.
+    // The triggerProviderStatusNotification method is removed.
 
-    // Keep these notification triggers for changes potentially detected by AiService
-    // or explicitly called by handlers.
-    public triggerToolStatusNotification() {
+    // Keep notification triggers - handlers might call these directly on AiService instance from context.
+    public triggerToolStatusNotification() { // Renamed from _notifyToolStatusChange
         this._subscriptionManager.notifyToolStatusChange();
     }
-    public triggerDefaultConfigNotification() {
+    public triggerDefaultConfigNotification() { // Renamed from _notifyDefaultConfigChange
         this._subscriptionManager.notifyDefaultConfigChange();
     }
-    public triggerCustomInstructionsNotification() {
+    public triggerCustomInstructionsNotification() { // Renamed from _notifyCustomInstructionsChange
         this._subscriptionManager.notifyCustomInstructionsChange();
     }
-    // Keep chat update notifications as they are likely triggered by HistoryManager/StreamProcessor via AiService
+    // Keep chat update notifications - these are likely called by ChatSessionManager/HistoryManager event emitters or StreamProcessor
     public notifyChatSessionsUpdate(data: any) {
         this._subscriptionManager.notifyChatSessionsUpdate(data);
     }

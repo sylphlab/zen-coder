@@ -8,10 +8,10 @@ export class GetProviderStatusHandler implements RequestHandler {
     public async handle(payload: any, context: HandlerContext): Promise<ProviderInfoAndStatus[]> {
         console.log(`[${this.requestType}] Handling request...`);
         try {
-            // Use ProviderStatusManager
+            // Use ProviderStatusManager, accessing providers via ProviderManager
             const statusList = await context.providerStatusManager.getProviderStatus(
-                context.aiService.allProviders,
-                context.aiService.providerMap
+                context.aiService.providerManager.allProviders, // Use providerManager
+                context.aiService.providerManager.providerMap    // Use providerManager
             );
 
             console.log(`[${this.requestType}] Returning status for ${statusList.length} providers.`);

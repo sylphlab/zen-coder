@@ -329,3 +329,12 @@ export interface DefaultChatConfig {
 
 
 // Duplicate DefaultChatConfig removed
+
+
+// --- Streaming Status ---
+
+export const STREAMING_STATUS_TOPIC = 'streamingStatusUpdate';
+
+export interface StreamingStatusPayload {
+    streaming: boolean;
+}

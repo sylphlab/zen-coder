@@ -8,7 +8,7 @@ export class SetActiveChatHandler implements RequestHandler {
         const chatId = payload?.chatId;
         if (chatId && typeof chatId === 'string') {
             console.log(`[SetActiveChatHandler] Setting active chat ID to: ${chatId}`);
-            await context.historyManager.setLastActiveChatId(chatId);
+            await context.chatSessionManager.setLastActiveChatId(chatId); // Use chatSessionManager
             return { success: true }; // Return success
         } else {
             console.error("[SetActiveChatHandler] Invalid or missing chatId in payload:", payload);

@@ -39,18 +39,19 @@ export function DefaultModelSettings(): JSX.Element {
             <div class="space-y-4">
                 <div class="p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
                     {isLoadingConfig && <p class="text-sm text-gray-500">Loading default config...</p>}
-                    {/* Render only when not loading and config exists */}
-                    {!isLoadingConfig && defaultConfig && (
+                    {/* Render only when not loading and config is a valid object */}
+                    {!isLoadingConfig && defaultConfig && typeof defaultConfig === 'object' && (
                         <ModelSelector
+                            // Removed key prop as it didn't solve the issue
                             labelPrefix="Default Chat"
-                            selectedProviderId={defaultConfig.defaultProviderId ?? null}
-                            selectedModelId={defaultConfig.defaultModelId ?? null}
+                            selectedProviderId={defaultConfig.defaultProviderId ?? null} // Access safely now
+                            selectedModelId={defaultConfig.defaultModelId ?? null}   // Access safely now
                             onModelChange={handleDefaultChatModelChange}
                         />
                     )}
-                    {/* Handle case where config is loaded but null/empty (optional) */}
-                    {!isLoadingConfig && !defaultConfig && (
-                        <p class="text-sm text-gray-500">No default configuration set.</p>
+                    {/* Handle case where config is loaded but null/empty (optional) - check type too */}
+                    {!isLoadingConfig && (!defaultConfig || typeof defaultConfig !== 'object') && (
+                        <p class="text-sm text-gray-500">No default configuration set or invalid data.</p> // Updated message
                     )}
                 </div>
                 {/* TODO: Add selectors for defaultImageModelId and defaultOptimizeModelId later */}

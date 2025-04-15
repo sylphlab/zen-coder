@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
 import { AiService } from '../../ai/aiService';
 import { HistoryManager } from '../../historyManager';
+import { ChatSessionManager } from '../../session/chatSessionManager'; // Import ChatSessionManager
+import { ConfigResolver } from '../../ai/configResolver'; // Import ConfigResolver
 import { ModelResolver } from '../../ai/modelResolver';
 import { ProviderStatusManager } from '../../ai/providerStatusManager';
-import { McpManager } from '../../ai/mcpManager'; // Import McpManager
+import { McpManager } from '../../ai/mcpManager';
 
 /**
  * Context object passed to request handlers.
@@ -12,9 +14,11 @@ export interface HandlerContext {
     webview: vscode.Webview;
     aiService: AiService;
     historyManager: HistoryManager;
+    chatSessionManager: ChatSessionManager; // Add ChatSessionManager
+    configResolver: ConfigResolver;         // Add ConfigResolver
     modelResolver: ModelResolver;
     providerStatusManager: ProviderStatusManager;
-    mcpManager: McpManager; // Add McpManager
+    mcpManager: McpManager;
     postMessage: (message: any) => void; // Function to post messages back to webview
     extensionContext: vscode.ExtensionContext; // Add extension context
 }

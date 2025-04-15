@@ -14,7 +14,7 @@ export class SubscribeToDefaultConfigHandler implements RequestHandler { // Impl
         // Use the context directly
         const service = context.aiService;
         // Assuming service is always available via context
-        service.setDefaultConfigSubscription(true);
+        await context.aiService.addSubscription('defaultConfig'); // Use addSubscription
         console.log('[SubscribeToDefaultConfigHandler] Default config subscription enabled.');
 
         // Send the current config immediately upon subscription via pushUpdate
@@ -23,8 +23,10 @@ export class SubscribeToDefaultConfigHandler implements RequestHandler { // Impl
             // Use context.postMessage for push update
             context.postMessage({
                 type: 'pushUpdate',
-                topic: 'defaultConfigUpdate', // Use a specific topic
-                payload: currentConfig
+                payload: { // Add payload wrapper
+                    topic: 'defaultConfig', // Standard topic name
+                    data: currentConfig // Data within payload
+                }
             });
             console.log('[SubscribeToDefaultConfigHandler] Sent initial default config state.');
         } catch (error) {

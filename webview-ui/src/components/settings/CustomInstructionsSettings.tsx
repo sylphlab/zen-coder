@@ -1,40 +1,51 @@
-import { useState, useEffect, useCallback } from 'preact/hooks'; // Added useCallback
-import { useStore } from '@nanostores/react'; // Import useStore
+import { useState, useEffect, useCallback } from 'preact/hooks';
+import { useStore } from '@nanostores/react';
 import { JSX } from 'preact/jsx-runtime';
-// import { requestData } from '../../utils/communication'; // Removed requestData
 import {
     $customInstructions,
     $setGlobalCustomInstructions,
     $setProjectCustomInstructions,
     $openOrCreateProjectInstructionsFile
-} from '../../stores/settingsStores'; // Import Nanostore stores
-// Removed: import { customInstructionsAtom } from '../../store/atoms';
+} from '../../stores/settingsStores';
 
 export function CustomInstructionsSettings(): JSX.Element {
     // --- State from Nanostores ---
-    const customInstructionsData = useStore($customInstructions); // Use the fetcher store
+    const customInstructionsData = useStore($customInstructions);
     const { mutate: saveGlobalMutate, loading: isSavingGlobal } = useStore($setGlobalCustomInstructions);
     const { mutate: saveProjectMutate, loading: isSavingProject } = useStore($setProjectCustomInstructions);
     const { mutate: openFileMutate, loading: isOpeningFile } = useStore($openOrCreateProjectInstructionsFile);
 
-    const isLoading = customInstructionsData === null; // Derive loading state from fetcher store
+    // Check for initial null or explicit 'loading' state
+    const isLoading = customInstructionsData === null || customInstructionsData === 'loading';
+    const loadError = customInstructionsData === 'error';
 
     // --- Local State for Inputs ---
     const [globalInstructions, setGlobalInstructions] = useState<string>('');
     const [projectInstructions, setProjectInstructions] = useState<string>('');
-    // Removed projectInstructionsPath state, will derive from customInstructionsData
 
-    // Effect to update local state when store data loads/changes
-    useEffect(() => {
-        if (customInstructionsData) { // Check if data is loaded
-            const newGlobal = customInstructionsData.global ?? '';
-            const newProject = customInstructionsData.project ?? '';
+     // Effect to log saving state changes (optional, keep for debugging if needed)
+     useEffect(() => {
+         console.log('[CustomInstructionsSettings] isSavingGlobal state changed:', isSavingGlobal);
+         console.log('[CustomInstructionsSettings] isSavingProject state changed:', isSavingProject);
+     }, [isSavingGlobal, isSavingProject]);
 
-            if (newGlobal !== globalInstructions) setGlobalInstructions(newGlobal);
-            if (newProject !== projectInstructions) setProjectInstructions(newProject);
-            // No need to set projectInstructionsPath locally
-        }
-    }, [customInstructionsData]); // Rerun only when store data changes
+     // Effect to update local state when store data loads/changes
+     useEffect(() => {
+         try {
+             if (customInstructionsData && typeof customInstructionsData === 'object') {
+                 const newGlobal = customInstructionsData.global ?? '';
+                 const newProject = customInstructionsData.project ?? '';
+                 if (newGlobal !== globalInstructions) {
+                     setGlobalInstructions(newGlobal);
+                 }
+                 if (newProject !== projectInstructions) {
+                     setProjectInstructions(newProject);
+                 }
+             }
+         } catch (err) {
+             console.error("[CustomInstructionsSettings] Error in useEffect handling customInstructionsData:", err);
+         }
+    }, [customInstructionsData]); // Depend only on the store data
 
     const handleGlobalInstructionsChange = (e: Event) => {
         setGlobalInstructions((e.target as HTMLTextAreaElement).value);
@@ -49,10 +60,8 @@ export function CustomInstructionsSettings(): JSX.Element {
         try {
             await saveGlobalMutate({ instructions: globalInstructions });
             console.log('Global instructions save request sent.');
-            // Update relies on backend push via $customInstructions store
         } catch (error) {
             console.error('Error saving global instructions:', error);
-            // TODO: Display error to user
         }
     }, [globalInstructions, saveGlobalMutate]);
 
@@ -61,10 +70,8 @@ export function CustomInstructionsSettings(): JSX.Element {
         try {
             await saveProjectMutate({ instructions: projectInstructions });
             console.log('Project instructions save request sent.');
-            // Update relies on backend push via $customInstructions store
         } catch (error) {
             console.error('Error saving project instructions:', error);
-            // TODO: Display error to user
         }
     }, [projectInstructions, saveProjectMutate]);
 
@@ -75,7 +82,6 @@ export function CustomInstructionsSettings(): JSX.Element {
             console.log('Open/Create project file request sent.');
         } catch (error) {
             console.error('Error opening project instructions file:', error);
-            // TODO: Display error to user
         }
     }, [openFileMutate]);
 
@@ -89,8 +95,8 @@ export function CustomInstructionsSettings(): JSX.Element {
             {/* Global Instructions */}
             <div class="mb-6">
                 <label for="global-instructions" class="block text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">Global Instructions (VS Code Setting)</label>
-                {isLoading && <p class="text-sm text-gray-500">Loading instructions...</p>}
-                {/* TODO: Add error display based on mutation store errors if needed */}
+                {/* Remove explicit loading message, rely only on disabled state */}
+                {loadError && <p class="text-sm text-red-500 italic">Error loading instructions.</p>}
                 <textarea
                     id="global-instructions"
                     rows={8}
@@ -99,12 +105,12 @@ export function CustomInstructionsSettings(): JSX.Element {
                     onInput={handleGlobalInstructionsChange}
                     placeholder="Enter global instructions here..."
                     aria-label="Global Custom Instructions"
-                    disabled={isLoading || isSavingGlobal} // Disable if loading or saving
+                    disabled={isLoading || isSavingGlobal}
                 />
                 <button
                     onClick={handleSaveGlobalInstructions}
                     class={`mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 ${isSavingGlobal ? 'animate-pulse' : ''}`}
-                    disabled={isLoading || isSavingGlobal} // Disable if loading or saving
+                    disabled={isLoading || isSavingGlobal}
                 >
                     {isSavingGlobal ? 'Saving...' : 'Save Global Instructions'}
                 </button>
@@ -113,11 +119,15 @@ export function CustomInstructionsSettings(): JSX.Element {
             {/* Project Instructions */}
             <div>
                 <label for="project-instructions" class="block text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">Project Instructions</label>
-                {customInstructionsData?.projectPath ? ( // Use data from store
-                   <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Editing: <code>{customInstructionsData.projectPath}</code></p>
-                ) : (
-                   <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">No project file found. Saving will create <code>.zen/custom_instructions.md</code>.</p>
+                {/* Only show path/message when data is loaded and not error */}
+                {!isLoading && !loadError && customInstructionsData && typeof customInstructionsData === 'object' && (
+                    customInstructionsData.projectPath ? (
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Editing: <code>{customInstructionsData.projectPath}</code></p>
+                    ) : (
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">No project file found. Saving will create <code>.zen/custom_instructions.md</code>.</p>
+                    )
                 )}
+                 {/* Remove explicit loading/error for project path */}
                 <textarea
                     id="project-instructions"
                     rows={12}
@@ -126,20 +136,20 @@ export function CustomInstructionsSettings(): JSX.Element {
                     onInput={handleProjectInstructionsChange}
                     placeholder="Enter project-specific instructions here..."
                     aria-label="Project Custom Instructions"
-                    disabled={isLoading || isSavingProject} // Disable if loading or saving
+                    disabled={isLoading || isSavingProject}
                 />
                  <div class="mt-2 flex space-x-2">
                      <button
                          onClick={handleSaveProjectInstructions}
                          class={`px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 ${isSavingProject ? 'animate-pulse' : ''}`}
-                         disabled={isLoading || isSavingProject} // Disable if loading or saving
+                         disabled={isLoading || isSavingProject}
                      >
                          {isSavingProject ? 'Saving...' : 'Save Project Instructions'}
                      </button>
                      <button
                          onClick={handleOpenProjectInstructionsFile}
                          class={`px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 ${isOpeningFile ? 'animate-pulse' : ''}`}
-                         disabled={isOpeningFile} // Disable while opening
+                         disabled={isOpeningFile}
                      >
                          Open/Create Project File
                      </button>

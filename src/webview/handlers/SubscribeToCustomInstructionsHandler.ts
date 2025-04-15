@@ -16,7 +16,7 @@ export class SubscribeToCustomInstructionsHandler implements RequestHandler { //
         const service = context.aiService;
         // No null check needed if context setup guarantees aiService exists
         // if (service) { // Assuming service is always available via context
-            service.setCustomInstructionsSubscription(true);
+            await context.aiService.addSubscription('customInstructions'); // Use addSubscription
             console.log('[SubscribeToCustomInstructionsHandler] Custom instructions subscription enabled.');
 
             // Send the current instructions immediately upon subscription via pushUpdate
@@ -25,8 +25,10 @@ export class SubscribeToCustomInstructionsHandler implements RequestHandler { //
                 // Use context.postMessage for push update
                 context.postMessage({
                     type: 'pushUpdate',
-                    topic: 'customInstructionsUpdate', // Use a specific topic
-                    payload: currentInstructions
+                    payload: { // Add payload wrapper
+                        topic: 'customInstructions', // Standard topic name
+                        data: currentInstructions // Data within payload
+                    }
                 });
                 console.log('[SubscribeToCustomInstructionsHandler] Sent initial custom instructions state.');
             } catch (error) {

@@ -6,7 +6,7 @@ export class GetLastLocationHandler implements RequestHandler {
     public async handle(payload: any, context: HandlerContext): Promise<{ location: string | null }> {
         console.log(`[${this.requestType}] Handling request...`);
         try {
-            const lastLocation = context.historyManager.getLastLocation();
+            const lastLocation = context.chatSessionManager.getLastLocation(); // Use chatSessionManager
             console.log(`[${this.requestType}] Returning last location: ${lastLocation}`);
             return { location: lastLocation };
         } catch (error: any) {

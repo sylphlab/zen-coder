@@ -14,8 +14,8 @@ export class GetDefaultConfigHandler implements RequestHandler<GetDefaultConfigP
     public async handle(_payload: GetDefaultConfigPayload, context: HandlerContext): Promise<GetDefaultConfigResponse> {
         console.log(`[GetDefaultConfigHandler] Handling ${this.requestType} request...`);
         try {
-            // Assuming HistoryManager has the method to get defaults
-            const config = context.historyManager.getDefaultConfig();
+            // Get default config via AiService
+            const config = await context.aiService.getDefaultConfig();
             // Return the config, which might be null or partially undefined based on settings
             return config ?? null;
         } catch (error: any) {

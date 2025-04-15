@@ -12,8 +12,8 @@ export class ClearChatHistoryHandler implements RequestHandler {
         }
         console.log(`[ClearChatHistoryHandler] Handling ${this.requestType} for chat ID: ${chatId}...`);
         await context.historyManager.clearHistory(chatId); // Pass chatId
-        // Get the updated session data (history should be empty now)
-        const updatedSession = context.historyManager.getChatSession(chatId);
+        // Get the updated session data via ChatSessionManager
+        const updatedSession = context.chatSessionManager.getChatSession(chatId); // Use chatSessionManager
         if (updatedSession) {
             // Trigger a push update for the specific chat session
             const topic = `chatSessionUpdate/${chatId}`;

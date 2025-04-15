@@ -8,14 +8,14 @@ export class UpdateLastLocationHandler implements RequestHandler {
         const location = payload?.location;
         if (typeof location === 'string') {
             // console.log(`[UpdateLastLocationHandler] Received location update: ${location}`);
-            await context.historyManager.setLastLocation(location);
+            await context.chatSessionManager.setLastLocation(location); // Use chatSessionManager
 
             // Check if the location matches the chat route pattern
             const chatRouteMatch = location.match(/^\/chat\/([a-zA-Z0-9_-]+)$/);
             if (chatRouteMatch && chatRouteMatch[1]) {
                 const chatId = chatRouteMatch[1];
                 console.log(`[UpdateLastLocationHandler] Location matches chat route, setting last active chat ID to: ${chatId}`);
-                await context.historyManager.setLastActiveChatId(chatId);
+                await context.chatSessionManager.setLastActiveChatId(chatId); // Use chatSessionManager
             }
             // If it doesn't match a chat route, we don't necessarily clear the last active ID,
             // as the user might just be temporarily visiting settings or the chat list.

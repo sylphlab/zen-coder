@@ -30,6 +30,9 @@
 - **Fixed MCP Server Settings UI:**
     - Implemented optimistic updates for the "Retry Connection" button in `webview-ui/src/stores/mcpStores.ts`.
     - Corrected UI logic in `webview-ui/src/components/settings/McpServerSettings.tsx` to show "Retrying..." status per-server using local state and disable buttons correctly during a retry.
+- **Attempted Default Model Selector Fix:**
+    - Removed imperative `useEffect`/`useRef` logic for setting `<select>` value in `ModelSelector.tsx`.
+    - Added a `key` prop to `<ModelSelector>` instance in `DefaultModelSettings.tsx` based on `providerId` and `modelId`.
     - Added and registered backend handlers (`OpenGlobalMcpConfigHandler`, `OpenProjectMcpConfigHandler`) for the "Configure Global/Project Servers" buttons in `src/extension.ts`.
     - Modified backend logic in `src/ai/mcpManager.ts` to force reconnection attempt on retry and emit `mcpStatusChanged` events.
     - Corrected `McpManager` to push status updates via the correct `pushUpdate` mechanism (`mcpStatus` topic).
@@ -39,9 +42,17 @@
     - Implemented collapsible sections (default collapsed) for Standard Tools and MCP Servers.
     - Fixed layout issues (description wrapping, flex constraints).
     - Removed `McpServerSettings.tsx`.
+- **Refactored `AiService`:** Split `aiService.ts` into smaller, more focused modules (`ProviderManager`, `ToolManager`, `SubscriptionManager`, `AiStreamer`). `AiService` now acts primarily as a coordinator.
+- **Refactored `HistoryManager`:**
+    - Created `src/state/workspaceStateManager.ts` for state persistence.
+    - Created `src/session/chatSessionManager.ts` for session lifecycle and metadata.
+    - Created `src/ai/configResolver.ts` for resolving default and chat-specific configurations.
+    - Moved `translateUiHistoryToCoreMessages` to `src/utils/historyUtils.ts`.
+    - Updated `HistoryManager` to focus solely on message management, using the new managers.
+    - Updated `AiStreamer` and `extension.ts` to use the new managers and utilities.
 
 ## What's Left
-- **Testing (Manual - Post `createStore` Refactor):** Crucial next step.
+- **Testing (Manual - Post `createStore` & `AiService` Refactors):** Crucial next step.
     - Verify all refactored stores (`$chatSessions`, `$defaultConfig`, `$activeChatSession`, `$activeChatHistory`, `$providerStatus`, `$allToolsStatus`, `$mcpStatus`, `$customInstructions`) load initial data correctly.
     - Verify real-time updates via PubSub for all subscribed stores.
     - Verify mutation logic and optimistic updates for settings (`provider`, `tool auth`, `mcp retry`), chat creation/deletion, message sending/deletion.
@@ -52,7 +63,7 @@
 - **Enhance `createMutationStore` for Multi-Store Updates:** Future task.
 - **Implement Features Based on New Communication Model:** Pagination, Refresh, Connection Status. Future task.
 - **Implement Pub/Sub for Suggested Actions:** Replace temporary state in `ChatView.tsx`.
-- **Image Upload (Backend & Full Test):** Review/update backend handling (`HistoryManager`, `AiService`) and test the full flow.
+- **Image Upload (Backend & Full Test):** Review/update backend handling (`HistoryManager`, `AiStreamer`) and test the full flow.
 - **VS Code Tool Enhancements:** Implement remaining VS Code debugging tools (stop, step, breakpoints); enhance `runCommandTool`.
 - **UI Refinements & Error Handling:** Continue improving UI styling and error reporting/handling.
 - **Test Structured Output:** Thoroughly test suggested actions parsing and display.
@@ -62,9 +73,11 @@
 - Obsolete Jotai atoms and `createFetcherStore` utility removed.
 - Dynamic stores like `$activeChatHistory` are reactive to router changes.
 - Components use local state (`useState`) or receive Nanostore state via props/`useStore`.
+- Backend service logic (`AiService`) is now more modular.
 
 ## Known Issues / TODOs
-- **Testing:** Thorough manual testing of the `createStore` refactoring, reactivity, and mutations is required.
+- **Messages Not Displaying:** Although the input area works and the backend processes messages, they do not appear in the `MessagesArea.tsx`. Logs added to `MessagesArea` and `$activeChatHistory` store's `handleUpdate`. The `handleUpdate` logic in the store was corrected to handle the pushed data format.
+- **Testing:** Thorough manual testing of the `createStore` and `AiService` refactoring, reactivity, and mutations is required.
 - **Suggested Actions:** Needs proper Nanostore/PubSub implementation.
 - **Image Upload:** Backend processing needs verification/completion.
 - **(Previous Known Issues Still Apply where relevant)**

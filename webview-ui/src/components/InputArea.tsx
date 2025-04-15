@@ -51,7 +51,7 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
     className,
     currentModelId
 }) => {
-    console.log(`[InputArea Render] isStreaming=${isStreaming}, inputValue=${inputValue.length}, selectedImages=${selectedImages.length}`); // Add log
+    console.log(`[InputArea Render] isStreaming=${isStreaming}, inputValue=${inputValue.length}, selectedImages=${selectedImages.length}, currentModelId=${currentModelId}`); // Enhanced log
 
     return (
         <div class={`input-area p-2 border-t border-gray-300 dark:border-gray-700 flex flex-col ${className ?? ''}`}>
@@ -99,10 +99,12 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
                 <textarea
                     value={inputValue} // Use prop
                     onInput={(e) => {
+                        const newValue = e.currentTarget.value;
+                        console.log(`[InputArea onInput] Event fired. New value: "${newValue}"`); // Add log
                         const target = e.currentTarget;
-                        target.style.height = 'auto';
-                        target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
-                        setInputValue(e.currentTarget.value); // Use prop setter
+                        target.style.height = 'auto'; // Auto-adjust height first
+                        target.style.height = `${Math.min(target.scrollHeight, 120)}px`; // Set new height (limit to 120px)
+                        setInputValue(newValue); // Call parent state setter
                     }}
                     onKeyDown={handleKeyDown}
                     placeholder={selectedImages.length > 0 ? "Add a caption or message..." : "Type your message..."} // Use prop

@@ -4,23 +4,24 @@ export class SubscribeToProviderStatusHandler implements RequestHandler { // Imp
     public readonly requestType = 'subscribeToProviderStatus'; // Use correct property name
 
     public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> { // Update signature and return type
-        console.log(`[${this.requestType}] Handling request...`); // Use correct property name
+        console.log(`[${this.requestType}] Handling request...`);
         try {
-            // AiService likely manages this subscription state
-            context.aiService.setProviderStatusSubscription(true); // Corrected: Call method on AiService
-            console.log(`[${this.requestType}] Webview subscribed to Provider status updates.`); // Use correct property name
+            await context.aiService.addSubscription('providerStatus'); // Use addSubscription
+            console.log(`[${this.requestType}] Webview subscribed to Provider status updates.`);
 
             // Push the current status immediately upon subscription via pushUpdate
             const currentStatus = await context.providerStatusManager.getProviderStatus(
-                context.aiService.allProviders, // Assuming these are still needed
-                context.aiService.providerMap   // Assuming these are still needed
+                context.aiService.providerManager.allProviders, // Use providerManager
+                context.aiService.providerManager.providerMap    // Use providerManager
             );
             context.postMessage({
                 type: 'pushUpdate',
-                topic: 'providerStatusUpdate', // Use a specific topic
-                payload: currentStatus
+                payload: { // Add payload wrapper
+                    topic: 'providerStatus', // Standard topic name
+                    data: { payload: currentStatus } // Data needs the inner 'payload' wrapper based on SubscriptionManager
+                }
             });
-            console.log(`[${this.requestType}] Sent initial Provider status state.`); // Use correct property name
+            console.log(`[${this.requestType}] Sent initial Provider status state.`);
 
             return { success: true }; // Return success
 

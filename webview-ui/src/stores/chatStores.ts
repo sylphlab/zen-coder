@@ -8,6 +8,8 @@ import { requestData } from '../utils/communication';
 import { GetChatSessionsResponse } from '../../../src/webview/handlers/GetChatSessionsHandler';
 // Import response type for defaultConfig
 import { GetDefaultConfigResponse } from '../../../src/webview/handlers/GetDefaultConfigHandler';
+// Import streaming status types
+import { STREAMING_STATUS_TOPIC, StreamingStatusPayload } from '../../../src/common/types';
 
 
 /**
@@ -70,9 +72,47 @@ export const $defaultConfig: StandardStore<DefaultChatConfig> = createStore<
     subscribe: {
         topic: () => 'defaultConfigUpdate', // Static topic
         // Assume backend pushes the complete new DefaultChatConfig object
-        handleUpdate: (_currentState, updateData) => updateData ?? null,
+        handleUpdate: (_currentState, updateData) => {
+            console.log('[$defaultConfig handleUpdate] Received updateData:', updateData);
+            const result = updateData ?? null;
+            console.log('[$defaultConfig handleUpdate] Returning:', result);
+            return result;
+        },
     },
     // No initial data, starts as 'loading'
+});
+
+/**
+ * Atom created using the new standard `createStore` utility for streaming status.
+ * It holds `boolean` indicating if the AI response is currently streaming.
+ */
+// Define the type for the update data pushed via pubsub
+type StreamingStatusUpdate = StreamingStatusPayload; // Use the imported type
+
+export const $isStreamingResponse: StandardStore<boolean> = createStore<
+    boolean,                  // TData: boolean
+    undefined,                // TResponse: No fetch request needed
+    undefined,                // PPayload: No fetch payload
+    StreamingStatusUpdate     // UUpdateData: { streaming: boolean }
+>({
+    key: 'isStreamingResponse',
+    // Add a minimal fetch config even though it's not used, as createStore likely requires it
+    fetch: {
+        requestType: 'internal_unused_streaming_status', // Dummy type, won't be called
+        transformResponse: () => null, // Corrected: Return null to satisfy type
+        // No fetch payload needed
+    },
+    subscribe: {
+        topic: () => STREAMING_STATUS_TOPIC, // Use the imported topic constant
+        // Assume backend pushes { streaming: boolean }
+        handleUpdate: (_currentState, updateData) => {
+            console.log('[$isStreamingResponse handleUpdate] Received updateData:', updateData);
+            const result = updateData?.streaming ?? false; // Default to false if updateData is null/undefined
+            console.log('[$isStreamingResponse handleUpdate] Returning:', result);
+            return result;
+        },
+    },
+    initialData: false, // Start with streaming as false
 });
 
 

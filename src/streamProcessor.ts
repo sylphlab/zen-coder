@@ -1,10 +1,17 @@
 import * as vscode from 'vscode';
 import { Tool, CoreMessage, StreamTextResult, TextStreamPart, ToolCallPart, ToolResultPart, ToolSet } from 'ai'; // Import necessary types
 // AiServiceResponse import removed
-import { StructuredAiResponse, UiTextMessagePart, ChatSession } from './common/types'; // Import ChatSession
+import {
+    StructuredAiResponse,
+    UiTextMessagePart,
+    ChatSession,
+    STREAMING_STATUS_TOPIC, // Import the topic constant
+    StreamingStatusPayload // Import the payload type
+} from './common/types'; // Import ChatSession
 import { allTools } from './tools'; // Correct path for allTools
 import { HistoryManager } from './historyManager';
 import { isPromise } from 'util/types';
+// SubscriptionManager import removed - using _postMessageCallback directly
 
 /**
  * Processes the AI response stream, updates history, and posts messages to the webview.
@@ -12,10 +19,13 @@ import { isPromise } from 'util/types';
 export class StreamProcessor {
     private _historyManager: HistoryManager;
     private _postMessageCallback: (message: any) => void;
+    // private _subscriptionManager: SubscriptionManager; // Removed - using callback
 
+    // Removed SubscriptionManager from constructor
     constructor(historyManager: HistoryManager, postMessageCallback: (message: any) => void) {
         this._historyManager = historyManager;
         this._postMessageCallback = postMessageCallback;
+        // this._subscriptionManager = subscriptionManager; // Removed
     }
 
     /**
@@ -28,28 +38,42 @@ export class StreamProcessor {
         console.log(`[StreamProcessor] Starting processing for message ID: ${assistantMessageId}`);
         // Removed accumulatedStructuredResponse variable
 
+        // Push initial streaming status update
+        const startStreamingPayload: StreamingStatusPayload = { streaming: true };
+        this._postMessageCallback({ type: 'pushUpdate', payload: { topic: STREAMING_STATUS_TOPIC, data: startStreamingPayload } });
+        console.log('[StreamProcessor] Sent streaming: true update'); // Debug log
+
         // --- Process Full Stream ---
+        let streamFinishedCleanly = false; // Flag to track normal completion
         try {
+            // Iterate through the stream parts
             for await (const part of streamResult.fullStream) {
                 await this._handleStreamPart(part, chatId, assistantMessageId); // Pass chatId
             }
+            // If the loop completes without error, mark as finished cleanly
             console.log("[StreamProcessor] Finished processing fullStream.");
+            streamFinishedCleanly = true;
         } catch (error) {
-            console.error("[StreamProcessor] Error processing fullStream:", error);
-            // Post error to UI if not already done by 'error' part handling
-            if (!(error instanceof Error && error.message.startsWith('Stream error:'))) {
-                 this._postMessageCallback({ type: 'streamError', error: error instanceof Error ? error.message : String(error) });
-            }
+            // Error handling during stream processing
+            console.error("[StreamProcessor] Error during fullStream processing:", error);
+            // _handleError (if called) or the finally block will handle sending streaming: false
             // Re-throw the error to signal failure to the caller (SendMessageHandler)
             throw error;
+        } finally {
+            // This block executes regardless of whether an error occurred or not.
+            // Send the final streaming status update ONLY if the stream finished cleanly.
+            // If an error occurred, _handleError would have already sent streaming: false.
+            if (streamFinishedCleanly) {
+                const endStreamingPayload: StreamingStatusPayload = { streaming: false };
+                this._postMessageCallback({ type: 'pushUpdate', payload: { topic: STREAMING_STATUS_TOPIC, data: endStreamingPayload } });
+                console.log('[StreamProcessor] Sent streaming: false update (finally block - clean exit)'); // Debug log
+            }
+             // Always log completion of the finally block
+            console.log(`[StreamProcessor] Stream processing finished (finally block executed) for message ID: ${assistantMessageId}.`);
         }
 
         // --- experimental_partialOutputStream processing removed ---
         // We are no longer using experimental_output, so this stream is not expected.
-
-        console.log(`[StreamProcessor] All stream processing finished for message ID: ${assistantMessageId}.`);
-        // Send final streaming status update
-        this._postMessageCallback({ type: 'pushUpdate', payload: { topic: 'streamingStatusUpdate', data: false } });
 
         // --- Post-Stream Parsing Removed ---
         // Final parsing and handling of potential <content> / <actions> tags
@@ -120,7 +144,7 @@ export class StreamProcessor {
     // --- Private Handlers for Specific Stream Part Types ---
 
     private async _handleTextDelta(part: { textDelta: string }, chatId: string, assistantMessageId: string): Promise<void> {
-        await this._historyManager.appendTextChunk(chatId, assistantMessageId, part.textDelta);
+        await this._historyManager.messageModifier.appendTextChunk(chatId, assistantMessageId, part.textDelta); // Use messageModifier
         // Get the updated history for THIS specific chat
         const updatedHistory = this._historyManager.getHistory(chatId); // Get UiMessage[]
         if (updatedHistory) {
@@ -133,7 +157,7 @@ export class StreamProcessor {
     }
 
     private async _handleToolCall(part: ToolCallPart, chatId: string, assistantMessageId: string): Promise<void> {
-        await this._historyManager.addToolCall(chatId, assistantMessageId, part.toolCallId, part.toolName, part.args);
+        await this._historyManager.messageModifier.addToolCall(chatId, assistantMessageId, part.toolCallId, part.toolName, part.args); // Use messageModifier
         // Get the updated history for THIS specific chat
         const updatedHistory = this._historyManager.getHistory(chatId);
         if (updatedHistory) {
@@ -155,7 +179,7 @@ export class StreamProcessor {
     }
 
     private async _handleToolResult(part: ToolResultPart, chatId: string): Promise<void> {
-        await this._historyManager.updateToolStatus(chatId, part.toolCallId, 'complete', part.result);
+        await this._historyManager.messageModifier.updateToolStatus(chatId, part.toolCallId, 'complete', part.result); // Use messageModifier
         // Get the updated history for THIS specific chat
         const updatedHistory = this._historyManager.getHistory(chatId);
          if (updatedHistory) {
@@ -186,8 +210,11 @@ export class StreamProcessor {
 
     private _handleError(part: { type: 'error', error: any }, chatId: string): void { // Add chatId
         console.error("[StreamProcessor] Error part received in stream:", part.error);
-        // Send streaming status update to indicate failure/stop
-        this._postMessageCallback({ type: 'pushUpdate', payload: { topic: 'streamingStatusUpdate', data: false } });
+        // Send streaming status update to indicate failure/stop BEFORE throwing
+        const errorStreamingPayload: StreamingStatusPayload = { streaming: false };
+        this._postMessageCallback({ type: 'pushUpdate', payload: { topic: STREAMING_STATUS_TOPIC, data: errorStreamingPayload } });
+        console.log('[StreamProcessor] Sent streaming: false update (_handleError)'); // Debug log
+
         // Optionally push an error message to the chat history via chatUpdate?
         // For now, just log and stop the stream processing by throwing.
         throw new Error(`Stream error: ${part.error}`);

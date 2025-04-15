@@ -1,10 +1,11 @@
 # Active Context
 
 ## Current Focus
-**Communication Mechanism Refactoring:** Implementing and standardizing the ReqRes (fetch initial state) + PubSub (subscribe updates, no initial state) pattern across the application using the new `createStore` utility.
+**Verify Message Display Fix:** Testing if correcting the `$activeChatHistory` store's update handler resolves the issue where messages were not displaying.
 
 ## Next Steps
-1.  **Implement Incremental PubSub Updates (Backend + Frontend):**
+1.  **Test Message Display:** Verify that messages now appear correctly in the chat view after sending. Check logs if it fails.
+2.  **Implement Incremental PubSub Updates (Backend + Frontend):**
     *   **Backend:** Modify `pushUpdate` logic to calculate and send JSON Patches (RFC 6902) instead of full state for relevant topics (especially `chatHistoryUpdate`). This requires adding sequence IDs (`seqId`) to messages and potentially versioning to states.
     *   **Frontend:** Update the `handleUpdate` function within `createStore` (or specific store definitions) to correctly apply received JSON Patches to the current state.
 3.  **Enhance `createMutationStore` for Multi-Store Updates:**
@@ -22,9 +23,17 @@
     *   Verify dynamic stores (`$activeChatHistory`, `$activeChatSession`) correctly react to route changes.
 6.  **Implement Pub/Sub for Suggested Actions:** Replace temporary state in `ChatView.tsx`.
 7.  **Resume Image Upload:** Continue implementation.
-8.  **Compliance Review & VS Code Tool Enhancements:** As before.
+8.  **Implement Pub/Sub for Suggested Actions:** Replace temporary state in `ChatView.tsx`.
+9.  **Resume Image Upload:** Continue implementation.
+10. **Compliance Review & VS Code Tool Enhancements:** As before.
 
-## Recent Changes (Communication Refactor, `createStore` Utility)
+## Recent Changes (History Store Fix, Logging, etc.)
++ **Fixed `$activeChatHistory` Update Handler (`activeChatHistoryStore.ts`):** Corrected the `handleUpdate` function and `UUpdateData` generic type to expect the `UiMessage[] | null` array directly from the backend push update, instead of incorrectly looking for a `.data` property. Enhanced logging within the handler.
++ **Fixed Model Selector Rendering (`ModelSelector.tsx`, `DefaultModelSettings.tsx`):** Resolved visual update issue using imperative `useEffect` + `ref`. Removed `key` prop. Added logs.
++ **Fixed Input Area (`ChatView.tsx`, `InputArea.tsx`):** Input area now accepts text. Added extensive logging to `ChatView.tsx` (`setInputValue`), `InputArea.tsx` (`onInput`, render) to trace state updates.
++ **Fixed TypeScript Error (`ChatView.tsx`):** Corrected type guards in `useMemo` hook for `effectiveConfig`.
++ **Added Message Display Logging:**
++    - Added detailed logs to `MessagesArea.tsx` render function.
 + **Defined Standard Communication Pattern:** Established **ReqRes (fetch initial) + PubSub (subscribe updates, no initial state)** as the standard. Documented in `systemPatterns.md`.
 + **Created `createStore` Utility (`stores/utils/createStore.ts`):** Implemented a standardized utility for creating Nanostores that follow the new pattern, handling fetch, subscription, loading/error states, and dynamic parameters.
 + **Created Backend Handlers:** Added `GetChatSessionHandler`, `GetChatHistoryHandler`. Fixed `GetChatSessionsHandler`, `GetDefaultConfigHandler` response types.

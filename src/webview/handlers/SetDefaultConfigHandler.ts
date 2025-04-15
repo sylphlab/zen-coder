@@ -38,7 +38,8 @@ export class SetDefaultConfigHandler implements RequestHandler {
 
             await Promise.all(updates);
             console.log('[SetDefaultConfigHandler] Successfully updated default config settings.');
-            // Pub/Sub handles notifying webview via AiService event emitter
+            // Explicitly trigger the notification
+            context.aiService.triggerDefaultConfigNotification();
             return { success: true }; // Return success
         } catch (error: any) {
             console.error('[SetDefaultConfigHandler] Error updating default config settings:', error);

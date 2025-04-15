@@ -14,10 +14,10 @@ export class DeleteChatHandler implements RequestHandler {
         console.log(`[DeleteChatHandler] Handling ${this.requestType} for chat ID: ${chatIdToDelete}...`);
 
         try {
-            await context.historyManager.deleteChatSession(chatIdToDelete);
+            await context.chatSessionManager.deleteChatSession(chatIdToDelete); // Use chatSessionManager
 
             // Trigger a push update with the latest sessions list
-            const allSessions = context.historyManager.getAllChatSessions();
+            const allSessions = context.chatSessionManager.getAllChatSessions(); // Use chatSessionManager
             context.postMessage({
                 type: 'pushUpdate',
                 payload: {

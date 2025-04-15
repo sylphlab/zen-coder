@@ -32,7 +32,7 @@ export class SetStandardToolEnabledHandler implements RequestHandler { // Implem
             console.warn(`Updated deprecated setting '${configKey}' to ${enabled}. Consider using 'zencoder.toolAuthorization'.`);
 
             // Notify the system that tool statuses might have changed, triggering a push update.
-            context.aiService._notifyToolStatusChange();
+            context.aiService.triggerToolStatusNotification(); // Use public trigger method
 
             return { success: true }; // Return success object
 

@@ -4,19 +4,22 @@ export class SubscribeToToolStatusHandler implements RequestHandler { // Impleme
     public readonly requestType = 'subscribeToToolStatus'; // Use correct property name
 
     public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> { // Update signature and return type
-        console.log(`[${this.requestType}] Handling request...`); // Use correct property name
+        console.log(`[${this.requestType}] Handling request...`);
+        const topic = 'allToolsStatusUpdate'; // Use standard topic name
         try {
-            context.aiService.setToolStatusSubscription(true);
-            console.log(`[${this.requestType}] Webview subscribed to Tool status updates.`); // Use correct property name
+            await context.aiService.addSubscription(topic); // Use addSubscription
+            console.log(`[${this.requestType}] Webview subscribed to Tool status updates.`);
 
             // Push the current status immediately upon subscription via pushUpdate
-            const currentStatus = await context.aiService.getAllToolsWithStatus();
+            const currentStatus = await context.aiService.getResolvedToolStatusInfo(); // Use correct method
             context.postMessage({
                 type: 'pushUpdate',
-                topic: 'toolStatusUpdate', // Use a specific topic
-                payload: currentStatus
+                payload: { // Add payload wrapper
+                    topic: topic, // Standard topic name
+                    data: currentStatus // Data within payload
+                }
             });
-            console.log(`[${this.requestType}] Sent initial Tool status state.`); // Use correct property name
+            console.log(`[${this.requestType}] Sent initial Tool status state.`);
 
             return { success: true }; // Return success
 

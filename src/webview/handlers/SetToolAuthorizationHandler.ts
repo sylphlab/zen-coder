@@ -39,8 +39,8 @@ export class SetToolAuthorizationHandler implements RequestHandler {
             await config.update('toolAuthorization', mergedConfig, vscode.ConfigurationTarget.Global);
             console.log('[SetToolAuthorizationHandler] Successfully updated tool authorization settings.');
 
-            // Notify subscribed webviews about the change via AiService event emitter
-            await context.aiService._notifyToolStatusChange();
+            // Trigger notification via AiService method
+            context.aiService.triggerToolStatusNotification(); // Use public trigger method
 
             return { success: true };
         } catch (error: any) {

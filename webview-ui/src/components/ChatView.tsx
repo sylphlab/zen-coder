@@ -23,7 +23,8 @@ import {
     $clearChatHistory,
     $executeToolAction,
     $stopGeneration,
-    $updateChatConfig
+    $updateChatConfig,
+    $isStreamingResponse // Import the new streaming status store
 } from '../stores/chatStores';
 // Import new stores and remove $chatSessions
 import { $activeChatHistory, $activeChatSession } from '../stores/activeChatHistoryStore'; // Removed setActiveChatIdAndSubscribe
@@ -73,10 +74,18 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
     const isHistoryLoading = messages === null; // History is loading if null
 
     // --- Nanostores Derived State ---
-    const isStreaming = isSending; // Use the loading state from $sendMessage
+    // Use the dedicated store for streaming status, handling non-boolean states
+    const isStreamingStoreValue = useStore($isStreamingResponse);
+    const isStreaming = typeof isStreamingStoreValue === 'boolean' ? isStreamingStoreValue : false;
+    // const isStreaming = isSending; // REMOVED: Use the loading state from $sendMessage
 
     // --- Local UI State ---
-    const [inputValue, setInputValue] = useState('');
+    const [inputValue, _setInputValue] = useState('');
+    // Add wrapper with logging
+    const setInputValue = useCallback((value: string) => {
+        console.log(`[ChatView setInputValue] Called with value: "${value}"`);
+        _setInputValue(value);
+    }, []);
     const [suggestedActionsMap, setSuggestedActionsMap] = useState<Record<string, SuggestedAction[]>>({});
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -99,13 +108,14 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
     // Calculate effective config *before* handlers that might need it
     // Handle 'loading'/'error' states for both session and default config
     const effectiveConfig = useMemo(() => {
-        const session = (currentChatSession === 'loading' || currentChatSession === 'error' || currentChatSession === null)
-            ? null
-            : currentChatSession;
-        // Explicitly type 'defaults' to guide the type checker
-        const defaults: DefaultChatConfig | null = (defaultConfig === 'loading' || defaultConfig === 'error' || defaultConfig === null)
-            ? null
-            : defaultConfig;
+        // Check if session is loaded and is a ChatSession object
+        const session = (typeof currentChatSession === 'object' && currentChatSession !== null)
+            ? currentChatSession
+            : null;
+        // Check if defaultConfig is loaded and is an object
+        const defaults: DefaultChatConfig | null = (typeof defaultConfig === 'object' && defaultConfig !== null)
+            ? defaultConfig
+            : null;
         return calculateEffectiveConfig(session, defaults);
     }, [currentChatSession, defaultConfig]);
     const providerId = effectiveConfig.providerId;
@@ -140,19 +150,30 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
 
     // --- Event Handlers ---
     const handleSend = useCallback(async () => {
+        console.log(`[ChatView handleSend] Attempting to send message. Input: "${inputValue}", Images: ${selectedImages.length}, isSending: ${isSending}, isStreaming: ${isStreaming}, providerId: ${providerId}, modelId: ${modelId}, chatId: ${chatIdFromRoute}`);
         if ((inputValue.trim() || selectedImages.length > 0) && !isSending && !isStreaming && providerId && modelId && chatIdFromRoute) {
+            console.log(`[ChatView handleSend] Conditions met. Preparing payload.`);
             const contentParts: UiMessageContentPart[] = selectedImages.map(img => ({ type: 'image', mediaType: img.mediaType, data: img.data } as UiImagePart));
             if (inputValue.trim()) {
                 contentParts.push({ type: 'text', text: inputValue });
             }
             const payload = { chatId: chatIdFromRoute, content: contentParts, providerId: providerId, modelId: modelId };
+            console.log(`[ChatView handleSend] Payload created:`, JSON.stringify(payload));
             setInputValue('');
             clearSelectedImages();
-            try { await sendMessageMutate(payload); } catch (error) { console.error(`Error sending message:`, error); }
+            try {
+                console.log(`[ChatView handleSend] Calling sendMessageMutate...`);
+                await sendMessageMutate(payload);
+                console.log(`[ChatView handleSend] sendMessageMutate call finished.`);
+            } catch (error) {
+                console.error(`[ChatView handleSend] Error sending message via mutation:`, error);
+            }
+        } else {
+            console.log(`[ChatView handleSend] Conditions NOT met.`);
         }
     }, [ inputValue, selectedImages, isSending, isStreaming, chatIdFromRoute, providerId, modelId, sendMessageMutate, setInputValue, clearSelectedImages ]);
 
-    const handleKeyDown = useCallback((e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey && !isSending && !isStreaming) { e.preventDefault(); handleSend(); } }, [handleSend, isSending, isStreaming]);
+    const handleKeyDown = useCallback((e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey && !isSending && !isStreaming) { console.log("[ChatView handleKeyDown] Enter pressed, calling handleSend."); e.preventDefault(); handleSend(); } }, [handleSend, isSending, isStreaming]);
     const handleClearChat = useCallback(() => { if (chatIdFromRoute) setShowClearConfirm(true); }, [chatIdFromRoute]);
     const confirmClearChat = useCallback(async () => { if (chatIdFromRoute) { setShowClearConfirm(false); try { await clearHistoryMutate({ chatId: chatIdFromRoute }); } catch (error) { console.error(`Error clearing chat history:`, error); } } }, [chatIdFromRoute, clearHistoryMutate]);
     const cancelClearChat = useCallback(() => { setShowClearConfirm(false); }, []);
@@ -212,7 +233,7 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
                 className="flex-1 overflow-y-auto mb-4 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent"
                 messages={displayMessages} // Pass the guaranteed array
                 suggestedActionsMap={suggestedActionsMap}
-                isStreaming={isStreaming} // Use derived state from isSending
+                isStreaming={isStreaming} // Pass the resolved boolean value
             />
             <InputArea
                 className="mt-auto"
@@ -227,7 +248,7 @@ export function ChatView({ chatIdFromRoute }: ChatViewProps) {
                 currentModelId={modelId ?? null}
                 inputValue={inputValue}
                 setInputValue={setInputValue}
-                isStreaming={isStreaming} // Use derived state from isSending
+                isStreaming={isStreaming} // Pass the resolved boolean value
                 selectedImages={selectedImages}
             />
              <ConfirmationDialog

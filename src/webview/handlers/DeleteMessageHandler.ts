@@ -25,8 +25,8 @@ export class DeleteMessageHandler implements RequestHandler { // Implement Reque
         try {
             await context.historyManager.deleteMessageFromHistory(chatId, messageId);
             console.log(`[DeleteMessageHandler] Successfully deleted message ${messageId} from history manager.`);
-// Get the updated session data
-const updatedSession = context.historyManager.getChatSession(chatId);
+// Get the updated session data via ChatSessionManager
+const updatedSession = context.chatSessionManager.getChatSession(chatId); // Use chatSessionManager
 if (updatedSession) {
     // Trigger a push update for the specific chat session
     const topic = `chatSessionUpdate/${chatId}`;

@@ -15,7 +15,7 @@ export class UnsubscribeFromCustomInstructionsHandler implements RequestHandler 
         const service = context.aiService;
         // Assuming service is always available via context
         try {
-            service.setCustomInstructionsSubscription(false);
+            await context.aiService.removeSubscription('customInstructions'); // Use removeSubscription
             console.log('[UnsubscribeFromCustomInstructionsHandler] Custom instructions subscription disabled.');
             return { success: true }; // Return success
         } catch (error: any) {

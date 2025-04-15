@@ -38,15 +38,19 @@ export class ModelResolver {
      */
     public async getAvailableProviders(): Promise<AvailableModel[]> {
         const availableProviders: AvailableModel[] = [];
-        const providerInfoList = await this.providerStatusManager.getProviderStatus(this._aiService.allProviders, this._aiService.providerMap);
+        // Access providers and map via ProviderManager
+        const providerInfoList = await this.providerStatusManager.getProviderStatus(
+            this._aiService.providerManager.allProviders,
+            this._aiService.providerManager.providerMap
+        );
 
         console.log(`[ModelResolver] Getting available providers based on status for ${providerInfoList.length} providers.`);
 
         for (const providerInfo of providerInfoList) {
             // Check if provider is enabled and has API key if required
             if (providerInfo.enabled && (providerInfo.apiKeySet || !providerInfo.requiresApiKey)) {
-                 // Use providerMap from AiService instance to ensure it exists
-                 const provider = this._aiService.providerMap.get(providerInfo.id);
+                 // Use providerMap from ProviderManager
+                 const provider = this._aiService.providerManager.providerMap.get(providerInfo.id);
                  if (!provider) {
                      console.warn(`[ModelResolver] Provider implementation not found for ID '${providerInfo.id}' during available provider check. Skipping.`);
                      continue;
@@ -88,7 +92,7 @@ export class ModelResolver {
         }
 
         // Convert cached ModelDefinition[] to AvailableModel[]
-        const provider = this._aiService.providerMap.get(providerId);
+        const provider = this._aiService.providerManager.providerMap.get(providerId); // Use ProviderManager
         if (!provider) {
              console.warn(`[ModelResolver] Provider implementation not found for ID '${providerId}' when converting cached models. Returning raw definitions.`);
              // Fallback or return undefined? Let's return undefined for consistency.
@@ -111,7 +115,7 @@ export class ModelResolver {
      * @returns A promise resolving to an array of ModelDefinition objects.
      */
     public async fetchModelsForProvider(providerId: string): Promise<AvailableModel[]> { // Return AvailableModel[]
-        const provider = this._aiService.providerMap.get(providerId);
+        const provider = this._aiService.providerManager.providerMap.get(providerId); // Use ProviderManager
         if (!provider) {
             console.error(`[ModelResolver] Provider implementation not found for ID '${providerId}' when fetching models.`);
             // Return empty list instead of throwing to avoid breaking UI completely if provider disappears

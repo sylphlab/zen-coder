@@ -74,8 +74,11 @@ export class SubscriptionManager {
         if (this.hasSubscription(topic)) {
             try {
                 const aiService = this._aiServiceGetter();
-                // Access necessary managers/data via AiService instance
-                const latestStatus = await aiService.providerStatusManager.getProviderStatus(aiService.allProviders, aiService.providerMap);
+                // Access necessary managers/data via AiService instance and its providerManager
+                const latestStatus = await aiService.providerStatusManager.getProviderStatus(
+                    aiService.providerManager.allProviders, // Use providerManager
+                    aiService.providerManager.providerMap      // Use providerManager
+                );
                  // Wrap in payload as expected by the specific store ($providerStatus)
                 const dataToSend = { payload: latestStatus };
                 console.log('[SubscriptionManager] Pushing providerStatus update.');
@@ -121,6 +124,8 @@ export class SubscriptionManager {
             try {
                 const aiService = this._aiServiceGetter();
                 const latestInstructions = await aiService.getCombinedCustomInstructions();
+                // Log the data structure being pushed
+                console.log('[SubscriptionManager] Fetched latest instructions for push:', JSON.stringify(latestInstructions, null, 2));
                 console.log('[SubscriptionManager] Pushing customInstructions update.');
                 this._postMessageCallback?.({ type: 'pushUpdate', payload: { topic, data: latestInstructions } });
             } catch (error) {

@@ -39,8 +39,8 @@ export class SetProjectCustomInstructionsHandler implements RequestHandler {
 
             // Removed direct postMessage update. Pub/Sub handles this.
 
-            // Notify subscribed webviews about the change
-            await context.aiService._notifyCustomInstructionsChange(); // Still notify for Pub/Sub
+            // Trigger notification via AiService method
+            context.aiService.triggerCustomInstructionsNotification(); // Use public trigger method
             return { success: true }; // Return success
 
         } catch (error: any) {

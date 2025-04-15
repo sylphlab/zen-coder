@@ -57,13 +57,13 @@ onMount($activeChatSession, () => {
 
 // --- Active Chat History Store (Refactored using createStore) ---
 // Fetches initial history and subscribes to updates based on the current router chatId.
-type ChatHistoryUpdatePayload = { data: UiMessage[] | null }; // Assuming backend pushes this structure
+type ChatHistoryUpdatePayload = UiMessage[] | null; // Update data is the array itself
 
 export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
     UiMessage[],                  // TData: Store holds array of messages
     GetChatHistoryResponse,       // TResponse: Raw response from fetch ('getChatHistory')
     GetChatHistoryPayload,        // PPayload: Payload for fetch ({ chatId })
-    ChatHistoryUpdatePayload      // UUpdateData: Type of data from pubsub 'chatHistoryUpdate/{chatId}'
+    ChatHistoryUpdatePayload      // UUpdateData: Type alias for UiMessage[] | null
 >({
     key: 'activeChatHistory',
     // Fetch configuration depends on the router
@@ -91,11 +91,38 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
              console.log(`[$activeChatHistory subscribe.topic] Calculating topic. ChatId: ${chatId}`);
             return chatId ? `chatHistoryUpdate/${chatId}` : null; // Dynamic topic based on chatId
         },
-        handleUpdate: (currentHistory, updateData) => {
-            const newHistory = updateData?.data ?? null;
-            console.log(`[$activeChatHistory subscribe.handleUpdate] Received update. New history length: ${newHistory?.length ?? 'null'}`);
-            // Backend pushes the full updated history list
-            return newHistory ? [...newHistory] : null; // Ensure new array reference
+        handleUpdate: (currentHistory, updateData: ChatHistoryUpdatePayload) => {
+            const newHistory = updateData;
+            console.log(`[$activeChatHistory subscribe.handleUpdate] Received update. Data length: ${newHistory?.length ?? 'null'}`);
+
+            // Check if it's potentially a streaming update for the last message
+            if (Array.isArray(currentHistory) && Array.isArray(newHistory) && currentHistory.length === newHistory.length && newHistory.length > 0) {
+                const lastCurrentMsg = currentHistory[currentHistory.length - 1];
+                const lastNewMsg = newHistory[newHistory.length - 1];
+
+                // If last message ID is the same, and roles match (likely assistant streaming), update only the last message
+                if (lastCurrentMsg.id === lastNewMsg.id && lastCurrentMsg.role === lastNewMsg.role && lastNewMsg.role === 'assistant') {
+                    console.log(`[$activeChatHistory subscribe.handleUpdate] Detected streaming update for message ID: ${lastNewMsg.id}. Replacing last message object.`);
+                    // Log content for debugging
+                    console.log(`[$activeChatHistory subscribe.handleUpdate] Current last msg content:`, JSON.stringify(lastCurrentMsg.content));
+                    console.log(`[$activeChatHistory subscribe.handleUpdate] New last msg content:`, JSON.stringify(lastNewMsg.content));
+                    // Create a new history array, replacing only the last message with the updated one
+                    // Ensure a new object reference for the updated message to trigger re-renders
+                    const updatedHistory = [...currentHistory.slice(0, -1), { ...lastNewMsg }]; // Creates shallow copy of lastNewMsg
+                    console.log(`[$activeChatHistory subscribe.handleUpdate] Returning updated history with replaced last message.`);
+                    return updatedHistory;
+                } else {
+                     // Add logging for when the ID/role check fails but lengths match
+                     console.log(`[$activeChatHistory subscribe.handleUpdate] Lengths match, but IDs/Roles differ: currentId=${lastCurrentMsg.id}, newId=${lastNewMsg.id}, currentRole=${lastCurrentMsg.role}, newRole=${lastNewMsg.role}`);
+                }
+            } else {
+                 // Add logging for when the length check fails
+                 console.log(`[$activeChatHistory subscribe.handleUpdate] Length check failed or not arrays: isArray(current)=${Array.isArray(currentHistory)}, isArray(new)=${Array.isArray(newHistory)}, currentLen=${currentHistory?.length ?? 'null'}, newLen=${newHistory?.length ?? 'null'}`);
+            }
+
+            // Otherwise, assume it's a full history replace (initial load, user message added, message deleted, stream finished etc.)
+            console.log(`[$activeChatHistory subscribe.handleUpdate] Fallback: Performing full history replace.`);
+            return newHistory ? [...newHistory] : null; // Ensure new array reference for full replace
         }
     },
     // Store depends on the router to recalculate payload and topic

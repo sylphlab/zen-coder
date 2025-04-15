@@ -4,26 +4,22 @@ import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to 
 import { AiService } from '../../ai/aiService'; // Import AiService
 
 export class DeleteApiKeyHandler implements RequestHandler {
-    public readonly requestType = 'deleteApiKey'; // Change messageType to requestType
-    private _aiService: AiService; // Store AiService instance
-
-    constructor(aiService: AiService) { // Inject AiService
-        this._aiService = aiService;
-    }
+    public readonly requestType = 'deleteApiKey';
+    // Constructor removed - use context
 
     // Return a simple success object or throw an error
-    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> {
+    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> { // Add context
         console.log("[DeleteApiKeyHandler] Handling deleteApiKey message...");
         // Payload is now directly passed
         if (payload && typeof payload.provider === 'string') {
             const providerId = payload.provider;
 
-            // Use providerMap from AiService instance
-            if (this._aiService.providerMap.has(providerId)) {
+            // Use providerMap via ProviderManager from context.aiService
+            if (context.aiService.providerManager.providerMap.has(providerId)) {
                 try {
-                    await this._aiService.deleteApiKey(providerId); // Use injected service
+                    await context.aiService.deleteApiKey(providerId); // Use context service
                     console.log(`[DeleteApiKeyHandler] API Key delete request processed for ${providerId}`);
-                    // No need to manually push updates, Pub/Sub handles it via AiService event emitter
+                    // No need to manually push updates, Pub/Sub handles it via ProviderManager event emitter triggering SubscriptionManager
                     return { success: true }; // Return success
                 } catch (error: any) {
                     // Error message is likely shown by AiService, just log here

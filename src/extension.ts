@@ -16,9 +16,11 @@ import {
     AllToolsStatusInfo
 } from './common/types';
 import { getWebviewContent } from './webview/webviewContent';
+import { ChatSessionManager } from './session/chatSessionManager';
 import { HistoryManager } from './historyManager';
 import { StreamProcessor } from './streamProcessor';
 import { ProviderStatusManager } from './ai/providerStatusManager';
+import { ConfigResolver } from './ai/configResolver'; // Import ConfigResolver
 import { ModelResolver } from './ai/modelResolver';
 import { RequestHandler, HandlerContext } from './webview/handlers/RequestHandler';
 // MessageHandler interface is no longer needed
@@ -69,16 +71,21 @@ export async function activate(context: vscode.ExtensionContext) {
     console.log('--- Zen Coder Extension Activating ---');
 
     try {
-        const historyManagerInstance = new HistoryManager(context);
+        // Instantiate managers in correct order of dependency
+        const chatSessionManagerInstance = new ChatSessionManager(context); // Instantiate ChatSessionManager
+        const historyManagerInstance = new HistoryManager(chatSessionManagerInstance); // Inject ChatSessionManager into HistoryManager
         const providerStatusManagerInstance = new ProviderStatusManager(context);
-        aiServiceInstance = new AiService(context, historyManagerInstance, providerStatusManagerInstance);
+
+        // Pass required managers to AiService constructor
+        aiServiceInstance = new AiService(context, historyManagerInstance, providerStatusManagerInstance, chatSessionManagerInstance); // Pass chatSessionManagerInstance
         await aiServiceInstance.initialize();
 
         if (!aiServiceInstance) {
             throw new Error("AiService failed to initialize.");
         }
 
-        const provider = new ZenCoderChatViewProvider(context, aiServiceInstance, historyManagerInstance);
+        // Pass AiService and ChatSessionManager to the View Provider
+        const provider = new ZenCoderChatViewProvider(context, aiServiceInstance, chatSessionManagerInstance);
 
         context.subscriptions.push(
             vscode.window.registerWebviewViewProvider(ZenCoderChatViewProvider.viewType, provider, {
@@ -87,9 +94,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
         console.log('Zen Coder Chat View Provider registered.');
 
-        aiServiceInstance.setPostMessageCallback((message: any) => {
-            provider.postMessageToWebview(message);
-        });
+        aiServiceInstance.setPostMessageCallback(provider.postMessageToWebview.bind(provider)); // Bind context
 
         // --- Register Commands ---
         context.subscriptions.push(
@@ -119,7 +124,9 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     private readonly _extensionUri: vscode.Uri;
     private readonly _extensionMode: vscode.ExtensionMode;
     private readonly _aiService: AiService;
+    private readonly _chatSessionManager: ChatSessionManager;
     private readonly _historyManager: HistoryManager;
+    private readonly _configResolver: ConfigResolver; // Add ConfigResolver instance
     private readonly _modelResolver: ModelResolver;
     private _streamProcessor?: StreamProcessor;
     private readonly _mcpManager: McpManager;
@@ -128,16 +135,19 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     constructor(
         context: vscode.ExtensionContext,
         aiService: AiService,
-        historyManager: HistoryManager
+        chatSessionManager: ChatSessionManager // Accept ChatSessionManager
     ) {
         this._context = context;
         this._extensionUri = context.extensionUri;
         this._extensionMode = context.extensionMode;
         this._aiService = aiService;
-        this._historyManager = historyManager;
+        this._chatSessionManager = chatSessionManager; // Store ChatSessionManager
+        // Instantiate HistoryManager and ConfigResolver internally
+        this._historyManager = new HistoryManager(this._chatSessionManager);
+        this._configResolver = new ConfigResolver(this._chatSessionManager); // Instantiate ConfigResolver
         this._modelResolver = new ModelResolver(context, aiService.providerStatusManager, aiService);
-        this._handlers = new Map(); // Initialize the unified map
-        this._mcpManager = new McpManager(context, this.postMessageToWebview.bind(this));
+        this._handlers = new Map();
+        this._mcpManager = new McpManager(context, this.postMessageToWebview.bind(this)); // Bind context
         console.log("ZenCoderChatViewProvider constructed.");
     }
 
@@ -148,10 +158,10 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             return;
         }
         // Register All Handlers (Unified)
-        const allHandlers: RequestHandler[] = [ // Use RequestHandler interface for all
+        // Based on latest error feedback (8:35 AM) and logical dependencies
+        const allHandlers: RequestHandler[] = [
             // Data Fetching
-            // Removed: new GetChatStateHandler(),
-            new GetChatSessionsHandler(), // Added new handler
+            new GetChatSessionsHandler(),
             new GetAvailableProvidersHandler(),
             new GetProviderStatusHandler(),
             new GetAllToolsStatusHandler(),
@@ -159,20 +169,20 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new GetCustomInstructionsHandler(),
             new GetDefaultConfigHandler(),
             new GetModelsForProviderHandler(),
-            new GetChatSessionHandler(this._historyManager), // Register the session handler
-            new GetChatHistoryHandler(this._historyManager), // Register the history handler
-            new GetLastLocationHandler(), // Register new handler
+            new GetChatSessionHandler(),
+            new GetChatHistoryHandler(this._historyManager), // Needs HistoryManager
+            new GetLastLocationHandler(),
             // Actions
-            new SetApiKeyHandler(this._aiService),
-            new DeleteApiKeyHandler(this._aiService),
-            new SetProviderEnabledHandler(this._aiService),
+            new SetApiKeyHandler(), // Error 175 expected 0
+            new DeleteApiKeyHandler(), // Error 176 expected 0
+            new SetProviderEnabledHandler(),
             new SetDefaultConfigHandler(),
-            new SetGlobalCustomInstructionsHandler(),
+            new SetGlobalCustomInstructionsHandler(), // Error 179 expected 0
             new SetProjectCustomInstructionsHandler(),
             new SetToolAuthorizationHandler(),
-            new RetryMcpConnectionHandler(this._mcpManager), // Pass mcpManager
-            new SetActiveChatHandler(),
-            new CreateChatHandler(),
+            new RetryMcpConnectionHandler(this._mcpManager), // Error 182 expected 1
+            new SetActiveChatHandler(), // Error 183 expected 0
+            new CreateChatHandler(), // Error 184 expected 0
             new DeleteChatHandler(),
             new UpdateChatConfigHandler(),
             new ClearChatHistoryHandler(),
@@ -183,10 +193,10 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             // Other Actions
             new OpenOrCreateProjectInstructionsFileHandler(),
             new UpdateLastLocationHandler(),
-            // Actions (Previously Message Handlers - now implement RequestHandler)
-            new SendMessageHandler(this._streamProcessor),
-            new StopGenerationHandler(this._aiService), // requestType added in handler file
-            new ExecuteToolActionHandler(), // requestType added in handler file
+            // Core Actions
+            new SendMessageHandler(this._streamProcessor), // Needs StreamProcessor
+            new StopGenerationHandler(this._aiService), // Needs AiService
+            new ExecuteToolActionHandler(),
             // MCP Config Handlers
             new OpenGlobalMcpConfigHandler(),
             new OpenProjectMcpConfigHandler(),
@@ -300,13 +310,15 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         // 5. Execute the Handler (only if found and no error yet)
         if (handler && !responseError) {
             const context: HandlerContext = {
-                webview: this._view.webview, // Safe access after check above
+                webview: this._view.webview,
                 aiService: this._aiService,
                 historyManager: this._historyManager,
-                providerStatusManager: this._aiService.providerStatusManager,
+                chatSessionManager: this._chatSessionManager,
+                configResolver: this._configResolver, // Add ConfigResolver to context
+                providerStatusManager: this._aiService.providerStatusManager, // Keep for direct access if needed
                 modelResolver: this._modelResolver,
                 mcpManager: this._mcpManager,
-                postMessage: this.postMessageToWebview.bind(this),
+                postMessage: this.postMessageToWebview.bind(this), // Bind context
                 extensionContext: this._context
             };
 

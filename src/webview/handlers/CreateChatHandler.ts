@@ -7,14 +7,14 @@ export class CreateChatHandler implements RequestHandler {
     public async handle(payload: any, context: HandlerContext): Promise<ChatSession> {
         console.log("[CreateChatHandler] Handling createChat message...");
         try {
-            // Create the new chat session (HistoryManager handles saving and setting it active)
-            const newChat = await context.historyManager.createChatSession(); // Name is optional
+            // Create the new chat session using ChatSessionManager
+            const newChat = await context.chatSessionManager.createChatSession(); // Name is optional
 
             // No push needed here. Frontend navigates, ChatView mounts,
             // and chatSessionAtomFamily gets initial state from chatSessionsAtom.
             // chatSessionsAtom itself is updated via chatSessionsUpdate pushed by Create/Delete handlers.
             // Correction: CreateChatHandler *should* push chatSessionsUpdate so the list page updates.
-            const allSessions = context.historyManager.getAllChatSessions();
+            const allSessions = context.chatSessionManager.getAllChatSessions(); // Use chatSessionManager
             context.postMessage({
                 type: 'pushUpdate',
                 payload: {

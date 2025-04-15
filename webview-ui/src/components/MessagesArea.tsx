@@ -89,7 +89,16 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
     isStreaming,
     className
 }) => {
-    console.log(`[MessagesArea Original Render] Rendering ${messages.length} messages.`);
+    // Enhanced logging
+    console.log(`[MessagesArea Render] Rendering. Messages count: ${messages?.length ?? 'undefined/null'}.`);
+    if (messages && messages.length > 0) {
+        console.log(`[MessagesArea Render] Last message ID: ${messages[messages.length - 1]?.id}, Role: ${messages[messages.length - 1]?.role}`);
+    } else if (messages) {
+        console.log(`[MessagesArea Render] Messages array is empty.`);
+    } else {
+        console.log(`[MessagesArea Render] Messages prop is null or undefined.`);
+    }
+
 
     return (
         <div class={`messages-area flex-1 overflow-y-auto p-4 space-y-4 ${className ?? ''}`}>

@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import { CoreMessage, streamText, generateText, Tool, ToolSet, LanguageModel, StreamTextResult } from 'ai';
-import { HistoryManager } from '../historyManager';
+import { HistoryManager } from '../historyManager'; // HistoryManager still needed for history access
 import { ToolManager } from './toolManager';
 import { AiProvider } from './providers/providerInterface';
+import { ConfigResolver, EffectiveChatConfig } from './configResolver'; // Import ConfigResolver and EffectiveChatConfig
+import { translateUiHistoryToCoreMessages } from '../utils/historyUtils'; // Import translation utility
 
 /**
  * Handles the core logic of interacting with AI models,
@@ -12,19 +14,22 @@ export class AiStreamer {
     private readonly historyManager: HistoryManager;
     private readonly toolManager: ToolManager;
     private readonly providerMap: Map<string, AiProvider>;
+    private readonly configResolver: ConfigResolver; // Add ConfigResolver instance
     private readonly context: vscode.ExtensionContext;
     private activeAbortController: AbortController | null = null;
 
     constructor(
         context: vscode.ExtensionContext,
-        historyManager: HistoryManager,
+        historyManager: HistoryManager, // Keep historyManager for getHistory
         toolManager: ToolManager,
-        providerMap: Map<string, AiProvider>
+        providerMap: Map<string, AiProvider>,
+        configResolver: ConfigResolver // Inject ConfigResolver
     ) {
         this.context = context;
         this.historyManager = historyManager;
         this.toolManager = toolManager;
         this.providerMap = providerMap;
+        this.configResolver = configResolver; // Store injected instance
     }
 
     /**
@@ -122,10 +127,11 @@ export class AiStreamer {
      * Prepares messages, loads instructions, enables tools, and calls the AI SDK.
      */
     public async getAiResponseStream(chatId: string): Promise<StreamTextResult<ToolSet, undefined>> {
-        const effectiveConfig = this.historyManager.getChatEffectiveConfig(chatId);
+        // Use ConfigResolver to get effective config
+        const effectiveConfig: EffectiveChatConfig = this.configResolver.getChatEffectiveConfig(chatId);
         const effectiveProviderId = effectiveConfig.providerId;
-        const combinedModelId = effectiveConfig.chatModelId;
-        const effectiveModelId = combinedModelId?.includes(':') ? combinedModelId.split(':').slice(1).join(':') : combinedModelId;
+        const combinedModelId = effectiveConfig.chatModelId; // Use chatModelId directly (includes provider)
+        const effectiveModelId = combinedModelId?.includes(':') ? combinedModelId.split(':').slice(1).join(':') : combinedModelId; // Extract model part only if needed by _getProviderInstance
 
         if (!effectiveProviderId || !effectiveModelId) {
             const errorMsg = `[AiStreamer] Could not determine effective provider/model for chat ${chatId}. Provider: ${effectiveProviderId}, Model: ${effectiveModelId}`;
@@ -140,8 +146,9 @@ export class AiStreamer {
             throw new Error(`Failed to get model instance for chat ${chatId}.`);
         }
 
-        const history = this.historyManager.translateUiHistoryToCoreMessages(chatId);
-        const messagesForApi: CoreMessage[] = [...history];
+        // Use utility function for history translation
+        const uiHistory = this.historyManager.getHistory(chatId);
+        const messagesForApi: CoreMessage[] = translateUiHistoryToCoreMessages(uiHistory);
         const customInstructions = await this._loadCustomInstructions();
         if (customInstructions) {
             if (!messagesForApi.some(m => m.role === 'system')) {

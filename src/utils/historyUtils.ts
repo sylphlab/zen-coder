@@ -13,24 +13,24 @@ export function parseAndValidateSuggestedActions(accumulatedText: string): { act
 
     if (match && match[1]) {
         const jsonString = match[1].trim();
-        console.log("[HistoryUtils] Found potential JSON block:", jsonString);
+        // console.log("[HistoryUtils] Found potential JSON block:", jsonString); // Optional debug
         try {
             const parsedJson = JSON.parse(jsonString);
             const validationResult = structuredAiResponseSchema.safeParse(parsedJson);
 
             if (validationResult.success && validationResult.data.suggested_actions && validationResult.data.suggested_actions.length > 0) {
-                console.log("[HistoryUtils] Successfully parsed and validated suggested actions:", validationResult.data.suggested_actions);
+                // console.log("[HistoryUtils] Successfully parsed and validated suggested actions:", validationResult.data.suggested_actions); // Optional debug
                 parsedActions = validationResult.data.suggested_actions;
                 textToSave = accumulatedText.substring(0, match.index).trimEnd();
-                console.log("[HistoryUtils] JSON block will be removed from saved history.");
+                // console.log("[HistoryUtils] JSON block will be removed from saved history."); // Optional debug
             } else {
-                console.warn("[HistoryUtils] Parsed JSON block failed validation or missing suggested_actions:", validationResult.success ? 'Missing/empty actions' : validationResult.error);
+                // console.warn("[HistoryUtils] Parsed JSON block failed validation or missing suggested_actions:", validationResult.success ? 'Missing/empty actions' : validationResult.error); // Optional debug
             }
         } catch (parseError) {
             console.error("[HistoryUtils] Error parsing JSON block:", parseError);
         }
     } else {
-        console.log("[HistoryUtils] No JSON block found at the end of the message.");
+        // console.log("[HistoryUtils] No JSON block found at the end of the message."); // Optional debug
     }
     return { actions: parsedActions, textWithoutBlock: textToSave };
 }
@@ -62,9 +62,10 @@ export function reconstructUiContent(
     // Add the final text content
     if (finalText) {
         reconstructedUiContent.push({ type: 'text', text: finalText });
-    } else {
-        console.warn(`[HistoryUtils] No final text content provided during UI content reconstruction.`);
     }
+    // else {
+    //     console.warn(`[HistoryUtils] No final text content provided during UI content reconstruction.`); // Optional debug
+    // }
 
     return reconstructedUiContent;
 }
@@ -94,7 +95,7 @@ export function translateUserMessageToCore(uiMsg: UiMessage): CoreMessage | null
     if (hasContentForAi && userContent.length > 0) {
         return { role: 'user', content: userContent };
     } else {
-        console.log(`[HistoryUtils] Skipping user message (ID: ${uiMsg.id}) with no AI-relevant content during translation.`);
+        // console.log(`[HistoryUtils] Skipping user message (ID: ${uiMsg.id}) with no AI-relevant content during translation.`); // Optional debug
         return null;
     }
 }
@@ -139,8 +140,32 @@ export function translateAssistantMessageToCore(uiMsg: UiMessage): CoreMessage[]
         if (toolResultsForThisMsg.length > 0) {
             resultingCoreMessages.push({ role: 'tool', content: toolResultsForThisMsg });
         }
-    } else if (!hasContentForAi) {
-         console.log(`[HistoryUtils] Skipping assistant message (ID: ${uiMsg.id}) with no AI-relevant content during translation.`);
     }
+    // else if (!hasContentForAi) { // Optional debug
+    //      console.log(`[HistoryUtils] Skipping assistant message (ID: ${uiMsg.id}) with no AI-relevant content during translation.`);
+    // }
     return resultingCoreMessages;
+}
+
+/**
+ * Translates the entire UI history (array of UiMessage) into the format
+ * required by the Vercel AI SDK (CoreMessage[]).
+ * @param chatHistory - The array of UiMessage objects.
+ * @returns An array of CoreMessage objects.
+ */
+export function translateUiHistoryToCoreMessages(chatHistory: UiMessage[]): CoreMessage[] {
+    if (!chatHistory) return [];
+
+    const coreMessages: CoreMessage[] = [];
+    for (const uiMsg of chatHistory) {
+        if (uiMsg.role === 'user') {
+            const coreMsg = translateUserMessageToCore(uiMsg);
+            if (coreMsg) { coreMessages.push(coreMsg); }
+        } else if (uiMsg.role === 'assistant') {
+            const coreMsgs = translateAssistantMessageToCore(uiMsg);
+            coreMessages.push(...coreMsgs);
+        }
+        // Ignore system/tool messages during this top-level translation
+    }
+    return coreMessages;
 }

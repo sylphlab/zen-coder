@@ -4,11 +4,18 @@
 - **VS Code Extension:** Standard structure (`extension.ts`, `package.json`).
 - **Webview UI:** A separate web application (HTML/CSS/JS) running inside a VS Code webview panel for the chat interface. Communication between the extension host and the webview via message passing.
 - **Core Services (Extension Host):**
-    - `AiService (`src/ai/aiService.ts`): Focused on core AI interaction (calling `streamText` using explicit `providerId` and `modelId`), API key storage delegation (`setApiKey`, `deleteApiKey`), and tool execution wrapping.
-    - `ProviderStatusManager` (`src/ai/providerStatusManager.ts`): Determines provider enablement and API key status.
-    - `ModelResolver` (`src/ai/modelResolver.ts`): Fetches and lists available models from enabled providers (including `providerId`).
-    - `HistoryManager` (`src/historyManager.ts`): Manages chat history persistence (`globalState`) and translation between UI/Core formats.
-    - `StreamProcessor` (`src/streamProcessor.ts`): Handles parsing the AI response stream (`fullStream` via `text-delta`), and performs post-stream parsing of appended JSON blocks (e.g., for `suggested_actions`) before updating history/UI.
+    - `AiService` (`src/ai/aiService.ts`): Acts as the central coordinator, orchestrating interactions between various managers. It initializes managers, handles `postMessage` setup, and exposes a unified API to the rest of the extension, delegating tasks to specialized managers.
+    - `ProviderManager` (`src/ai/providerManager.ts`): Manages AI provider instances (initialization, `providerMap`), configuration (API keys via `setApiKey`/`deleteApiKey`, enablement via `setProviderEnabled`), and status reporting (`getProviderStatus`, potentially using `ProviderStatusManager`). Notifies `SubscriptionManager` of status changes.
+    - `ToolManager` (`src/ai/toolManager.ts`): Manages tool definitions (standard and MCP), determines tool enablement based on configuration (`zencoder.toolAuthorization`), prepares the final `ToolSet` for the AI (`prepareToolSet`), and provides resolved tool status for the UI (`getResolvedToolStatusInfo`).
+    - `SubscriptionManager` (`src/ai/subscriptionManager.ts`): Manages webview subscriptions (`addSubscription`, `removeSubscription`, `hasSubscription`) and pushes updates to the frontend (`notifyProviderStatusChange`, `notifyToolStatusChange`, etc.) using the `postMessageCallback`. Receives notifications from other managers or `AiService`.
+    - `AiStreamer` (`src/ai/aiStreamer.ts`): Handles the core AI interaction logic, preparing messages (`_loadCustomInstructions`, uses `historyUtils.translateUiHistoryToCoreMessages`), getting provider instances (`_getProviderInstance`), resolving config (`configResolver.getChatEffectiveConfig`), calling the AI SDK (`streamText`), managing stream lifecycle (`abortCurrentStream`), and handling tool repair logic.
+    - `ConfigResolver` (`src/ai/configResolver.ts`): Reads default chat configuration (`zencoder.ai.*`), merges it with session-specific configuration (`ChatSession.config`), and provides the effective configuration for a given chat (`getChatEffectiveConfig`).
+    - `ProviderStatusManager` (`src/ai/providerStatusManager.ts`): (Used by `ProviderManager`) Determines provider enablement and API key status based on configuration and secrets.
+    - `ModelResolver` (`src/ai/modelResolver.ts`): Fetches and lists available models from enabled providers.
+    - `HistoryManager` (`src/historyManager.ts`): Manages chat history messages (CRUD operations: `addMessage`, `deleteMessage`, `clearHistory`, `getHistory`, etc.). It utilizes `ChatSessionManager` to get session details (like `nextSeqId`) and `WorkspaceStateManager` for persistence. It also handles message modification logic via `MessageModifier`.
+    - `ChatSessionManager` (`src/session/chatSessionManager.ts`): Manages the lifecycle and metadata (name, config, `nextSeqId`, location) of chat sessions. Uses `WorkspaceStateManager` for persistence.
+    - `WorkspaceStateManager` (`src/state/workspaceStateManager.ts`): Handles the low-level saving and loading of state (sessions, history) to `context.workspaceState`.
+    - `StreamProcessor` (`src/streamProcessor.ts`): Handles parsing the AI response stream (`fullStream` via `text-delta`), and performs post-stream parsing of appended JSON blocks (e.g., for `suggested_actions`) before updating history/UI via `HistoryManager`.
     - `McpManager` (`src/ai/mcpManager.ts`): Manages lifecycle, configuration, and tool fetching for MCP servers.
 - **Standard Data Communication Pattern (FE <-> BE):**
     - **Core Principle:** Explicit separation of state fetching (ReqRes) and update subscription (PubSub). PubSub **does not** send initial state upon subscription.
@@ -18,7 +25,7 @@
         - Backend uses `pushUpdate(topic, data)` to push **updates** (not initial state) to subscribed clients.
         - **Current:** Backend pushes the **full updated state** for simplicity (e.g., the entire updated `ChatSession[]` list).
         - **Future Goal:** Refactor backend to push **incremental updates (patches)**, ideally using JSON Patch (RFC 6902), for better efficiency, especially for large data structures like chat history. Frontend `handleUpdate` will then apply these patches.
-    - **Mutation:** User actions that modify state are sent via `requestData(mutationRequestType, payload)`. Backend handlers process the mutation and typically trigger a PubSub `pushUpdate` with the changed state (full or patch).
+    - **Mutation:** User actions that modify state are sent via `requestData(mutationRequestType, payload)`. Backend handlers process the mutation (e.g., using `HistoryManager` or `ChatSessionManager`) and typically trigger a PubSub `pushUpdate` with the changed state (full or patch).
 - **Standardized Frontend Store Creation (`createStore` Utility):**
     - Location: `webview-ui/src/stores/utils/createStore.ts`
     - Purpose: Provides a consistent way to create Nanostores (`StandardStore`) that follow the ReqRes + PubSub pattern.
@@ -30,7 +37,7 @@
     - State: The created store holds `'loading' | 'error' | TData | null`.
     - Methods: Includes a `.refetch()` method.
     - Lifecycle: Uses `onMount` to manage initial fetch, subscription, unsubscription, and handling changes in dynamic `payload`/`topic`.
-- **State Management (Persistence):** Chat history (`UiMessage[]` with `seqId`) and session metadata (`ChatSession` with `nextSeqId`) persisted in `context.workspaceState` (per workspace) via `HistoryManager`. API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`).
+- **State Management (Persistence):** Session metadata (`ChatSession`) and chat history (`UiMessage[]`) persisted in `context.workspaceState` (per workspace) via `WorkspaceStateManager`, coordinated by `ChatSessionManager` and `HistoryManager`. API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`). Default chat config stored in VS Code settings (`zencoder.ai.*`).
 - **Tool Authorization:** Managed via VS Code setting `zencoder.toolAuthorization`. (Details remain the same).
 - **Configuration Files:** (Details remain the same).
     - Global MCP Servers: `[VS Code User Data]/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`

@@ -27,7 +27,7 @@ export class UpdateChatConfigHandler implements RequestHandler {
         console.log(`[UpdateChatConfigHandler] Handling updateChatConfig for chat ID: ${chatId}`, config);
 
         try {
-            const chat = context.historyManager.getChatSession(chatId);
+            const chat = context.chatSessionManager.getChatSession(chatId); // Use chatSessionManager
             if (!chat) {
                 throw new Error(`Chat session not found: ${chatId}`);
             }
@@ -37,11 +37,11 @@ export class UpdateChatConfigHandler implements RequestHandler {
                 ...config       // Apply partial updates
             };
             // Pass the complete, merged config object
-            await context.historyManager.updateChatSession(chatId, { config: mergedConfig });
+            await context.chatSessionManager.updateChatSession(chatId, { config: mergedConfig }); // Use chatSessionManager
             console.log(`[UpdateChatConfigHandler] Successfully updated config for chat ${chatId}.`);
 
             // Get the updated session data
-            const updatedSession = context.historyManager.getChatSession(chatId);
+            const updatedSession = context.chatSessionManager.getChatSession(chatId); // Use chatSessionManager
             if (updatedSession) {
                 // Trigger a push update for the specific chat session
                 const topic = `chatSessionUpdate/${chatId}`;

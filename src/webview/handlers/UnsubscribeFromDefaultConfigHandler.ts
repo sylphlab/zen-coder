@@ -15,7 +15,7 @@ export class UnsubscribeFromDefaultConfigHandler implements RequestHandler { // 
         const service = context.aiService;
         // Assuming service is always available via context
         try {
-            service.setDefaultConfigSubscription(false);
+            await context.aiService.removeSubscription('defaultConfig'); // Use removeSubscription
             console.log('[UnsubscribeFromDefaultConfigHandler] Default config subscription disabled.');
             return { success: true }; // Return success
         } catch (error: any) {

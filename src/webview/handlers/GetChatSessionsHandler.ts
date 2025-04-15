@@ -17,7 +17,7 @@ export class GetChatSessionsHandler implements RequestHandler<GetChatSessionsPay
     public async handle(_payload: GetChatSessionsPayload, context: HandlerContext): Promise<GetChatSessionsResponse> {
         console.log(`[${this.requestType}] Handling request...`);
         try {
-            const allSessions = context.historyManager.getAllChatSessions();
+            const allSessions = context.chatSessionManager.getAllChatSessions(); // Use chatSessionManager
             console.log(`[${this.requestType}] Returning ${allSessions.length} sessions.`);
             // Return the correct response structure
             return {
