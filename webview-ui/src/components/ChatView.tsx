@@ -234,6 +234,8 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
 
             // 5. Send to Backend
             try {
+                // *** ADDED LOGGING ***
+                console.log(`[ChatView|${chatId}] handleSend: Using providerId='${backendPayload.providerId}', modelId='${backendPayload.modelId}' for mutation.`);
                 console.log(`[ChatView|${chatId}] Sending payload to backend mutation:`, backendPayload); // Added chatId
                 await sendMessageMutate(backendPayload);
             } catch (error) {

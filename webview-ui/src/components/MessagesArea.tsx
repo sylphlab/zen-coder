@@ -142,6 +142,22 @@ const Message: FunctionalComponent<MessageProps> = memo(({ message, isStreaming,
     return (
         <div class={`flex mb-4 ${isUser ? 'justify-end' : ''}`}>
             <div class={`p-3 rounded-lg max-w-xl lg:max-w-2xl xl:max-w-3xl ${isUser ? 'bg-blue-100 dark:bg-blue-900' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                {/* Model/Provider Info - Moved ABOVE content */}
+                {isAssistant && !isPending && (message.modelName || message.providerName) && (
+                    // Log before returning the JSX
+                    (console.log(`[Message Render - Model Info] ID: ${message.id}, ModelName: ${message.modelName}, ModelId: ${message.modelId}, ProviderName: ${message.providerName}`),
+                    <div class="mb-1 text-xs"> {/* Add margin-bottom */}
+                        {/* Add title attribute for tooltip */}
+                        <span class="text-gray-900 dark:text-gray-100" title={message.modelId || 'Unknown Model ID'}>
+                            {message.modelName || message.modelId} {/* Display modelName, fallback to modelId */}
+                        </span>
+                        {message.providerName && (
+                            <span class="text-gray-400 dark:text-gray-500"> via {message.providerName}</span>
+                        )}
+                    </div>
+                    )
+                )}
+
                  {/* Display Loading Indicator if pending */}
                  {isPending ? (
                      <div class="flex items-center space-x-2 text-gray-500 dark:text-gray-400">
@@ -155,9 +171,10 @@ const Message: FunctionalComponent<MessageProps> = memo(({ message, isStreaming,
                       ))
                  )}
 
+
                 {/* Actions (Copy/Delete) - Show only for non-pending messages */}
                 {!isPending && (
-                     <div class="flex justify-end space-x-2 mt-2 opacity-50 group-hover:opacity-100 transition-opacity duration-150">
+                     <div class="flex justify-end space-x-2 mt-1 opacity-50 group-hover:opacity-100 transition-opacity duration-150"> {/* Adjusted margin-top */}
                          <button onClick={handleCopy} class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600" title="Copy">
                              <ClipboardIcon class="h-4 w-4 text-gray-500 dark:text-gray-400" />
                          </button>

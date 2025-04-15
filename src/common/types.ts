@@ -30,6 +30,11 @@ export interface UiMessage {
     timestamp: number; // When the message was created/received
     /** Optional status for UI rendering (e.g., pending response, error) */
     status?: 'pending' | 'error'; // Status for the message itself (e.g., waiting for AI response)
+    // Model/Provider info (optional, primarily for assistant messages)
+    providerId?: string;
+    providerName?: string;
+    modelId?: string;
+    modelName?: string; // User-friendly model name
     // sender property is deprecated, use role instead
 }
 
@@ -74,11 +79,17 @@ export interface HistoryUpdateToolCallDelta {
 }
 
 // Delta to update the overall status of a message (e.g., from 'pending' to 'error' or remove status)
+// Also carries final model info when clearing 'pending' status.
 export interface HistoryUpdateMessageStatusDelta {
     type: 'historyUpdateMessageStatus';
     chatId: string;
     messageId: string;
     status?: UiMessage['status']; // New status (e.g., 'error') or undefined to clear 'pending'
+    // Include model info when finalizing (status becomes undefined)
+    providerId?: string;
+    providerName?: string;
+    modelId?: string;
+    modelName?: string;
 }
 
 export interface HistoryDeleteMessageDelta {

@@ -49,6 +49,10 @@ export class StreamProcessor {
         stream: AsyncIterable<ExpectedStreamPart>,
         chatId: string,
         messageId: string,
+        providerId: string, // Added
+        providerName: string, // Added
+        modelId: string, // Added
+        modelName: string, // Added
         // Removed notifyUpdateCallback parameter
         toolChoice?: CoreToolChoice<any> | undefined
     ): Promise<{
@@ -129,12 +133,12 @@ export class StreamProcessor {
             }
 
              if (streamFinishedCleanly) {
-                 await this.handlePostStreamProcessing(chatId, messageId, this._accumulatedText);
+                 await this.handlePostStreamProcessing(chatId, messageId, this._accumulatedText, providerId, providerName, modelId, modelName); // Pass details
                  console.log(`[StreamProcessor|${chatId}] Finished processing stream cleanly for message ${messageId}.`);
                  // NO NOTIFICATION CALL HERE
              } else if (finishReason !== 'error') {
                   console.warn(`[StreamProcessor|${chatId}] Stream for message ${messageId} ended unexpectedly without 'finish' or 'error'. Finish reason: ${finishReason}.`);
-                  await this.handlePostStreamProcessing(chatId, messageId, this._accumulatedText);
+                  await this.handlePostStreamProcessing(chatId, messageId, this._accumulatedText, providerId, providerName, modelId, modelName); // Pass details
                   if (finishReason === 'unknown') finishReason = 'incomplete'; // Mark as incomplete if reason wasn't set
              }
              // If finishReason is 'error', streamError should be set
@@ -158,13 +162,25 @@ export class StreamProcessor {
       * Note: This method now implicitly relies on reconcileFinalAssistantMessage using
       * its own injected SubscriptionManager to push suggested actions.
       */
-     private async handlePostStreamProcessing(chatId: string, messageId: string, fullText: string): Promise<void> {
+     private async handlePostStreamProcessing(
+         chatId: string,
+         messageId: string,
+         fullText: string,
+         providerId: string, // Added
+         providerName: string, // Added
+         modelId: string, // Added
+         modelName: string // Added
+     ): Promise<void> {
           console.log(`[StreamProcessor|${chatId}] Starting post-stream processing for message ${messageId}.`);
           try {
                await this._historyManager.messageModifier.reconcileFinalAssistantMessage(
                    chatId,
                    messageId,
                    null,
+                   providerId, // Pass through
+                   providerName, // Pass through
+                   modelId, // Pass through
+                   modelName, // Pass through
                    () => {} // Dummy callback
                );
                 console.log(`[StreamProcessor|${chatId}] Completed post-stream processing (reconcile) for message ${messageId}.`);

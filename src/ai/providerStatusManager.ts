@@ -63,10 +63,30 @@ export class ProviderStatusManager {
         for (const provider of allProviders) {
             const isEnabled = provider.isEnabled(); // Use provider's method
             const hasApiKey = apiKeyStatusMap[provider.id] ?? false;
+            let models: { id: string; name: string }[] = []; // Initialize models array
 
             // Find the provider details from the map to get name, URL etc.
             // Use passed-in providerMap
             const providerDetails = providerMap.get(provider.id);
+
+            // Fetch models only if the provider is enabled and has the necessary API key (if required)
+            if (isEnabled && (hasApiKey || !provider.requiresApiKey)) {
+                try {
+                    const apiKey = provider.requiresApiKey ? await provider.getApiKey(this.context.secrets) : undefined;
+                    const fetchedModels = await provider.getAvailableModels(apiKey);
+                    // Ensure models have both id and name, provide fallback if name is missing
+                    models = fetchedModels.map(m => ({
+                        id: m.id,
+                        name: m.name || m.id // Use ID as fallback name
+                    }));
+                    console.log(`[ProviderStatusManager] Fetched ${models.length} models for enabled provider ${provider.id}`);
+                } catch (error) {
+                    console.error(`[ProviderStatusManager] Failed to fetch models for provider ${provider.id}:`, error);
+                    // Keep models as empty array on error
+                }
+            } else {
+                 console.log(`[ProviderStatusManager] Skipping model fetch for disabled/key-missing provider ${provider.id}`);
+            }
 
             combinedStatusList.push({
                 id: provider.id,
@@ -75,8 +95,7 @@ export class ProviderStatusManager {
                 requiresApiKey: provider.requiresApiKey,
                 enabled: isEnabled,
                 apiKeySet: hasApiKey,
-                // Models are not part of status, handled by ModelResolver
-                models: [], // Keep structure consistent for now, but empty
+                models: models, // Include fetched models
             });
         }
         combinedStatusList.sort((a, b) => a.name.localeCompare(b.name));

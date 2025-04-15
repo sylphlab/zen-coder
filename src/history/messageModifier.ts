@@ -115,7 +115,16 @@ export class MessageModifier {
      * Parses suggested actions, reconstructs content, saves state, and sends actions update via SubscriptionManager.
      * @param _postMessageCallback - Deprecated parameter, no longer used directly for suggested actions.
      */
-    public async reconcileFinalAssistantMessage(chatId: string, assistantMessageId: string, finalCoreMessage: CoreMessage | null, _postMessageCallback: (message: any) => void): Promise<void> {
+    public async reconcileFinalAssistantMessage(
+        chatId: string,
+        assistantMessageId: string,
+        finalCoreMessage: CoreMessage | null,
+        providerId: string, // Added
+        providerName: string, // Added
+        modelId: string, // Added
+        modelName: string, // Added
+        _postMessageCallback: (message: any) => void
+    ): Promise<void> {
         const chat = this._sessionManager.getChatSession(chatId);
         if (!chat) {
             console.warn(`[MessageModifier reconcile] Chat session ${chatId} not found.`);
@@ -154,22 +163,35 @@ export class MessageModifier {
         const reconstructedUiContent = reconstructUiContent(finalCoreToolCalls, currentContent, textWithoutBlock);
 
         finalUiMessage.content = reconstructedUiContent; // Update the message content in memory
+    
+        // Add model/provider info
+        finalUiMessage.providerId = providerId;
+        finalUiMessage.providerName = providerName;
+        finalUiMessage.modelId = modelId;
+        finalUiMessage.modelName = modelName;
+    
         console.log(`[MessageModifier reconcile] Chat ${chatId}, Msg ${assistantMessageId}: Content BEFORE save:`, JSON.stringify(finalUiMessage.content));
-
-        // Save the final reconciled state (including cleaned text and potentially updated tool call states)
+        console.log(`[MessageModifier reconcile] Chat ${chatId}, Msg ${assistantMessageId}: Model Info: ${providerName} (${providerId}) / ${modelName} (${modelId})`);
+    
+        // Save the final reconciled state (including cleaned text, model info, and potentially updated tool call states)
         await this._sessionManager.touchChatSession(chatId);
         console.log(`[MessageModifier reconcile] Chat ${chatId}, Msg ${assistantMessageId}: touchChatSession completed.`);
 
 
-        // Push final status update (clear pending) via SubscriptionManager
+        // Push final status update (clear pending) via SubscriptionManager, including model info
         const statusDelta: HistoryUpdateMessageStatusDelta = {
             type: 'historyUpdateMessageStatus',
             chatId: chatId,
             messageId: assistantMessageId,
-            status: undefined // Clear the 'pending' status
+            status: undefined, // Clear the 'pending' status
+            // Add model info to the delta
+            providerId: providerId,
+            providerName: providerName,
+            modelId: modelId,
+            modelName: modelName
         };
         this._subscriptionManager.notifyChatHistoryUpdate(chatId, statusDelta);
-        console.log(`[MessageModifier reconcile] Pushed final status update (clear pending) for Msg ${assistantMessageId}.`);
+        console.log(`[MessageModifier reconcile] Pushed final status update (clear pending + model info) for Msg ${assistantMessageId}.`);
 
         // Push suggested actions update via SubscriptionManager
         const payload: SuggestedActionsPayload = {

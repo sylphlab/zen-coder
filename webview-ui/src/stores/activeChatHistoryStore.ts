@@ -332,13 +332,24 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
                          statusChanged = true;
                     }
 
-                    // Only update the array if the status actually changed
-                    if (statusChanged) {
+                    // Update model info if provided in the delta (typically when status becomes undefined)
+                    let modelInfoChanged = false;
+                    if (updateData.providerId && updatedMessage.providerId !== updateData.providerId) { updatedMessage.providerId = updateData.providerId; modelInfoChanged = true; }
+                    if (updateData.providerName && updatedMessage.providerName !== updateData.providerName) { updatedMessage.providerName = updateData.providerName; modelInfoChanged = true; }
+                    if (updateData.modelId && updatedMessage.modelId !== updateData.modelId) { updatedMessage.modelId = updateData.modelId; modelInfoChanged = true; }
+                    if (updateData.modelName && updatedMessage.modelName !== updateData.modelName) { updatedMessage.modelName = updateData.modelName; modelInfoChanged = true; }
+
+                    if (modelInfoChanged) {
+                         console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Updated model info for message ${updatedMessage.id}: ${updatedMessage.providerName}/${updatedMessage.modelId}`);
+                    }
+
+                    // Only update the array if the status or model info actually changed
+                    if (statusChanged || modelInfoChanged) {
                         newHistory[messageIndex] = updatedMessage;
-                        console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Final state for message ${updatedMessage.id}: status='${updatedMessage.status ?? 'undefined'}'`);
+                        console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Final state for message ${updatedMessage.id}: status='${updatedMessage.status ?? 'undefined'}', model='${updatedMessage.modelId}'`);
                         return newHistory; // Return the modified array
                     } else {
-                         console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Status for message ${messageToUpdate.id} did not change from '${currentStatus}'.`);
+                         console.log(`[$activeChatHistory|${currentRouteChatId} handleUpdate - historyUpdateMessageStatus] Status and model info for message ${messageToUpdate.id} did not change.`);
                          return newHistory; // Return the original array reference if no change occurred
                     }
                 }

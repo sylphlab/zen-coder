@@ -21,6 +21,10 @@ export class SendMessageHandler implements RequestHandler {
         console.log("[SendMessageHandler] Handling sendMessage request...");
         let assistantUiMsgId: string | undefined;
         let chatId: string | undefined;
+        let providerId: string | undefined; // Declare higher scope
+        let modelId: string | undefined; // Declare higher scope
+        let providerName: string | undefined; // Declare higher scope
+        let modelName: string | undefined; // Declare higher scope
 
         // Get dependencies from context
         const streamProcessor = context.aiService.streamProcessor;
@@ -31,8 +35,12 @@ export class SendMessageHandler implements RequestHandler {
             const { tempId: userMessageTempId } = message; // Extract and rename tempId for clarity
             // Pass userMessageTempId to the validation function
             const validationResult = this._validateInput(message, context, userMessageTempId);
+            // Assign validated IDs to higher-scoped variables
             chatId = validationResult.chatId ?? undefined;
-            const { userMessageContent, providerId, modelId } = validationResult;
+            providerId = validationResult.providerId ?? undefined;
+            modelId = validationResult.modelId ?? undefined;
+            const { userMessageContent } = validationResult; // Only get content here
+
             if (!userMessageContent || !chatId || !providerId || !modelId) {
                  console.error("[SendMessageHandler] Input validation failed.");
                  // Error message already posted by _validateInput
@@ -55,13 +63,37 @@ export class SendMessageHandler implements RequestHandler {
             }
 
             // 3. Prepare and initiate AI stream
-            const { streamResult } = await this._prepareAndSendToAI(context, chatId!, providerId!, modelId!); // Don't need assistantId from here anymore
+            const { streamResult } = await this._prepareAndSendToAI(context, chatId, providerId, modelId); // Pass validated IDs
+
+            // --- Get Provider and Model Names (ONCE) ---
+            // Use providerMap to get provider instance name
+            const providerInstance = context.aiService.providerManager.providerMap.get(providerId);
+            providerName = providerInstance?.name ?? providerId; // Assign to higher-scoped variable
+
+            // Get model name from provider status
+            const allProviderStatus = await context.aiService.providerManager.getProviderStatus();
+            const providerStatus = allProviderStatus.find(p => p.id === providerId);
+            const modelInfo = providerStatus?.models.find(m => m.id === modelId);
+            modelName = modelInfo?.name ?? modelId; // Assign to higher-scoped variable
+            // *** ADDED LOGGING ***
+            console.log(`[SendMessageHandler|${chatId}] Fetched Model Info: ProviderStatus found=${!!providerStatus}, ModelInfo found=${!!modelInfo}, Resolved modelName='${modelName}' (from modelInfo.name='${modelInfo?.name}', fallback modelId='${modelId}')`);
+
+            // Ensure definite strings with fallbacks before passing
+            const finalProviderId = providerId;
+            const finalProviderName = providerName;
+            const finalModelId = modelId;
+            const finalModelName = modelName;
+            // --- End Get Names ---
 
             // 4. Process the AI response stream and get the result
             const streamProcessingResult = await streamProcessor.processStream(
                 streamResult.fullStream,
                 chatId,
-                assistantUiMsgId
+                assistantUiMsgId,
+                finalProviderId, // Pass definite ID
+                finalProviderName, // Pass definite Name
+                finalModelId, // Pass definite ID
+                finalModelName // Pass definite Name
                 // No notification callback passed here
             );
 
@@ -86,8 +118,9 @@ export class SendMessageHandler implements RequestHandler {
              });
 
 
-            // 6. Finalize history (reconcile text, extract suggested actions)
-            await this._finalizeHistory(chatId, assistantUiMsgId, context);
+            // 6. Finalize history (reconcile text, extract suggested actions, add model info)
+            // Use the already fetched names from higher scope
+            await this._finalizeHistory(chatId, assistantUiMsgId, providerId, providerName, modelId, modelName, context); // Pass details
 
         } catch (error: any) {
             console.error("[SendMessageHandler] Error processing AI stream:", error);
@@ -111,7 +144,16 @@ export class SendMessageHandler implements RequestHandler {
             if (chatId && assistantUiMsgId) {
                 try {
                      console.warn(`[SendMessageHandler|${chatId}] Attempting to finalize history for ${assistantUiMsgId} after error.`);
-                    await this._finalizeHistory(chatId, assistantUiMsgId, context);
+                    // Use higher-scoped variables, provide fallbacks if they are somehow still undefined
+                    await this._finalizeHistory(
+                        chatId,
+                        assistantUiMsgId,
+                        providerId ?? 'unknown',
+                        providerName ?? 'Unknown',
+                        modelId ?? 'unknown',
+                        modelName ?? 'Unknown',
+                        context
+                    );
                 } catch (finalizationError) {
                     console.error(`[SendMessageHandler|${chatId}] Error during post-error history finalization for ${assistantUiMsgId}:`, finalizationError);
                 }
@@ -219,12 +261,30 @@ export class SendMessageHandler implements RequestHandler {
 
     // Removed _processAIResponse method - logic moved into handle
 
-    /** Finalizes the history after stream processing (reconciles text, extracts actions). */
-    private async _finalizeHistory(chatId: string, assistantUiMsgId: string, context: HandlerContext): Promise<void> {
+    /** Finalizes the history after stream processing (reconciles text, extracts actions, adds model info). */
+    private async _finalizeHistory(
+        chatId: string,
+        assistantUiMsgId: string,
+        providerId: string | undefined, // Allow undefined from catch block
+        providerName: string | undefined, // Allow undefined
+        modelId: string | undefined, // Allow undefined
+        modelName: string | undefined, // Allow undefined
+        context: HandlerContext
+    ): Promise<void> {
         try {
             console.log(`[SendMessageHandler|${chatId}] Finalizing history for message ${assistantUiMsgId}.`);
             // Reconcile history using accumulated text and null for finalCoreMessage via messageModifier
-            await context.historyManager.messageModifier.reconcileFinalAssistantMessage(chatId, assistantUiMsgId, null, context.postMessage); // Use messageModifier
+            // Use fallbacks directly in the call if values might be undefined
+            await context.historyManager.messageModifier.reconcileFinalAssistantMessage(
+                chatId,
+                assistantUiMsgId,
+                null,
+                providerId ?? 'unknown',
+                providerName ?? 'Unknown',
+                modelId ?? 'unknown',
+                modelName ?? 'Unknown',
+                context.postMessage // Pass callback (though likely unused now)
+            );
 // Get the updated session data AFTER reconciliation via ChatSessionManager
 const updatedSession = context.chatSessionManager.getChatSession(chatId); // Use chatSessionManager
 if (updatedSession) {

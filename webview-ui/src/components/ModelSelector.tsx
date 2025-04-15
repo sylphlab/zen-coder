@@ -37,18 +37,7 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
         fetchModels(selectedProviderId);
     }, [selectedProviderId]);
 
-    // Effect to update local input state based on selected model
-    useEffect(() => {
-        const selectedModelObject = modelsState.models.find(m => m.id === selectedModelId);
-        const newValue = selectedModelObject?.name ?? selectedModelId ?? '';
-        if (modelsState.providerId === selectedProviderId && !modelsState.loading && newValue !== inputValue) {
-            setInputValue(newValue);
-        } else if (selectedProviderId && modelsState.providerId !== selectedProviderId && inputValue) {
-            setInputValue('');
-        } else if (selectedProviderId && modelsState.providerId === selectedProviderId && !modelsState.loading && !selectedModelObject && selectedModelId && inputValue) {
-            setInputValue('');
-        }
-    }, [selectedProviderId, selectedModelId, modelsState]);
+    // REMOVED useEffect that forced input value to selectedModelId
 
     // Removed imperative useEffect for select update
 
@@ -104,15 +93,16 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
 
     const handleModelBlur = useCallback(() => {
         console.log(`[ModelSelector handleModelBlur] Input value on blur: "${inputValue}"`);
-        const lowerInput = inputValue.toLowerCase().trim();
+        const finalInput = inputValue.trim(); // Use the trimmed input directly
+        const lowerInput = finalInput.toLowerCase();
         let matchedModel: AvailableModel | null = null;
 
         // Check if models are loaded for the correct provider
         if (modelsState.providerId !== selectedProviderId || modelsState.loading) {
              console.log(`[ModelSelector handleModelBlur] Models not ready or wrong provider. StoreProvider: ${modelsState.providerId}, PropProvider: ${selectedProviderId}, Loading: ${modelsState.loading}. Reverting input.`);
-             const currentSelectedModelAgain = modelsState.models.find(m => m.id === selectedModelId);
-             const revertValueAgain = currentSelectedModelAgain?.name ?? selectedModelId ?? '';
-             console.log(`[ModelSelector handleModelBlur] Reverting input to: "${revertValueAgain}"`);
+             // Revert to selectedModelId
+             const revertValueAgain = selectedModelId ?? '';
+             console.log(`[ModelSelector handleModelBlur] Reverting input to ID: "${revertValueAgain}"`);
              setInputValue(revertValueAgain);
             return;
         }
@@ -125,8 +115,9 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
             console.log(`[ModelSelector handleModelBlur] Found match: ID=${matchedModel.id}, Name=${matchedModel.name}`);
             const finalProviderId = matchedModel.providerId;
             const finalModelId = matchedModel.id;
-            const displayValue = matchedModel.name ?? matchedModel.id;
-            console.log(`[ModelSelector handleModelBlur] Setting input value to displayValue: "${displayValue}"`);
+            // Always set input value to the matched model ID
+            const displayValue = matchedModel.id;
+            console.log(`[ModelSelector handleModelBlur] Setting input value to matched ID: "${displayValue}"`);
             setInputValue(displayValue);
             if (finalProviderId !== selectedProviderId || finalModelId !== selectedModelId) {
                 console.log(`[ModelSelector handleModelBlur] Model changed. Calling onModelChange with Provider: ${finalProviderId}, Model: ${finalModelId}`);
@@ -135,15 +126,21 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
                  console.log(`[ModelSelector handleModelBlur] Matched model is the same as current selection. No change needed.`);
             }
         } else {
-            console.log(`[ModelSelector handleModelBlur] No exact match found for "${lowerInput}".`);
-            const currentSelectedModel = modelsState.models.find(m => m.id === selectedModelId);
-            const revertValue = currentSelectedModel?.name ?? selectedModelId ?? '';
-            console.log(`[ModelSelector handleModelBlur] Reverting input value to current selection: "${revertValue}"`);
-            setInputValue(revertValue);
-            // If user cleared the input, deselect the model
-            if (!lowerInput && selectedModelId !== null) {
+            console.log(`[ModelSelector handleModelBlur] No exact match found for "${lowerInput}". Using input value as model ID.`);
+            // Use the trimmed input value as the model ID
+            const finalModelId = finalInput;
+            // Keep the input value as is
+            setInputValue(finalInput);
+            // Call onModelChange if the input is not empty and different from current selection
+            if (finalModelId && (selectedProviderId !== null && finalModelId !== selectedModelId)) {
+                 console.log(`[ModelSelector handleModelBlur] Custom model ID entered. Calling onModelChange with Provider: ${selectedProviderId}, Model: ${finalModelId}`);
+                 onModelChange(selectedProviderId, finalModelId);
+            } else if (!finalModelId && selectedModelId !== null) {
+                 // If user cleared the input, deselect the model
                  console.log(`[ModelSelector handleModelBlur] Input was cleared. Calling onModelChange to deselect model.`);
                  onModelChange(selectedProviderId, null);
+            } else {
+                 console.log(`[ModelSelector handleModelBlur] Input matches current selection or is empty. No change needed.`);
             }
         }
     }, [inputValue, selectedProviderId, selectedModelId, modelsState, onModelChange, setInputValue]);
