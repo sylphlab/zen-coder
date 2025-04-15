@@ -42,7 +42,8 @@ export const $openProjectMcpConfig = createMutationStore<
 });
 
 // Retry MCP Connection
-type RetryMcpConnectionPayload = { serverName: string };
+// Corrected payload type to use 'identifier'
+type RetryMcpConnectionPayload = { identifier: string };
 export const $retryMcpConnection = createMutationStore<
   undefined, // Result type (no specific result needed)
   McpConfiguredStatusPayload | null, // Type of the store being updated ($mcpStatus)
@@ -50,14 +51,16 @@ export const $retryMcpConnection = createMutationStore<
   void // Return type of performMutation
 >({
   performMutation: async (payload: RetryMcpConnectionPayload) => {
-    await requestData<void>('retryMcpConnection', payload);
+    // Pass the payload with the 'identifier' key
+    await requestData<void>('retryMcpConnection', { identifier: payload.identifier });
     // Actual state update will happen via $mcpStatus subscription push
   },
   getOptimisticUpdate: (
     payload: RetryMcpConnectionPayload,
     currentDataState: McpConfiguredStatusPayload | null // Use the provided current state
   ): OptimisticUpdateResult<McpConfiguredStatusPayload | null> => {
-    if (!currentDataState || !currentDataState[payload.serverName]) {
+    // Use 'identifier' from payload to find the server
+    if (!currentDataState || !currentDataState[payload.identifier]) {
       // If no current state or server not found, don't apply optimistic update
       return { optimisticState: currentDataState, revertState: currentDataState };
     }
@@ -65,8 +68,8 @@ export const $retryMcpConnection = createMutationStore<
     // Create a deep copy for the optimistic state
     const optimisticState: McpConfiguredStatusPayload = JSON.parse(JSON.stringify(currentDataState));
 
-    // Update the specific server's state optimistically
-    const serverToUpdate = optimisticState[payload.serverName] as McpServerStatus;
+    // Update the specific server's state optimistically using 'identifier'
+    const serverToUpdate = optimisticState[payload.identifier] as McpServerStatus;
     serverToUpdate.isConnected = false; // Assume disconnection while retrying
     serverToUpdate.lastError = 'Retrying...'; // Set status text
     serverToUpdate.tools = {}; // Clear tools while retrying

@@ -1,32 +1,36 @@
-import { RequestHandler, HandlerContext } from './RequestHandler'; // Change to RequestHandler
+import { McpManager } from '../../ai/mcpManager';
+import { RequestHandler } from './RequestHandler';
+// Removed unused ServerMessage import
 
-/**
- * Handles the 'retryMcpConnection' message from the webview.
- * Triggers a connection retry attempt for a specific MCP server using AiService
- * (which delegates to McpManager). McpManager will notify the UI about the
- * status update via the postMessage callback after the attempt.
- */
-export class RetryMcpConnectionHandler implements RequestHandler {
-    public requestType = 'retryMcpConnection'; // Change messageType to requestType
+interface RetryMcpConnectionPayload {
+  identifier: string; // Unique identifier for the MCP server (e.g., config path or name)
+}
 
-    // Return a simple success object or throw an error
-    public async handle(payload: any, context: HandlerContext): Promise<{ success: boolean }> {
-        const serverName = payload?.serverName;
-        if (typeof serverName !== 'string' || !serverName) {
-            console.error(`[Handler] Invalid or missing serverName in ${this.requestType} message payload:`, payload);
-            throw new Error('Invalid payload: Missing server name for connection retry.'); // Throw error
-        }
+// Made RequestHandler generic
+export class RetryMcpConnectionHandler implements RequestHandler<RetryMcpConnectionPayload, void> {
+  public readonly requestType = 'retryMcpConnection'; // Added requestType
+  private mcpManager: McpManager;
 
-        console.log(`[Handler] Handling ${this.requestType} for server: ${serverName}`);
-        try {
-            // Call the retry method on AiService (which delegates to McpManager)
-            await context.aiService.retryMcpConnection(serverName);
-            console.log(`[Handler] Triggered retry for ${serverName}. McpManager will send status update via Pub/Sub.`);
-            return { success: true }; // Return success
-        } catch (error) {
-            console.error(`[Handler] Error triggering retry for ${serverName}:`, error);
-            // Throw error to reject the requestData promise
-            throw new Error(`Failed to trigger retry for ${serverName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
+  constructor(mcpManager: McpManager) {
+    this.mcpManager = mcpManager;
+  }
+
+  public async handle(payload: RetryMcpConnectionPayload): Promise<void> {
+    if (!payload || typeof payload.identifier !== 'string') {
+      throw new Error('Invalid payload: Missing or invalid identifier for MCP retry.');
     }
+
+    try {
+      console.log(`Retrying MCP connection for identifier: ${payload.identifier}`);
+      // Corrected method name
+      await this.mcpManager.retryMcpConnection(payload.identifier);
+      // Status update will be pushed via the McpManager's subscription mechanism
+    } catch (error: any) {
+      console.error(`Error retrying MCP connection for ${payload.identifier}:`, error);
+      // Optionally, re-throw or handle specific errors if needed
+      // For now, we let the McpManager handle pushing the error status
+      // Re-throwing might be useful if the frontend needs specific confirmation of failure
+      // throw new Error(`Failed to retry connection for ${payload.identifier}: ${error.message}`);
+    }
+  }
 }

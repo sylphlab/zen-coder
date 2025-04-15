@@ -16,29 +16,20 @@
 5.  **VS Code Tool Enhancements:** Implement remaining VS Code debugging tools and enhance `runCommandTool`.
 6.  **UI Refinements & Error Handling:** Continue improving UI and error handling.
 
-## Recent Changes (Jotai Removal, Bug Fixes)
-+ - **Removed Obsolete Jotai Atoms & Refactored UI State:**
-+     - Deleted `webview-ui/src/store/atoms.ts`.
-+     - Removed dependencies on `isStreamingAtom`, `inputValueAtom`, `selectedImagesAtom`, `suggestedActionsMapAtom`, and `activeChatIdAtom` from `ChatView.tsx`, `InputArea.tsx`, `MessagesArea.tsx`, and `chatStores.ts`.
-+     - Refactored `ChatView.tsx` to manage `inputValue` and `suggestedActionsMap` (temporarily) with local state (`useState`).
-+     - Refactored `ChatView.tsx` to derive `isStreaming` state from `$sendMessage.loading`.
-+     - Refactored `InputArea.tsx` and `MessagesArea.tsx` to receive UI state (`inputValue`, `isStreaming`, `selectedImages`, `suggestedActionsMap`) and setters (`setInputValue`) as props from `ChatView.tsx`.
-+     - Updated relevant event handlers (`handleSend`, `handleSuggestedActionClick`, etc.) in `ChatView.tsx` to use local state setters or derived state.
-+     - Ensured `activeChatId` logic relies solely on the `chatIdFromRoute` prop passed via the router.
-+ - **Fixed Build Errors:** Resolved various import errors related to the refactoring and obsolete atoms file. Exported `generateUniqueId` from `communication.ts`. Fixed syntax error in `chatStores.ts`.
-+ - **Fixed 404 Routing Error:** Modified `webview-ui/src/stores/router.ts` to map the initial `/index.html` path (from `getLastLocation`) to the `/` (home) route.
-+ - **(Previous: Nanostores Integration & Routing)**
-+ - **Refactored Settings Page & Subscription Logic:** (Obsolete due to Nanostores migration)
-+ - **Refactored Initial Data Loading:** (Obsolete due to Nanostores migration)
-+ - **Implemented Pub/Sub (Various):** MCP Status, Tool Status, Custom Instructions, Provider Status, Default Config.
-+ - **Fixed App Load Failure (Request/Response Timing):** Centralized message handling.
-+ - **Fixed Chat Creation Error (Data Transformation):** Modified `createFetcherStore.ts` (then refactored `providerStores.ts` to use basic atom/onMount) to correctly handle both initial fetch (raw array) and push updates (`{payload: array}`) for `$providerStatus`.
-+ - **Fixed Chat Creation Navigation (Attempt 1):** Modified `CreateChatHandler.ts` to return the full `ChatSession` object.
-+ - **Fixed Missing Providers Dropdown:** Added logs, identified data format mismatch between initial fetch and push update for `$providerStatus`, corrected store logic in `providerStores.ts`. Added checks in `ModelSelector.tsx`. Refactored `$providerStatus` to use basic atom/onMount. Corrected `processData` logic in `providerStores.ts`.
-+ - **Fixed Provider Selection Reset:** Corrected return type and value in `UpdateChatConfigHandler.ts` to match frontend expectations (`{ config: ... }`).
-+ - **Fixed Chat Creation Navigation (Attempt 2 - Timing):** Modified `ChatPage.tsx` `useEffect` to check for session existence only after `$chatSessions` is loaded (not null) and depend on `sessions`.
-- **Fixed Model Input Field:** Modified `useEffect` hook in `ModelSelector.tsx`.
-- **Fixed Gray Screen:** Resolved import error in `InputArea.tsx`.
+## Recent Changes (Settings UI Refactoring, Jotai Removal, Bug Fixes)
++ - **Refactored Tool/MCP Settings UI:**
++     - Added retry button for MCP server connections (`RetryMcpConnectionHandler`, `$retryMcpConnection` store, UI button in `ToolSettings.tsx`).
++     - Merged MCP server status display into `ToolSettings.tsx`.
++     - Separated Standard Tools and MCP Servers/Tools into distinct sections in `ToolSettings.tsx`.
++     - Implemented collapsible sections for each tool category/server in `ToolSettings.tsx`, defaulting to collapsed.
++     - Fixed layout issues in `ToolSettings.tsx` (description wrapping, flex constraints).
++     - Removed the redundant `McpServerSettings.tsx` component and its usage in `SettingPage.tsx`.
++     - Made `RequestHandler.ts` interface generic.
++     - Fixed related TS errors in `extension.ts` and other files.
+ - **Removed Obsolete Jotai Atoms & Refactored UI State:**
+      - Deleted `webview-ui/src/store/atoms.ts`.
+      - Removed dependencies on `isStreamingAtom`, `inputValueAtom`, `selectedImagesAtom`, `suggestedActionsMapAtom`, and `activeChatIdAtom` from `ChatView.tsx`, `InputArea.tsx`, `MessagesArea.tsx`, and `chatStores.ts`.
+      # Removed duplicated block below
 - **Attempted Blank Page/Timeout Fix:** Various adjustments (superseded).
 - **Fixed TypeScript Errors:** General fixes post-refactoring.
 - **Added VS Code Tools:** `goToDefinitionTool`, `findReferencesTool`, etc.

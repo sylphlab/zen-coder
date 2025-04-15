@@ -166,7 +166,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new SetGlobalCustomInstructionsHandler(),
             new SetProjectCustomInstructionsHandler(),
             new SetToolAuthorizationHandler(),
-            new RetryMcpConnectionHandler(),
+            new RetryMcpConnectionHandler(this._mcpManager), // Pass mcpManager
             new SetActiveChatHandler(),
             new CreateChatHandler(),
             new DeleteChatHandler(),

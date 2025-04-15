@@ -22,7 +22,8 @@ export interface HandlerContext {
 /**
  * Interface for handling specific requests from the webview.
  */
-export interface RequestHandler {
+// Make the interface generic for payload (P) and return type (R)
+export interface RequestHandler<P = any, R = any> {
     /**
      * The specific request type this handler is responsible for.
      * Matches the `requestType` sent from the webview via `requestData`.
@@ -35,5 +36,5 @@ export interface RequestHandler {
      * @param context Context object containing shared resources.
      * @returns A promise that resolves with the result payload to send back, or rejects with an error.
      */
-    handle(payload: any, context: HandlerContext): Promise<any>;
+    handle(payload: P, context: HandlerContext): Promise<R>;
 }
