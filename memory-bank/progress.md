@@ -29,6 +29,11 @@
     - Modified backend logic in `src/ai/mcpManager.ts` to force reconnection attempt on retry and emit `mcpStatusChanged` events.
     - Corrected `McpManager` to push status updates via the correct `pushUpdate` mechanism (`mcpStatus` topic).
     - Updated `AiService` to listen for `mcpStatusChanged` from `McpManager` and trigger `_notifyToolStatusChange`, ensuring MCP tools appear in the main toggle list.
+- **Refactored Tool/MCP Settings UI:**
+    - Merged MCP server status and retry button into `ToolSettings.tsx`.
+    - Implemented collapsible sections (default collapsed) for Standard Tools and MCP Servers.
+    - Fixed layout issues (description wrapping, flex constraints).
+    - Removed `McpServerSettings.tsx`.
 
 ## What's Left
 - **Testing (Manual - Post-Refactor):** Crucial next step.
