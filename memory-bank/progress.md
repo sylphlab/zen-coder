@@ -1,6 +1,11 @@
 # Project Progress
 
 ## What Works
+- **Model ID/Name Handling:**
+    - Model Selector input allows custom model IDs and doesn't revert to name.
+    - Backend correctly fetches and stores `modelName` and `modelId`.
+    - Message bubbles display `modelName` above the content (with `modelId` in tooltip) and provider name.
+    - Model info appears immediately for new messages.
 - **Message Display:** Fixed issues where messages (including streamed text) were not appearing correctly.
 - **Persistence (Completed Messages):** AI responses that finish streaming completely are now reliably saved and persist after reloading.
 - **Persistence (Manually Stopped Messages):** Explicitly triggering a save when "Stop Generation" is used persists the partial message state (subject to async save completion before termination).
@@ -28,7 +33,8 @@
 - **Suggested Actions Pub/Sub:** Implemented backend push via `SubscriptionManager`, created frontend `$suggestedActions` store, integrated with UI (`ChatView`, `MessagesArea`). Fixed syntax errors in related files.
 
 ## What's Left
-- **Testing (Manual - Streaming Display Fix):** Verify AI responses stream correctly. **(Next Task)**
+- **Testing (Manual - Model Display & Selection):** Verify model name/ID display and custom ID input work as expected. **(Next Task)**
+- **Testing (Manual - Streaming Display Fix):** Verify AI responses stream correctly.
 - **Testing (Manual - Suggested Actions):** Verify suggested actions appear and function correctly.
 - **Testing (Manual - Delta Implementation):** Thorough testing of delta updates for history/sessions.
 - **Resume Image Upload (Backend & Full Test):** Review/update backend and test.
@@ -39,6 +45,7 @@
 
 
 ## Current Status
+- **Fixed Model ID/Name Issues:** Corrected logic in `ModelSelector`, `MessagesArea`, `ProviderStatusManager`, `SendMessageHandler`, `MessageModifier`, `activeChatHistoryStore`, and `types.ts` to ensure correct handling, storage, and display of model names and IDs.
 - Core chat functionality, including persistence for completed/manually stopped messages, is working.
 - **Fixed the live streaming display bug** by implementing chunk buffering in the frontend history store.
 - State management refactored to Nanostores with delta updates for key areas.
@@ -48,7 +55,7 @@
 
 ## Known Issues / TODOs
 - **Persistence on Abrupt Reload:** Partial messages being streamed during an abrupt window reload might be lost due to VS Code's async storage limitations. (Accepted Limitation)
-- **Testing:** Manual testing needed for streaming fix, suggested actions, and delta updates.
+- **Testing:** Manual testing needed for model display/selection, streaming fix, suggested actions, and delta updates.
 - **Timeout:** Potential timeout issue during `sendMessage` needs investigation if problems persist.
 - **Image Upload:** Backend processing needs verification/completion.
 - **(Previous Known Issues Still Apply where relevant)**
