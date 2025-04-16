@@ -6,7 +6,7 @@
 ## Next Steps
 1.  **Diagnose `Model: undefined`:** Re-examine `ConfigResolver`, `AiStreamer`, and `SendMessageHandler` focusing on how `modelId` is determined and passed specifically for DeepSeek. Add more targeted logging if necessary.
 2.  **Diagnose Delayed Name Display:** Trace how `providerName` and `modelName` are passed from `SendMessageHandler` to `HistoryManager.addAssistantMessageFrame` and included in the initial `HistoryAddMessageDelta`. Verify the frontend store (`activeChatHistoryStore`) correctly applies this initial data.
-3.  **Test Vertex AI:** Thoroughly test Vertex AI integration, including dynamic project/location fetching and selection via dropdowns.
+3.  **Test Vertex AI:** Thoroughly test Vertex AI integration, including dynamic project fetching/selection. Location is currently text input.
 4.  **Test Core Functionality:** Once the above are resolved, re-test basic chat, streaming, persistence, and suggested actions.
 5.  **Resume Image Upload:** Continue implementation.
 6.  **Compliance Review & VS Code Tool Enhancements:** As before.
@@ -28,7 +28,7 @@
 
 ## Active Decisions
 *   **Vertex Credentials Storage:** Store Vertex credentials (JSON content, optional project ID, optional location) as a single JSON stringified object in `SecretStorage`.
-*   **Vertex Dynamic Fetching:** Added methods to `VertexProvider` and corresponding Handlers (`GetVertexProjectsHandler`, `GetVertexLocationsHandler`) to fetch projects and locations using Google Cloud APIs. Updated settings UI to use dropdowns populated by these fetches.
+*   **Vertex Dynamic Fetching (Partial):** Added methods/Handlers for fetching projects (using `@google-cloud/resource-manager`) and updated UI for project dropdown. Location fetching reverted to placeholder due to SDK client issues (`LocationsClient` import failed); UI uses text input for location. Added TODOs for location fetching implementation.
 *   **Incremental Saves:** Text chunks are saved as they arrive via `appendTextChunk`.
 *   **Simplified Finalization:** Post-stream logic in `SendMessageHandler` handles parsing actions, updating final content via `MessageModifier.updateMessageContent`, and pushing relevant updates (status, suggested actions).
 *   **Optimistic Name Display:** Model/Provider names are fetched early in `SendMessageHandler` and passed to `HistoryManager.addAssistantMessageFrame` to be included in the initial message delta. (Still needs verification/debugging).

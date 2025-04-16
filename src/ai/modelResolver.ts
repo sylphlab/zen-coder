@@ -48,7 +48,7 @@ export class ModelResolver {
 
         for (const providerInfo of providerInfoList) {
             // Check if provider is enabled and has API key if required
-            if (providerInfo.enabled && (providerInfo.apiKeySet || !providerInfo.requiresApiKey)) {
+            if (providerInfo.enabled && (providerInfo.credentialsSet || !providerInfo.requiresApiKey)) { // Use credentialsSet
                  // Use providerMap from ProviderManager
                  const provider = this._aiService.providerManager.providerMap.get(providerInfo.id);
                  if (!provider) {
@@ -66,7 +66,7 @@ export class ModelResolver {
                 });
                 console.log(`[ModelResolver] Added available provider: ${providerInfo.name}`);
             } else {
-                 console.log(`[ModelResolver] Skipping unavailable provider: ${providerInfo.name} (Enabled: ${providerInfo.enabled}, KeySet: ${providerInfo.apiKeySet})`);
+                 console.log(`[ModelResolver] Skipping unavailable provider: ${providerInfo.name} (Enabled: ${providerInfo.enabled}, CredentialsSet: ${providerInfo.credentialsSet})`); // Use credentialsSet
             }
         }
 

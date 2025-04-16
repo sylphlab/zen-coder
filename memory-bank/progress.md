@@ -34,7 +34,8 @@
 *   **Refactored Credential Handling:** Updated provider interface, backend logic, and UI to support complex credentials (JSON + optional fields) alongside simple API keys.
 
 ## What's Left / Known Issues
-*   **Vertex AI Testing:** Need to test Vertex AI functionality thoroughly, including dynamic project/location fetching and selection.
+*   **Vertex AI Testing:** Need to test Vertex AI functionality thoroughly, including dynamic project fetching and selection. Location selection is currently text input.
+*   **Vertex AI Dynamic Locations:** Implement dynamic location fetching (currently returns empty list due to SDK client issues). Requires finding the correct Node.js client/method.
 *   **Vertex AI Dynamic Models:** Implement dynamic model fetching for Vertex AI (currently uses static list, requires API call).
 *   **Vertex AI Error Handling:** Improve error handling for API calls (project/location/model fetching) and display informative messages to the user (e.g., permission errors).
 *   **BUGFIX: Tool Call UI:** Spinner doesn't stop, default state isn't collapsed. (Lower Priority - Addressing collapsed state now)

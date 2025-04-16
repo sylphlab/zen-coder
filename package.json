@@ -283,6 +283,7 @@
     "webview-ui": "pnpm --filter webview-ui"
   },
   "devDependencies": {
+    "@types/long": "^5.0.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "~20.17.30",
     "@types/vscode": "^1.99.0",

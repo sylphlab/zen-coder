@@ -2,8 +2,10 @@ import * as vscode from 'vscode';
 import { createVertex } from '@ai-sdk/google-vertex';
 import { LanguageModel } from 'ai';
 import { AiProvider, ModelDefinition } from './providerInterface';
-import { ResourceManagerClient } from '@google-cloud/resource-manager';
-import { PredictionServiceClient } from '@google-cloud/aiplatform'; // For locations, potentially models
+import { ProjectsClient } from '@google-cloud/resource-manager'; // Correct client for searching projects
+import { PredictionServiceClient } from '@google-cloud/aiplatform'; // Keep for potential model listing
+// import { LocationsClient } from 'google-gax'; // Cannot find module or correct export
+// import { LocationsClient } from '@google-cloud/common'; // Cannot find module
 
 // Define known Vertex models (add more as needed) - Keep as fallback
 // Note: IDs should match the actual model IDs used by the Vertex AI API
@@ -161,13 +163,13 @@ export class VertexProvider implements AiProvider {
     }
     try {
       const clientOptions = { credentials: JSON.parse(credentialsJsonString) };
-      const resourceManagerClient = new ResourceManagerClient(clientOptions);
-      const [projects] = await resourceManagerClient.searchProjects();
+      const projectsClient = new ProjectsClient(clientOptions); // Use ProjectsClient
+      const [projects] = await projectsClient.searchProjects(); // Use correct client method
       console.log(`[VertexProvider] Fetched ${projects.length} projects.`);
       return projects
-        .filter(p => p.projectId && p.displayName) // Ensure essential fields exist
-        .map(p => ({ id: p.projectId!, name: p.displayName! }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .filter((p: any) => p.projectId && p.displayName) // Add 'any' type for filter param
+        .map((p: any) => ({ id: p.projectId!, name: p.displayName! })) // Add 'any' type for map param
+        .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)); // Add explicit types for sort params
     } catch (error) {
       console.error('[VertexProvider] Error fetching projects:', error);
       // Inform the user about potential permission issues
@@ -179,35 +181,27 @@ export class VertexProvider implements AiProvider {
   /**
    * Fetches available Google Cloud locations for AI Platform (Vertex AI).
    * Requires a project ID.
+   * TODO: Implement dynamic location fetching. Need to find the correct Node.js client
+   * and method for listing locations (e.g., via google.cloud.location.Locations service).
+   * The correct client might be part of google-gax, @google-cloud/location, or another core library.
+   * Requires credentials and project ID. Ensure service account has `aiplatform.locations.list` permission.
    */
   async getAvailableLocations(credentialsJsonString?: string, projectId?: string): Promise<{ id: string; name: string }[]> {
      if (!credentialsJsonString || !projectId) {
        console.warn('[VertexProvider] Cannot fetch locations without credentials JSON and Project ID.');
        return [];
      }
-     try {
-       const clientOptions = { credentials: JSON.parse(credentialsJsonString) };
-       // Use PredictionServiceClient, potentially needs adjustment for location listing endpoint
-       const predictionClient = new PredictionServiceClient(clientOptions); // May need specific apiEndpoint?
-
-       // Construct the parent resource path for listing locations
-       const name = `projects/${projectId}`;
-       console.log(`[VertexProvider] Fetching locations for project: ${name}`);
-
-       // Call listLocations - Check SDK for correct method and parameters
-       const [locations] = await predictionClient.listLocations({ name });
-       console.log(`[VertexProvider] Fetched ${locations.length} locations.`);
-
-       return locations
-         .filter(l => l.locationId && l.displayName)
-         .map(l => ({ id: l.locationId!, name: l.displayName! }))
-         .sort((a, b) => a.name.localeCompare(b.name));
-
-     } catch (error) {
-       console.error(`[VertexProvider] Error fetching locations for project ${projectId}:`, error);
-       vscode.window.showWarningMessage(`Failed to fetch Google Cloud locations for project ${projectId}. Ensure the service account has "aiplatform.locations.list" permission.`);
-       return [];
-     }
+     console.warn(`[VertexProvider] Dynamic location fetching for project ${projectId} is not yet implemented. Returning empty list.`);
+     // Placeholder: Return empty array until implemented
+     // In the future, implement the API call here using the correct client library.
+     // Example (pseudo-code):
+     // try {
+     //   const clientOptions = { credentials: JSON.parse(credentialsJsonString) };
+     //   const locationClient = new CorrectLocationsClient(clientOptions); // Replace with actual client
+     //   const [locations] = await locationClient.listLocations({ name: `projects/${projectId}` });
+     //   return locations.map(l => ({ id: l.locationId!, name: l.displayName! })).sort(...);
+     // } catch (error) { ... handle error ... }
+     return [];
   }
 
 
