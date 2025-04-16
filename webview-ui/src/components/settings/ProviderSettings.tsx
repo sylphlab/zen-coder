@@ -1,14 +1,22 @@
 import { useState, useMemo, useCallback, useEffect } from 'preact/hooks'; // Added useEffect
 import { useStore } from '@nanostores/react';
 import { JSX } from 'preact/jsx-runtime';
-import { ProviderInfoAndStatus } from '../../../../src/common/types';
+import { ProviderInfoAndStatus } from '../../../../src/common/types'; // Removed LocationWithRegion import
 import { requestData } from '../../utils/communication'; // Added requestData import
+import { CustomSelect } from '../ui/CustomSelect'; // Updated import path
 import {
     $providerStatus,
     $setApiKey,
     $deleteApiKey,
     $setProviderEnabled,
 } from '../../stores/providerStores';
+
+// Define LocationWithRegion interface locally
+interface LocationWithRegion {
+    id: string;
+    name: string;
+    region: string;
+}
 
 export function ProviderSettings(): JSX.Element {
     // --- State from Stores ---
@@ -28,9 +36,10 @@ export function ProviderSettings(): JSX.Element {
     const [searchQuery, setSearchQuery] = useState('');
     // State for fetched projects and locations
     const [vertexProjects, setVertexProjects] = useState<{ id: string; name: string }[]>([]);
-    const [vertexLocations, setVertexLocations] = useState<{ id: string; name: string }[]>([]);
+    // Update state type to use locally defined LocationWithRegion
+    const [vertexLocations, setVertexLocations] = useState<LocationWithRegion[]>([]);
     const [isFetchingProjects, setIsFetchingProjects] = useState(false);
-    const [isFetchingLocations, setIsFetchingLocations] = useState(false);
+    // Removed isFetchingLocations
 
     const handleCredentialsJsonChange = (providerId: string, value: string) => {
         // Update the JSON input state immediately
@@ -162,51 +171,49 @@ export function ProviderSettings(): JSX.Element {
         if (vertexStatus?.credentialsSet && vertexStatus.enabled) {
             // Fetch projects if not already fetched
             if (vertexProjects.length === 0 && !isFetchingProjects) {
-                console.log('[ProviderSettings Effect] Fetching Vertex projects...');
-                setIsFetchingProjects(true);
-                requestData<{ id: string; name: string }[]>('getVertexProjects')
-                    .then(projects => {
-                        console.log('[ProviderSettings Effect] Fetched projects:', projects);
-                        setVertexProjects(projects || []);
+                console.log('[ProviderSettings Effect] Fetching Vertex static data (projects/locations)...');
+                // Use a single flag for fetching static data
+                setIsFetchingProjects(true); // Re-use existing flag for simplicity
+                // Update the expected return type for requestData to include LocationWithRegion
+                requestData<{ projects: { id: string; name: string }[], locations: LocationWithRegion[] }>('getVertexStaticData')
+                    .then(data => {
+                        console.log('[ProviderSettings Effect] Fetched static data:', data);
+                        // Set both projects (empty) and locations from the response
+                        setVertexProjects(data?.projects || []);
+                        setVertexLocations(data?.locations || []);
                     })
                     .catch(error => {
-                        console.error('[ProviderSettings Effect] Error fetching Vertex projects:', error);
+                        console.error('[ProviderSettings Effect] Error fetching Vertex static data:', error);
                         // Optionally show error to user
+                        setVertexProjects([]); // Clear on error
+                        setVertexLocations([]); // Clear on error
                     })
-                    .finally(() => setIsFetchingProjects(false));
+                    .finally(() => setIsFetchingProjects(false)); // Re-use existing flag for static data fetch
             }
-
-            // Fetch locations if project ID is selected/available and not already fetched
-            const selectedProjectId = projectIdInput['vertex'] || vertexStatus.currentProjectId;
-            if (selectedProjectId && vertexLocations.length === 0 && !isFetchingLocations) {
-                 console.log(`[ProviderSettings Effect] Fetching Vertex locations for project ${selectedProjectId}...`);
-                 setIsFetchingLocations(true);
-                 requestData<{ id: string; name: string }[]>('getVertexLocations', { projectId: selectedProjectId })
-                     .then(locations => {
-                         console.log('[ProviderSettings Effect] Fetched locations:', locations);
-                         setVertexLocations(locations || []);
-                     })
-                     .catch(error => {
-                         console.error(`[ProviderSettings Effect] Error fetching Vertex locations for project ${selectedProjectId}:`, error);
-                         // Optionally show error to user
-                     })
-                     .finally(() => setIsFetchingLocations(false));
-            } else if (!selectedProjectId && vertexLocations.length > 0) {
-                // Clear locations if project ID is removed
-                setVertexLocations([]);
-            }
+            // Removed the separate location fetching logic as it's now included in getVertexStaticData
         } else {
             // Clear projects/locations if credentials are removed or provider disabled
             if (vertexProjects.length > 0) setVertexProjects([]);
             if (vertexLocations.length > 0) setVertexLocations([]);
         }
-    // Depend on providerStatus to refetch when credentials change, and projectIdInput for locations
-    }, [providerStatus, projectIdInput, vertexProjects.length, vertexLocations.length, isFetchingProjects, isFetchingLocations]);
+    // Depend only on providerStatus to trigger fetching static data when Vertex is enabled/credentials set
+    }, [providerStatus]); // Simplified dependencies
 
+
+    // Helper function to group locations by region - update type hint
+    const groupLocationsByRegion = (locations: LocationWithRegion[]) => {
+        return locations.reduce((acc, loc) => {
+            (acc[loc.region] = acc[loc.region] || []).push(loc);
+            return acc;
+        }, {} as Record<string, LocationWithRegion[]>);
+    };
 
     const renderProviderSetting = (providerInfo: ProviderInfoAndStatus): JSX.Element => {
         // Destructure all properties including new ones
         const { id, name, apiKeyUrl, apiKeyDescription, requiresApiKey, enabled, credentialsSet, usesComplexCredentials, currentProjectId, currentLocation } = providerInfo;
+
+        // Memoize grouped locations for CustomSelect
+        const groupedVertexLocations = useMemo(() => groupLocationsByRegion(vertexLocations), [vertexLocations]);
         const keyLabel = usesComplexCredentials ? '憑證' : 'API Key'; // Simplified label
         const keyStatusText = credentialsSet ? `(${keyLabel} 已設定)` : `(${keyLabel} 未設定)`;
         const keyStatusColor = credentialsSet ? 'green' : 'red';
@@ -290,54 +297,37 @@ export function ProviderSettings(): JSX.Element {
                                                 value={projectIdInput[id] || currentProjectId || ''} // Use currentProjectId from status as initial value
                                                 onChange={(e) => handleProjectIdChange(id, (e.target as HTMLSelectElement).value)}
                                                 aria-label={`${name} Project ID Select`}
-                                                disabled={isSettingKey || isDeletingKey || isFetchingProjects}
+                                                disabled={isSettingKey || isDeletingKey || isFetchingProjects} // Keep disabled while fetching static data
                                             >
-                                                <option value="">{isFetchingProjects ? '載入中...' : '-- 選擇 Project --'}</option>
-                                                {vertexProjects.map(proj => (
-                                                    <option key={proj.id} value={proj.id}>{proj.name} ({proj.id})</option>
-                                                ))}
+                                                {/* Project list is now always empty based on static handler */}
+                                                <option value="">{isFetchingProjects ? '載入中...' : '-- Project (手動輸入) --'}</option>
+                                                {/* Removed mapping over vertexProjects as it's always empty */}
                                             </select>
                                         ) : (
                                             <input
                                                 type="text"
                                                 id={`project-id-${id}`}
                                                 class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                                placeholder={currentProjectId || (isFetchingProjects ? '載入中...' : "你的 GCP Project ID")}
+                                                placeholder={currentProjectId || "你的 GCP Project ID"} // Removed loading text
                                                 value={projectIdInput[id] || ''}
                                                 onInput={(e) => handleProjectIdChange(id, (e.target as HTMLInputElement).value)}
                                                 aria-label={`${name} Project ID Input`}
-                                                disabled={isSettingKey || isDeletingKey || isFetchingProjects}
+                                                disabled={isSettingKey || isDeletingKey} // Only disable based on key actions
                                             />
                                         )}
                                     </div>
                                     <div>
                                         <label htmlFor={`location-${id}`} class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Location (選填)</label>
-                                        {vertexLocations.length > 0 ? (
-                                            <select
-                                                id={`location-${id}`}
-                                                class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                                value={locationInput[id] || currentLocation || ''} // Use currentLocation from status
-                                                onChange={(e) => handleLocationChange(id, (e.target as HTMLSelectElement).value)}
-                                                aria-label={`${name} Location Select`}
-                                                disabled={isSettingKey || isDeletingKey || isFetchingLocations || !projectIdInput[id] && !currentProjectId} // Disable if no project selected
-                                            >
-                                                <option value="">{isFetchingLocations ? '載入中...' : '-- 選擇 Location --'}</option>
-                                                {vertexLocations.map(loc => (
-                                                    <option key={loc.id} value={loc.id}>{loc.name} ({loc.id})</option>
-                                                ))}
-                                            </select>
-                                        ) : (
-                                            <input
-                                                type="text"
-                                                id={`location-${id}`}
-                                                class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                                placeholder={currentLocation || (isFetchingLocations ? '載入中...' : "例如: us-central1")}
-                                                value={locationInput[id] || ''}
-                                                onInput={(e) => handleLocationChange(id, (e.target as HTMLInputElement).value)}
-                                                aria-label={`${name} Location Input`}
-                                                disabled={isSettingKey || isDeletingKey || isFetchingLocations}
-                                            />
-                                        )}
+                                        {/* Replace standard select with CustomSelect */}
+                                        <CustomSelect
+                                            groupedOptions={groupedVertexLocations}
+                                            value={locationInput[id] || currentLocation || null} // Pass null if no value
+                                            onChange={(value) => handleLocationChange(id, value || '')} // Handle null from onChange
+                                            placeholder={isFetchingProjects ? '載入中...' : '-- 選擇或輸入 Location --'} // Update placeholder
+                                            disabled={isSettingKey || isDeletingKey || isFetchingProjects}
+                                            ariaLabel={`${name} Location Select`}
+                                            allowCustomValue={true} // Enable custom value input
+                                        />
                                     </div>
                                 </div>
                             )}

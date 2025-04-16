@@ -4,6 +4,7 @@ import { useStore } from '@nanostores/preact'; // Use preact binding
 import { JSX } from 'preact/jsx-runtime';
 import { AvailableModel } from '../../../src/common/types';
 import { $providerStatus, $modelsForSelectedProvider, fetchModels } from '../stores/providerStores';
+import { CustomSelect } from './ui/CustomSelect'; // Updated import path
 
 interface ModelSelectorProps {
     labelPrefix?: string;
@@ -56,7 +57,8 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
         const providerMap = new Map<string, { id: string; name: string }>();
         // Filter providers based on status before adding to the map
         allProvidersStatus
-            .filter(provider => provider && provider.enabled && (provider.apiKeySet || !provider.requiresApiKey))
+            // Use credentialsSet instead of apiKeySet
+            .filter(provider => provider && provider.enabled && (provider.credentialsSet || !provider.requiresApiKey))
             .forEach(provider => {
                 // Add only ready providers, ensuring uniqueness by ID
                 if (!providerMap.has(provider.id)) {
@@ -82,84 +84,65 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
         return [];
     }, [selectedProviderId, modelsState]);
 
-    const filteredModelsForDatalist = useMemo(() => {
-        const lowerInput = inputValue.toLowerCase();
-        if (!selectedProviderId || modelsState.providerId !== selectedProviderId || modelsState.loading || modelsState.models.length === 0) return [];
-        if (!lowerInput) return modelsState.models;
-        return modelsState.models.filter(model => model.id.toLowerCase().includes(lowerInput) || (model.name && model.name.toLowerCase().includes(lowerInput)));
-    }, [inputValue, selectedProviderId, modelsState]);
+    // Prepare grouped options for CustomSelect (only one group for the selected provider)
+    const groupedModelOptions = useMemo(() => {
+        if (!selectedProviderId || modelsState.providerId !== selectedProviderId || modelsState.loading || modelsState.models.length === 0) {
+            return {};
+        }
+        const providerName = uniqueProviders.find(p => p.id === selectedProviderId)?.name || selectedProviderId;
+        // Map AvailableModel to Option format { id, name }
+        const options = modelsForSelectedProvider.map(m => ({ id: m.id, name: m.name || m.id }));
+        return { [providerName]: options };
+    }, [selectedProviderId, modelsState, modelsForSelectedProvider, uniqueProviders]);
+
+    // Prepare grouped options for Provider CustomSelect, ensuring correct type even when empty
+    const groupedProviderOptions = useMemo((): Record<string, { id: string; name: string }[]> => { // Add return type annotation to useMemo callback
+        if (!Array.isArray(allProvidersStatus) || uniqueProviders.length === 0) {
+            return {}; // Return an empty object if no providers
+        }
+        // Use a generic group label and ensure the value is always an array
+        const options = uniqueProviders.map(p => ({ id: p.id, name: p.name }));
+        return { "AI Providers": options };
+    }, [allProvidersStatus, uniqueProviders]);
+
 
     // --- Event Handlers ---
-    const handleProviderSelect = useCallback((e: JSX.TargetedEvent<HTMLSelectElement>) => {
-        const newProviderId = e.currentTarget.value || null;
-        setInputValue('');
-        onModelChange(newProviderId, null);
-    }, [onModelChange]);
-
-    const handleModelInputChange = useCallback((e: JSX.TargetedEvent<HTMLInputElement>) => {
-        setInputValue(e.currentTarget.value);
-    }, [setInputValue]);
-
-    const handleModelBlur = useCallback(() => {
-        console.log(`[ModelSelector handleModelBlur] Input value on blur: "${inputValue}"`);
-        const finalInput = inputValue.trim(); // Use the trimmed input directly
-        const lowerInput = finalInput.toLowerCase();
-        let matchedModel: AvailableModel | null = null;
-
-        // Check if models are loaded for the correct provider
-        if (modelsState.providerId !== selectedProviderId || modelsState.loading) {
-             console.log(`[ModelSelector handleModelBlur] Models not ready or wrong provider. StoreProvider: ${modelsState.providerId}, PropProvider: ${selectedProviderId}, Loading: ${modelsState.loading}. Reverting input.`);
-             // Revert to selectedModelId
-             const revertValueAgain = selectedModelId ?? '';
-             console.log(`[ModelSelector handleModelBlur] Reverting input to ID: "${revertValueAgain}"`);
-             setInputValue(revertValueAgain);
-            return;
-        }
-
-        console.log(`[ModelSelector handleModelBlur] Trying to match input "${lowerInput}" against ${modelsState.models.length} models.`);
-        // Try to find an exact match (case-insensitive) for ID or Name
-        matchedModel = modelsState.models.find(m => m.id.toLowerCase() === lowerInput || (m.name && m.name.toLowerCase() === lowerInput)) ?? null;
-
-        if (matchedModel) {
-            console.log(`[ModelSelector handleModelBlur] Found match: ID=${matchedModel.id}, Name=${matchedModel.name}`);
-            const finalProviderId = matchedModel.providerId;
-            const finalModelId = matchedModel.id;
-            // Always set input value to the matched model ID
-            const displayValue = matchedModel.id;
-            console.log(`[ModelSelector handleModelBlur] Setting input value to matched ID: "${displayValue}"`);
-            setInputValue(displayValue);
-            if (finalProviderId !== selectedProviderId || finalModelId !== selectedModelId) {
-                console.log(`[ModelSelector handleModelBlur] Model changed. Calling onModelChange with Provider: ${finalProviderId}, Model: ${finalModelId}`);
-                onModelChange(finalProviderId, finalModelId);
-            } else {
-                 console.log(`[ModelSelector handleModelBlur] Matched model is the same as current selection. No change needed.`);
-            }
+    // Updated handler for Provider CustomSelect change
+    const handleProviderSelectChange = useCallback((newProviderId: string | null) => {
+        console.log(`[ModelSelector handleProviderSelectChange] Provider changed to: "${newProviderId}"`);
+        setInputValue(''); // Clear model input when provider changes
+        if (newProviderId !== selectedProviderId) {
+             console.log(`[ModelSelector handleProviderSelectChange] Calling onModelChange with Provider: ${newProviderId}, Model: null`);
+            onModelChange(newProviderId, null); // Deselect model when provider changes
         } else {
-            console.log(`[ModelSelector handleModelBlur] No exact match found for "${lowerInput}". Using input value as model ID.`);
-            // Use the trimmed input value as the model ID
-            const finalModelId = finalInput;
-            // Keep the input value as is
-            setInputValue(finalInput);
-            // Call onModelChange if the input is not empty and different from current selection
-            if (finalModelId && (selectedProviderId !== null && finalModelId !== selectedModelId)) {
-                 console.log(`[ModelSelector handleModelBlur] Custom model ID entered. Calling onModelChange with Provider: ${selectedProviderId}, Model: ${finalModelId}`);
-                 onModelChange(selectedProviderId, finalModelId);
-            } else if (!finalModelId && selectedModelId !== null) {
-                 // If user cleared the input, deselect the model
-                 console.log(`[ModelSelector handleModelBlur] Input was cleared. Calling onModelChange to deselect model.`);
-                 onModelChange(selectedProviderId, null);
-            } else {
-                 console.log(`[ModelSelector handleModelBlur] Input matches current selection or is empty. No change needed.`);
-            }
+             console.log(`[ModelSelector handleProviderSelectChange] Provider selection unchanged.`);
         }
-    }, [inputValue, selectedProviderId, selectedModelId, modelsState, onModelChange, setInputValue]);
+    }, [selectedProviderId, onModelChange]);
+
+
+    // Handler for Model CustomSelect change
+    const handleModelSelectChange = useCallback((newModelId: string | null) => {
+        console.log(`[ModelSelector handleModelSelectChange] CustomSelect changed to: "${newModelId}"`);
+        // Provider ID doesn't change here, only the model ID
+        if (selectedProviderId && newModelId !== selectedModelId) {
+             console.log(`[ModelSelector handleModelSelectChange] Calling onModelChange with Provider: ${selectedProviderId}, Model: ${newModelId}`);
+            onModelChange(selectedProviderId, newModelId);
+        } else if (!newModelId && selectedModelId) {
+             console.log(`[ModelSelector handleModelSelectChange] Model deselected. Calling onModelChange with Provider: ${selectedProviderId}, Model: null`);
+             onModelChange(selectedProviderId, null);
+        } else {
+             console.log(`[ModelSelector handleModelSelectChange] No change detected or provider not selected.`);
+        }
+        // Input value is managed internally by CustomSelect based on its 'value' prop now
+    }, [selectedProviderId, selectedModelId, onModelChange]);
+
 
     // --- Render ---
     const providerLabel = `${labelPrefix ? labelPrefix + ' ' : ''}Provider`;
     const modelLabel = `${labelPrefix ? labelPrefix + ' ' : ''}Model`;
     const providerSelectId = `provider-select-${labelPrefix.toLowerCase().replace(/\s+/g, '-') || 'main'}`;
     const modelInputId = `model-input-${labelPrefix.toLowerCase().replace(/\s+/g, '-') || 'main'}`;
-    const datalistId = `models-datalist-${labelPrefix.toLowerCase().replace(/\s+/g, '-') || 'main'}`;
+    // Removed datalistId
 
     const providersLoading = allProvidersStatus === 'loading' || allProvidersStatus === null;
     const providersError = allProvidersStatus === 'error';
@@ -171,54 +154,45 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
         // Use gap for consistent spacing, align items center
         <div class="model-selector flex items-center gap-2">
             <label htmlFor={providerSelectId} class="text-sm font-medium flex-shrink-0">{providerLabel}:</label>
-            <select
-                // Removed ref
-                id={providerSelectId}
-                value={selectedProviderId ?? ''} // Control the select value directly
-                onChange={handleProviderSelect}
-                // Removed defaultValue
-                disabled={providersLoading || providersError}
-                class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm focus:ring-blue-500 focus:border-blue-500 outline-none"
-            >
-                <option value="">-- Select Provider --</option>
-                {providersLoading && <option disabled>Loading...</option>}
-                {providersError && <option disabled>Error loading</option>}
-                {!providersLoading && !providersError && Array.isArray(allProvidersStatus) && uniqueProviders.length > 0 && uniqueProviders.map(provider => (
-                    <option key={provider.id} value={provider.id}>{provider.name}</option>
-                ))}
-                {!providersLoading && !providersError && uniqueProviders.length === 0 && <option disabled>No providers found</option>}
-            </select>
+            {/* Replace select with CustomSelect for Provider */}
+            <div class="min-w-40"> {/* Wrapper for consistent width */}
+                <CustomSelect
+                    // Use providerSelectId for association if needed
+                    ariaLabel={providerLabel}
+                    groupedOptions={groupedProviderOptions}
+                    value={selectedProviderId}
+                    onChange={handleProviderSelectChange} // Use the correct handler
+                    placeholder={
+                        providersLoading ? "Loading..."
+                        : providersError ? "Error"
+                        : "-- Select Provider --"
+                    }
+                    disabled={providersLoading || providersError || uniqueProviders.length === 0}
+                    allowCustomValue={false} // Providers are not custom
+                    showId={false} // Do not show ID for providers
+                />
+            </div>
 
             {/* Adjusted margin */}
             <label htmlFor={modelInputId} class="text-sm font-medium flex-shrink-0 ml-2">{modelLabel}:</label>
-            <input
-                list={datalistId}
-                id={modelInputId}
-                name={modelInputId}
-                value={inputValue}
-                onInput={handleModelInputChange}
-                onBlur={handleModelBlur}
-                placeholder={
-                    !selectedProviderId ? "Select Provider First"
-                    : modelsLoading ? "Loading Models..."
-                    : modelsError ? "Error loading models"
-                    : "Select or Type Model"
-                }
-                // Removed modelsLoading from disabled condition
-                disabled={!selectedProviderId || !!modelsError}
-                // Added flex-grow to allow input to expand
-                class="p-1 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm flex-grow min-w-40 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                aria-invalid={!!modelsError}
-                title={modelsError ?? (modelsLoading ? 'Loading models...' : '')} // Show loading in title
-            />
-            <datalist id={datalistId}>
-                {filteredModelsForDatalist.map((model) => (
-                    // Use model.id as the value for consistency with internal logic
-                    // Use model.id as key assuming it's unique for the provider
-                    // Display model.name (or id as fallback) between the tags for the user
-                    <option key={model.id} value={model.id}>{model.name ?? model.id}</option>
-                ))}
-            </datalist>
+            {/* Replace input+datalist with CustomSelect */}
+            <div class="flex-grow min-w-40"> {/* Wrapper to allow CustomSelect to grow */}
+                <CustomSelect
+                    // Use modelInputId for association if needed, though CustomSelect handles internal IDs
+                    ariaLabel={modelLabel}
+                    groupedOptions={groupedModelOptions}
+                    value={selectedModelId} // Use the prop directly as value
+                    onChange={handleModelSelectChange} // Use the new handler
+                    placeholder={
+                        !selectedProviderId ? "Select Provider First"
+                        : modelsLoading ? "Loading Models..."
+                        : modelsError ? "Error loading models"
+                        : "Select or Type Model"
+                    }
+                    disabled={!selectedProviderId || !!modelsError || modelsLoading} // Disable while loading models too
+                    allowCustomValue={true} // Enable custom input
+                />
+            </div>
 
             {/* Error Indicator - Adjusted margin */}
             {modelsError && (

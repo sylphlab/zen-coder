@@ -44,8 +44,9 @@
 *   **BUGFIX: Tool Call UI:** Spinner doesn't stop, default state isn't collapsed. (Lower Priority - Addressing collapsed state now)
 *   **BUGFIX: Error Message UI:** API errors (like function calling not supported) are logged but not shown in the UI. Need to update `Message` component to handle `status: 'error'`. (Medium Priority)
 *   **BUGFIX: `deepseek-reasoner` Function Calling Error:** While the error is correct (model doesn't support it), the UI should display the error gracefully instead of just stopping. (Related to Error Message UI bug).
-*   **BUGFIX: Settings Default Model Loading (Possible):** The "狂 load" issue might be fixed by the `SubscriptionManager` correction and Extension Host restart, but needs confirmation.
-*   **Testing (Manual):** Thorough testing needed once critical bugs are fixed.
+*   **BUGFIX (Fixed): Settings Infinite Reload (Vertex):** Identified root cause as missing backend handlers (`getVertexProjects`, `getVertexLocations`). Replaced dynamic fetching with a static data handler (`GetVertexStaticDataHandler`) providing locations and an empty project list, and updated frontend (`ProviderSettings.tsx`) to use it.
+*   **UI Improvement (Custom Select):** Created and enhanced a custom dropdown component (`CustomSelect.tsx`), moved to `components/ui/`. Integrated it into `ProviderSettings.tsx` for Vertex Location and into `ModelSelector.tsx` for Provider and Model selection. Component displays Name primary and ID secondary (optional). Input field displays selected option's Name. Supports filtering. Implemented keyboard navigation (Up/Down/Enter/Escape). Added logic for `allowCustomValue=false`: autocompletes on exact name match or single filter result on blur/enter, otherwise reverts input display to selected option's name (or clears if none selected).
+*   **Testing (Manual):** Thorough testing needed once critical bugs are fixed, including CustomSelect behavior (especially autocomplete/revert and keyboard nav).
 *   **Resume Image Upload (Backend & Full Test):** Review/update backend and test.
 *   **Compliance Review:** Apply `docs/general_guidelines.md`.
 *   **VS Code Tool Enhancements:** Implement remaining debug tools, enhance `runCommandTool`.
