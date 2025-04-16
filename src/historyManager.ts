@@ -4,20 +4,20 @@ import {
     UiMessage,
     UiMessageContentPart,
     UiToolCallPart,
-    HistoryClearDelta,
-    HistoryDeleteMessageDelta,
-    HistoryAddMessageDelta,
+    HistoryAddMessageDelta, // Keep for now, might remove later if not needed by frontend optimistic logic
+    // Removed HistoryClearDelta, HistoryDeleteMessageDelta imports
 } from './common/types';
+import { generatePatch } from './utils/patchUtils'; // Import patch generator
 import {
     translateUserMessageToCore,
     translateAssistantMessageToCore,
     translateUiHistoryToCoreMessages
 } from './utils/historyUtils';
 import { ChatSessionManager } from './session/chatSessionManager';
-import { MessageModifier } from './history/messageModifier';
+// Removed MessageModifier import
 import { SubscriptionManager } from './ai/subscriptionManager'; // Import SubscriptionManager
-
-/**
+ 
+ /**
  * Manages reading chat history, adding new message frames, deleting messages/history,
  * and translating message formats. Modifying existing message content is delegated
  * to MessageModifier. Relies on ChatSessionManager for session data access.
@@ -25,7 +25,7 @@ import { SubscriptionManager } from './ai/subscriptionManager'; // Import Subscr
  */
 export class HistoryManager {
     private readonly _sessionManager: ChatSessionManager;
-    private readonly _messageModifier: MessageModifier;
+    // Removed _messageModifier field
     private readonly _subscriptionManager: SubscriptionManager; // Store SubscriptionManager instance
     private _postMessageCallback?: (message: any) => void; // Keep for now, but primarily use SubscriptionManager
 
@@ -33,8 +33,7 @@ export class HistoryManager {
     constructor(sessionManager: ChatSessionManager, subscriptionManager: SubscriptionManager) {
         this._sessionManager = sessionManager;
         this._subscriptionManager = subscriptionManager; // Store SubscriptionManager
-        // Pass SubscriptionManager to MessageModifier
-        this._messageModifier = new MessageModifier(sessionManager, this._subscriptionManager); // Pass the stored instance
+        // Removed MessageModifier instantiation
         console.log(`[HistoryManager constructor] Instance created. SubscriptionManager injected.`);
     }
 
@@ -42,14 +41,11 @@ export class HistoryManager {
     public setPostMessageCallback = (callback: (message: any) => void): void => {
         console.log(`[HistoryManager setPostMessageCallback START] Current callback type: ${typeof this._postMessageCallback}. Received callback type: ${typeof callback}`);
         this._postMessageCallback = callback;
-        // Pass it down to modifier if it still needs it for other purposes (like suggested actions *before* refactor)
-        // this._messageModifier.setPostMessageCallback(callback); // Modify MessageModifier if needed
+        // Removed passing callback to MessageModifier
         console.log(`[HistoryManager setPostMessageCallback END] Internal _postMessageCallback type after assignment: ${typeof this._postMessageCallback}. Is set? ${!!this._postMessageCallback}`);
     }
-
-    public get messageModifier(): MessageModifier {
-        return this._messageModifier;
-    }
+ 
+    // Removed messageModifier getter
 
     // --- History Reading and Frame Creation ---
 
@@ -78,14 +74,19 @@ export class HistoryManager {
             content: content,
             timestamp: Date.now()
         };
+        const oldHistory = [...chat.history]; // Capture state before mutation
         chat.history.push(userUiMessage);
         await this._sessionManager.touchChatSession(chatId); // Triggers save and session update delta
-
-        // Use SubscriptionManager to push delta (message now includes tempId if passed)
-        const delta: HistoryAddMessageDelta = { type: 'historyAddMessage', chatId, message: userUiMessage };
-        this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
-        console.log(`[HistoryManager] Pushed user message delta via SubscriptionManager: ID=${finalId}, TempID=${tempId}`);
-
+ 
+        // Generate and push patch
+        const patch = generatePatch(oldHistory, chat.history);
+        if (patch.length > 0) {
+            this._subscriptionManager.notifyChatHistoryUpdate(chatId, patch);
+            console.log(`[HistoryManager addUserMessage] Pushed history patch via SubscriptionManager: ID=${finalId}, TempID=${tempId}, Patch:`, JSON.stringify(patch));
+        } else {
+             console.log(`[HistoryManager addUserMessage] No patch generated for message ID=${finalId}, TempID=${tempId}`);
+        }
+ 
         return finalId; // Return the final generated ID
     }
 
@@ -116,15 +117,19 @@ export class HistoryManager {
             modelId: modelId,
             modelName: modelName
         };
+        const oldHistory = [...chat.history]; // Capture state before mutation
         chat.history.push(initialAssistantUiMessage);
         await this._sessionManager.touchChatSession(chatId); // Triggers save and session update delta
-
-        // Use SubscriptionManager to push delta (including model info)
-        const delta: HistoryAddMessageDelta = { type: 'historyAddMessage', chatId, message: initialAssistantUiMessage };
-        this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
-        console.log(`[HistoryManager] Pushed assistant message frame delta (with model info) via SubscriptionManager: ${assistantUiMsgId}`);
-
-
+ 
+        // Generate and push patch
+        const patch = generatePatch(oldHistory, chat.history);
+        if (patch.length > 0) {
+            this._subscriptionManager.notifyChatHistoryUpdate(chatId, patch);
+            console.log(`[HistoryManager addAssistantMessageFrame] Pushed history patch via SubscriptionManager: ${assistantUiMsgId}, Patch:`, JSON.stringify(patch));
+        } else {
+             console.log(`[HistoryManager addAssistantMessageFrame] No patch generated for message ID=${assistantUiMsgId}`);
+        }
+ 
         return assistantUiMsgId;
     }
 
@@ -136,15 +141,16 @@ export class HistoryManager {
             console.warn(`[HistoryManager clearHistory] Chat not found for chat ${chatId}.`);
             return;
         }
-
+ 
+        const oldHistory = [...chat.history]; // Capture state before mutation
         chat.history = [];
         await this._sessionManager.touchChatSession(chatId); // Triggers save and session update delta
-
-        // Use SubscriptionManager to push delta
-        const delta: HistoryClearDelta = { type: 'historyClear', chatId };
-        this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
-
-        console.log(`[HistoryManager] Cleared history for chat: ${chat.name} (ID: ${chatId}) and pushed delta via SubscriptionManager.`);
+ 
+        // Generate and push patch
+        const patch = generatePatch(oldHistory, chat.history);
+        // Even if patch is empty (already empty), push it to signal clear on frontend
+        this._subscriptionManager.notifyChatHistoryUpdate(chatId, patch);
+        console.log(`[HistoryManager clearHistory] Pushed history patch for clear via SubscriptionManager: ${chat.name} (ID: ${chatId}), Patch:`, JSON.stringify(patch));
     }
 
     public deleteMessageFromHistory = async (chatId: string, messageId: string): Promise<void> => { // Arrow function
@@ -153,20 +159,25 @@ export class HistoryManager {
             console.warn(`[HistoryManager deleteMessageFromHistory] Chat not found for chat ${chatId}.`);
              return;
         }
-
-        const initialLength = chat.history.length;
-        chat.history = chat.history.filter((msg: UiMessage) => msg.id !== messageId);
-
-        if (chat.history.length < initialLength) {
+ 
+        const oldHistory = [...chat.history]; // Capture state before mutation
+        const initialLength = oldHistory.length;
+        const newHistory = oldHistory.filter((msg: UiMessage) => msg.id !== messageId);
+ 
+        if (newHistory.length < initialLength) {
+            chat.history = newHistory; // Update the actual history
             await this._sessionManager.touchChatSession(chatId); // Triggers save and session update delta
-
-            // Use SubscriptionManager to push delta
-            const delta: HistoryDeleteMessageDelta = { type: 'historyDeleteMessage', chatId, messageId };
-            this._subscriptionManager.notifyChatHistoryUpdate(chatId, delta);
-
-            console.log(`[HistoryManager] Deleted message ${messageId} from chat ${chatId} and pushed delta via SubscriptionManager.`);
+ 
+            // Generate and push patch
+            const patch = generatePatch(oldHistory, newHistory);
+            if (patch.length > 0) {
+                this._subscriptionManager.notifyChatHistoryUpdate(chatId, patch);
+                console.log(`[HistoryManager deleteMessageFromHistory] Pushed history patch for delete via SubscriptionManager: ${messageId}, Patch:`, JSON.stringify(patch));
+            } else {
+                 console.log(`[HistoryManager deleteMessageFromHistory] No patch generated for deleting message ID=${messageId}`);
+            }
         } else {
-            console.warn(`[HistoryManager] Message ${messageId} not found in chat ${chatId} for deletion.`);
+            console.warn(`[HistoryManager deleteMessageFromHistory] Message ${messageId} not found in chat ${chatId} for deletion.`);
         }
     }
 
@@ -196,5 +207,134 @@ export class HistoryManager {
             }
         }
         return null;
+    }
+ 
+    // --- Public Methods for Modifying History (called by StreamProcessor or Handlers) ---
+ 
+    /**
+     * Appends a text chunk to an assistant message, saves state, and pushes a patch.
+     */
+    public async appendTextChunk(chatId: string, assistantMessageId: string, textDelta: string): Promise<void> {
+        const chat = this._sessionManager.getChatSession(chatId);
+        if (!chat) { return; }
+        const messageIndex = chat.history.findIndex((msg: UiMessage) => msg.id === assistantMessageId);
+ 
+        if (messageIndex !== -1 && chat.history[messageIndex]?.role === 'assistant') {
+            const oldHistory = JSON.parse(JSON.stringify(chat.history)); // Deep clone before modification
+            const message = chat.history[messageIndex]; // Get reference
+ 
+            if (!Array.isArray(message.content)) { message.content = []; }
+            const lastContentPart = message.content[message.content.length - 1];
+ 
+            if (lastContentPart?.type === 'text') {
+                lastContentPart.text += textDelta;
+            } else {
+                message.content.push({ type: 'text', text: textDelta });
+            }
+ 
+            // Also clear 'pending' status if this is the first chunk for a pending message
+            if (message.status === 'pending') {
+                 message.status = undefined;
+                 console.log(`[HistoryManager appendTextChunk] Cleared pending status for ${assistantMessageId}`);
+            }
+ 
+            await this._sessionManager.touchChatSession(chatId); // Trigger save
+ 
+            const patch = generatePatch(oldHistory, chat.history);
+            if (patch.length > 0) {
+                this._subscriptionManager.notifyChatHistoryUpdate(chatId, patch);
+                // console.log(`[HistoryManager appendTextChunk] Pushed patch for Msg ${assistantMessageId}`);
+            }
+        }
+    }
+ 
+    /**
+     * Adds a tool call part to an assistant message, saves state, and pushes a patch.
+     */
+    public async addToolCall(chatId: string, assistantMessageId: string, toolCallId: string, toolName: string, args: any): Promise<void> {
+        const chat = this._sessionManager.getChatSession(chatId);
+        if (!chat) { return; }
+        const messageIndex = chat.history.findIndex((msg: UiMessage) => msg.id === assistantMessageId);
+ 
+        if (messageIndex !== -1 && chat.history[messageIndex]?.role === 'assistant') {
+            const oldHistory = JSON.parse(JSON.stringify(chat.history)); // Deep clone before modification
+            const message = chat.history[messageIndex]; // Get reference
+ 
+            if (!Array.isArray(message.content)) { message.content = []; }
+            const toolCallPart: UiToolCallPart = { type: 'tool-call', toolCallId, toolName, args, status: 'pending' };
+            message.content.push(toolCallPart);
+ 
+             // Clear message 'pending' status if adding a tool call (implies stream started/progressing)
+             if (message.status === 'pending') {
+                  message.status = undefined;
+                  console.log(`[HistoryManager addToolCall] Cleared pending status for ${assistantMessageId}`);
+             }
+ 
+            await this._sessionManager.touchChatSession(chatId); // Trigger save
+ 
+            const patch = generatePatch(oldHistory, chat.history);
+            if (patch.length > 0) {
+                this._subscriptionManager.notifyChatHistoryUpdate(chatId, patch);
+                console.log(`[HistoryManager addToolCall] Pushed patch for tool call ${toolCallId}`);
+            }
+        }
+    }
+ 
+    /**
+     * Updates the status of a tool call, saves state, and pushes a patch.
+     */
+    public async updateToolStatus(chatId: string, toolCallId: string, status: 'running' | 'complete' | 'error', resultOrProgress?: any): Promise<void> {
+        const chat = this._sessionManager.getChatSession(chatId);
+        if (!chat) { return; }
+ 
+        const oldHistory = JSON.parse(JSON.stringify(chat.history)); // Deep clone before modification
+        let historyChanged = false;
+        let targetMessageId: string | undefined;
+ 
+        for (let i = chat.history.length - 1; i >= 0; i--) {
+            const msg: UiMessage = chat.history[i]; // Get reference
+            if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+                const toolCallIndex = msg.content.findIndex((p: UiMessageContentPart) => p.type === 'tool-call' && (p as UiToolCallPart).toolCallId === toolCallId);
+                if (toolCallIndex !== -1) {
+                    const toolCallPart = msg.content[toolCallIndex] as UiToolCallPart; // Get reference
+                    let changedInPart = false;
+                    // Update status, result, progress
+                    if (toolCallPart.status !== status) { toolCallPart.status = status; changedInPart = true; }
+                    if (status === 'complete' || status === 'error') {
+                        const newResult = resultOrProgress ?? (status === 'complete' ? 'Completed' : 'Error');
+                        if (toolCallPart.result !== newResult) { toolCallPart.result = newResult; changedInPart = true; }
+                        if (toolCallPart.progress !== undefined) { toolCallPart.progress = undefined; changedInPart = true; }
+                    } else if (status === 'running') {
+                        const newProgress = typeof resultOrProgress === 'string' ? resultOrProgress : toolCallPart.progress;
+                        if (toolCallPart.progress !== newProgress) { toolCallPart.progress = newProgress; changedInPart = true; }
+                    }
+ 
+                    // Clear message 'pending' status if tool call completes/errors
+                    if (msg.status === 'pending' && (status === 'complete' || status === 'error')) {
+                         msg.status = undefined;
+                         changedInPart = true; // Ensure patch is generated even if only message status changes
+                         console.log(`[HistoryManager updateToolStatus] Cleared pending status for ${msg.id}`);
+                    }
+ 
+                    if (changedInPart) {
+                        historyChanged = true;
+                        targetMessageId = msg.id;
+                    }
+                    break;
+                }
+            }
+        }
+ 
+        if (historyChanged) {
+            await this._sessionManager.touchChatSession(chatId); // Trigger save
+ 
+            const patch = generatePatch(oldHistory, chat.history);
+            if (patch.length > 0) {
+                this._subscriptionManager.notifyChatHistoryUpdate(chatId, patch);
+                console.log(`[HistoryManager updateToolStatus] Pushed patch for tool call ${toolCallId} in Msg ${targetMessageId}`);
+            } else {
+                 console.log(`[HistoryManager updateToolStatus] No patch generated for tool call ${toolCallId} in Msg ${targetMessageId}`);
+            }
+        }
     }
 }

@@ -1,12 +1,8 @@
-import { atom, WritableAtom } from 'nanostores'; // Import WritableAtom
+import { atom, WritableAtom, onMount } from 'nanostores'; // Import WritableAtom and onMount
 import {
     ChatSession,
     DefaultChatConfig,
-    ChatSessionsUpdateData, // Import the union type for updates
-    SessionSetDelta,
-    SessionAddDelta,
-    SessionDeleteDelta,
-    SessionUpdateDelta,
+    // Removed ChatSessionsUpdateData and specific delta types
     STREAMING_STATUS_TOPIC, // Import topic constant
     StreamingStatusPayload, // Import payload type
     SUGGESTED_ACTIONS_TOPIC_PREFIX, // Import suggested actions topic prefix
@@ -15,11 +11,13 @@ import {
     UiMessage, // Import UiMessage for mutations
     UiMessageContentPart, // Import UiMessageContentPart for mutations
     ChatConfig // Import ChatConfig for mutations
+    // Removed Operation import from common/types
 } from '../../../src/common/types'; // Import Delta types & SuggestedAction types
 // Import the new createStore utility
 import { createStore, StandardStore } from './utils/createStore';
+import { Operation } from 'fast-json-patch'; // Import Operation directly
 import { createMutationStore } from './utils/createMutationStore';
-import { requestData } from '../utils/communication';
+import { requestData, listen } from '../utils/communication'; // Import listen
 // Import response type for fetch config
 import { GetChatSessionsResponse } from '../../../src/webview/handlers/GetChatSessionsHandler';
 // Import response type for defaultConfig
@@ -48,72 +46,31 @@ export const $chatSessions: StandardStore<ChatSession[]> = createStore<
     ChatSession[],           // TData: The data type we want in the store
     GetChatSessionsResponse, // TResponse: The raw response type from the fetch request
     {},                      // PPayload: Payload for fetch (none needed for getChatSessions)
-    ChatSessionsUpdateData   // UUpdateData: Now the delta union type
+    Operation[]              // UUpdateData: Expecting JSON Patch array
 >({
     key: 'chatSessions',
     fetch: {
         requestType: 'getChatSessions',
-        transformResponse: (response) => response?.sessions ?? null,
+        transformResponse: (response) => response?.sessions ?? [], // Return empty array if null
     },
     subscribe: {
-        topic: () => 'chatSessionsUpdate', // Static topic for session list updates
-        handleUpdate: (currentState: ChatSession[] | null, updateData: ChatSessionsUpdateData): ChatSession[] | null => {
-            console.log(`[$chatSessions handleUpdate] Received update. Type: ${updateData.type}`);
-            const sessions = currentState ?? [];
-            let newSessions: ChatSession[];
-
-            switch (updateData.type) {
-                case 'sessionSet':
-                    newSessions = updateData.sessions ? [...updateData.sessions] : [];
-                    break;
-                case 'sessionAdd':
-                    console.log(`[$chatSessions handleUpdate] Adding session ID: ${updateData.session.id}`);
-                    newSessions = sessions.filter(s => s.id !== updateData.session.id);
-                    newSessions.push(updateData.session);
-                    break;
-                case 'sessionDelete':
-                    console.log(`[$chatSessions handleUpdate] Deleting session ID: ${updateData.sessionId}`);
-                    newSessions = sessions.filter(s => s.id !== updateData.sessionId);
-                    break;
-                case 'sessionUpdate': {
-                    console.log(`[$chatSessions handleUpdate] Updating session ID: ${updateData.sessionId}`);
-                    const index = sessions.findIndex(s => s.id === updateData.sessionId);
-                    if (index !== -1) {
-                        const updatedSession = {
-                            ...sessions[index],
-                            ...(updateData.name !== undefined && { name: updateData.name }),
-                            ...(updateData.config !== undefined && { config: updateData.config }),
-                            ...(updateData.lastModified !== undefined && { lastModified: updateData.lastModified }),
-                        };
-                        newSessions = [...sessions];
-                        newSessions[index] = updatedSession;
-                    } else {
-                        console.warn(`[$chatSessions handleUpdate] Session ID ${updateData.sessionId} not found for update.`);
-                        newSessions = sessions;
-                    }
-                    break;
-                }
-                default:
-                     console.warn(`[$chatSessions handleUpdate] Received unhandled update type:`, updateData);
-                    newSessions = sessions;
-            }
-            return newSessions.sort((a, b) => b.lastModified - a.lastModified);
-        },
+        topic: 'chatSessionsUpdate', // Static topic for session list updates
+        // handleUpdate is now handled internally by createStore for JSON patches
     },
-    initialData: [],
+    initialData: [], // Start with empty array
 });
 
 /**
  * Atom created using the new standard `createStore` utility for default config.
  * It holds `DefaultChatConfig | null | 'loading' | 'error'`.
  */
-type DefaultConfigUpdate = DefaultChatConfig;
+type DefaultConfigUpdate = Operation[]; // Expecting JSON Patch
 
 export const $defaultConfig: StandardStore<DefaultChatConfig> = createStore<
     DefaultChatConfig,
     GetDefaultConfigResponse,
     {},
-    DefaultConfigUpdate
+    DefaultConfigUpdate // Expecting JSON Patch
 >({
     key: 'defaultConfig',
     fetch: {
@@ -121,12 +78,10 @@ export const $defaultConfig: StandardStore<DefaultChatConfig> = createStore<
         transformResponse: (response) => response ?? null,
     },
     subscribe: {
-        topic: () => 'defaultConfigUpdate',
-        handleUpdate: (_currentState: DefaultChatConfig | null, updateData: DefaultConfigUpdate): DefaultChatConfig | null => {
-            const result = updateData ?? null;
-            return result;
-        },
+        topic: 'defaultConfigUpdate',
+        // handleUpdate is now handled internally by createStore for JSON patches
     },
+    // initialData: undefined, // Let it start as 'loading'
 });
 
 /**
@@ -137,19 +92,23 @@ type StreamingStatusUpdate = StreamingStatusPayload;
 
 export const $isStreamingResponse: StandardStore<boolean> = createStore<
     boolean,
-    undefined,
-    undefined,
+    undefined, // No fetch needed
+    undefined, // No fetch payload
     StreamingStatusUpdate
 >({
     key: 'isStreamingResponse',
     fetch: { // Minimal fetch config to satisfy type
         requestType: 'internal_unused_streaming_status',
-        transformResponse: () => false,
+        transformResponse: () => false, // Initial state is false
     },
     subscribe: {
-         topic: () => STREAMING_STATUS_TOPIC,
-         handleUpdate: (_currentState: boolean | null, updateData: StreamingStatusUpdate): boolean => {
-             const result = typeof updateData?.streaming === 'boolean' ? updateData.streaming : false;
+         topic: STREAMING_STATUS_TOPIC, // Use constant
+         // Still needs custom handleUpdate as backend pushes full boolean, not patch
+         // Correct currentState type to include 'loading' and 'error'
+         handleUpdate: (currentState: boolean | null | 'loading' | 'error', updateData: StreamingStatusUpdate): boolean => {
+             // If current state is loading/error, default to false before applying update
+             const prevState = (currentState === 'loading' || currentState === 'error' || currentState === null) ? false : currentState;
+             const result = typeof updateData?.streaming === 'boolean' ? updateData.streaming : prevState;
              return result;
         },
     },
@@ -165,10 +124,9 @@ export const $suggestedActions: StandardStore<SuggestedActionsMap> = createStore
     SuggestedActionsMap,
     undefined, // No initial fetch response needed
     undefined, // No payload for fetch
-    SuggestedActionsPayload
+    SuggestedActionsPayload // Still expect full payload
 >({
     key: 'suggestedActions',
-    // Add minimal fetch config to satisfy type, even though it won't be used
     fetch: {
         requestType: 'internal_unused_suggested_actions', // Dummy type
         transformResponse: () => ({}), // Return empty map as default TData
@@ -179,9 +137,12 @@ export const $suggestedActions: StandardStore<SuggestedActionsMap> = createStore
             const chatId = (route && 'params' in route && route.params && 'chatId' in route.params) ? route.params.chatId : undefined;
             return chatId ? `${SUGGESTED_ACTIONS_TOPIC_PREFIX}${chatId}` : null;
         },
-        handleUpdate: (currentState: SuggestedActionsMap | null, updateData: SuggestedActionsPayload): SuggestedActionsMap | null => {
+        // Still needs custom handleUpdate as backend pushes full payload/clear instruction
+        // Correct currentState type to include 'loading' and 'error'
+        handleUpdate: (currentState: SuggestedActionsMap | null | 'loading' | 'error', updateData: SuggestedActionsPayload): SuggestedActionsMap | null => {
             console.log(`[$suggestedActions handleUpdate] Received update. Type: ${updateData.type}`);
-            const currentMap = currentState ?? {};
+            // If current state is loading/error, start from empty map
+            const currentMap = (currentState === 'loading' || currentState === 'error' || currentState === null) ? {} : currentState;
 
             if (updateData.type === 'setActions') {
                  const newMap = { ...currentMap };
@@ -194,7 +155,7 @@ export const $suggestedActions: StandardStore<SuggestedActionsMap> = createStore
             }
 
             console.warn(`[$suggestedActions handleUpdate] Received unhandled update type:`, updateData);
-            return currentState;
+            return currentMap; // Return currentMap instead of potentially null currentState
         },
     },
     dependsOn: [router],
@@ -206,7 +167,7 @@ export const $suggestedActions: StandardStore<SuggestedActionsMap> = createStore
 
 type CreateChatResult = ChatSession;
 export const $createChat = createMutationStore<
-  typeof $chatSessions,
+  StandardStore<ChatSession[]>, // Use StandardStore type
   ChatSession[],
   void,
   CreateChatResult
@@ -217,89 +178,58 @@ export const $createChat = createMutationStore<
     if (!newSession) throw new Error("Create chat failed: Backend didn't return a session.");
     return newSession;
   },
-  getOptimisticUpdate: (_payload: void, currentDataState: ChatSession[] | null | 'loading' | 'error') => {
-    const currentState = (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
-    const tempId = `temp_${Date.now()}`;
-    const tempSession: ChatSession = {
-      id: tempId,
-      name: 'New Chat...',
-      createdAt: Date.now(),
-      lastModified: Date.now(),
-      config: { useDefaults: true },
-      history: [],
-    };
-    return {
-      optimisticState: [...(currentState ?? []), tempSession].sort((a, b) => b.lastModified - a.lastModified),
-      revertState: currentDataState,
-      tempId: tempId
-    };
-  },
-  applyMutationResult: (newSession: CreateChatResult, currentDataState: ChatSession[] | null | 'loading' | 'error', tempId?: string) => {
-    const currentState = (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
-    const list = (currentState ?? []).filter(s => s.id !== tempId);
-    list.push(newSession);
-    list.sort((a, b) => b.lastModified - a.lastModified);
-    return list;
-  }
+  // Removed getOptimisticUpdate and applyMutationResult - rely on backend patch
 });
 
-type DeleteChatPayload = string;
+type DeleteChatPayload = { chatId: string }; // Corrected payload type
 type DeleteChatResult = { deletedId: string };
 export const $deleteChat = createMutationStore<
-  typeof $chatSessions,
+  StandardStore<ChatSession[]>, // Use StandardStore type
   ChatSession[],
   DeleteChatPayload,
   DeleteChatResult
 >({
   targetAtom: $chatSessions,
-  performMutation: async (chatId: DeleteChatPayload) => {
-    await requestData<void>('deleteChat', { chatId });
-    return { deletedId: chatId };
+  performMutation: async (payload: DeleteChatPayload) => { // Use correct payload type
+    await requestData<void>('deleteChat', payload); // Pass payload directly
+    return { deletedId: payload.chatId };
   },
-  getOptimisticUpdate: (chatId: DeleteChatPayload, currentDataState: ChatSession[] | null | 'loading' | 'error') => {
-    const currentState = (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
-    return {
-      optimisticState: (currentState ?? []).filter(session => session.id !== chatId),
-      revertState: currentDataState
-    };
-  },
-  applyMutationResult: (result: DeleteChatResult, currentDataState: ChatSession[] | null | 'loading' | 'error') => {
-     const currentState = (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
-     return (currentState ?? []).filter((session: ChatSession) => session.id !== result.deletedId);
-  }
+  // Removed getOptimisticUpdate and applyMutationResult - rely on backend patch
 });
 
 // --- Mutation Stores for Chat Messages ---
 
-type SendMessagePayload = {
+export type SendMessagePayload = { // Export the type
     chatId: string;
     content: UiMessageContentPart[];
     providerId?: string;
     modelId?: string;
+    tempId: string; // Added tempId
 };
 type SendMessageResult = void;
 
 export const $sendMessage = createMutationStore<
-  undefined,
-  any,
+  StandardStore<UiMessage[]>, // Target history store
+  UiMessage[],
   SendMessagePayload,
   SendMessageResult
 >({
-  targetAtom: undefined,
+  targetAtom: undefined, // Let ChatView handle optimistic state via options
   performMutation: async (payload: SendMessagePayload) => {
     await requestData<void>('sendMessage', payload);
   }
+  // Optimistic update handled by passing state to mutate options in ChatView
 });
 
 type DeleteMessagePayload = { chatId: string; messageId: string };
 type DeleteMessageResult = { chatId: string; deletedMessageId: string };
 export const $deleteMessage = createMutationStore<
-    undefined,
-    any,
+    StandardStore<UiMessage[]>, // Target history store
+    UiMessage[],
     DeleteMessagePayload,
     DeleteMessageResult
 >({
-    targetAtom: undefined,
+    targetAtom: undefined, // Let backend patch handle update
     performMutation: async (payload: DeleteMessagePayload) => {
         await requestData<void>('deleteMessage', payload);
         return { chatId: payload.chatId, deletedMessageId: payload.messageId };
@@ -309,12 +239,12 @@ export const $deleteMessage = createMutationStore<
 type ClearHistoryPayload = { chatId: string };
 type ClearHistoryResult = { chatId: string };
 export const $clearChatHistory = createMutationStore<
-    undefined,
-    any,
+    StandardStore<UiMessage[]>, // Target history store
+    UiMessage[],
     ClearHistoryPayload,
     ClearHistoryResult
 >({
-    targetAtom: undefined,
+    targetAtom: undefined, // Let backend patch handle update (likely replace with empty array)
     performMutation: async (payload: ClearHistoryPayload) => {
         await requestData<void>('clearChatHistory', payload);
         return { chatId: payload.chatId };
@@ -326,7 +256,7 @@ type ExecuteToolActionResult = any;
 export const $executeToolAction = createMutationStore<
     undefined, any, ExecuteToolActionPayload, ExecuteToolActionResult
 >({
-    targetAtom: undefined,
+    targetAtom: undefined, // No direct store update needed
     performMutation: async (payload: ExecuteToolActionPayload) => {
         return await requestData<ExecuteToolActionResult>('executeToolAction', payload);
     },
@@ -336,57 +266,26 @@ type StopGenerationResult = void;
 export const $stopGeneration = createMutationStore<
     undefined, any, void, StopGenerationResult
 >({
-    targetAtom: undefined,
+    targetAtom: undefined, // No direct store update needed
     performMutation: async () => {
         await requestData<void>('stopGeneration');
     },
 });
 
 type UpdateChatConfigPayload = { chatId: string; config: Partial<ChatConfig> };
-type BackendUpdateChatConfigResult = { config: ChatConfig };
-type PerformUpdateChatConfigResult = BackendUpdateChatConfigResult & { chatId: string };
+// Backend now pushes patch for chatSessionsUpdate, so result isn't strictly needed for state update
+type UpdateChatConfigResult = void;
 
 export const $updateChatConfig = createMutationStore<
-    typeof $chatSessions,
+    StandardStore<ChatSession[]>, // Target sessions store
     ChatSession[],
     UpdateChatConfigPayload,
-    PerformUpdateChatConfigResult
+    UpdateChatConfigResult
 >({
-    targetAtom: $chatSessions,
-    performMutation: async (payload: UpdateChatConfigPayload): Promise<PerformUpdateChatConfigResult> => {
-        const result = await requestData<BackendUpdateChatConfigResult>('updateChatConfig', payload);
-        if (!result || !result.config) {
-            throw new Error('Update chat config failed: Invalid response from backend.');
-        }
-        return { ...result, chatId: payload.chatId };
+    targetAtom: $chatSessions, // Keep target for potential optimistic patch
+    performMutation: async (payload: UpdateChatConfigPayload): Promise<UpdateChatConfigResult> => {
+        await requestData<void>('updateChatConfig', payload);
+        // Rely on backend pushing patch via chatSessionsUpdate topic
     },
-    getOptimisticUpdate: (payload: UpdateChatConfigPayload, currentDataState: ChatSession[] | null | 'loading' | 'error') => {
-        const currentState = (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
-        const { chatId, config: configUpdate } = payload;
-        const updatedSessions = (currentState ?? []).map(session => {
-            if (session.id === chatId) {
-                return {
-                    ...session,
-                    config: { ...session.config, ...configUpdate },
-                    lastModified: Date.now(),
-                };
-            }
-            return session;
-        });
-        return { optimisticState: updatedSessions.sort((a, b) => b.lastModified - a.lastModified), revertState: currentDataState };
-    },
-    applyMutationResult: (result: PerformUpdateChatConfigResult, currentDataState: ChatSession[] | null | 'loading' | 'error', _tempId?: string) => {
-         const currentState = (currentDataState === 'loading' || currentDataState === 'error') ? null : currentDataState;
-         if (!result || !result.chatId || !result.config) {
-             console.error("[$updateChatConfig applyMutationResult] Invalid result received from performMutation:", result);
-             return currentState;
-         }
-         const updatedList = (currentState ?? []).map(session => {
-             if (session.id === result.chatId) {
-                  return { ...session, config: result.config, lastModified: Date.now() };
-             }
-             return session;
-         });
-         return updatedList.sort((a,b) => b.lastModified - a.lastModified);
-    }
+    // Removed getOptimisticUpdate and applyMutationResult
 });

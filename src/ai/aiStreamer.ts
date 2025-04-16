@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { CoreMessage, streamText, generateText, Tool, ToolSet, LanguageModel, StreamTextResult } from 'ai';
 import { HistoryManager } from '../historyManager'; // HistoryManager still needed for history access
 import { ToolManager } from './toolManager';
-import { AiProvider } from './providers/providerInterface';
+import { AiProvider, ModelDefinition } from './providers/providerInterface'; // Import ModelDefinition
 import { ConfigResolver, EffectiveChatConfig } from './configResolver'; // Import ConfigResolver and EffectiveChatConfig
 import { translateUiHistoryToCoreMessages } from '../utils/historyUtils'; // Import translation utility
 
@@ -124,15 +124,13 @@ export class AiStreamer {
      * Prepares messages, loads instructions, enables tools, and calls the AI SDK.
      */
     public async getAiResponseStream(chatId: string): Promise<StreamTextResult<ToolSet, undefined>> {
-        const effectiveConfig: EffectiveChatConfig = this.configResolver.getChatEffectiveConfig(chatId);
-        // *** ADDED LOGGING ***
+        // Resolve effective configuration for the chat - MUST AWAIT!
+        const effectiveConfig = await this.configResolver.getChatEffectiveConfig(chatId); // Ensure await is present
         console.log(`[AiStreamer] Effective config resolved for chat ${chatId}:`, JSON.stringify(effectiveConfig));
 
         const effectiveProviderId = effectiveConfig.providerId;
         // Directly use modelId from the resolved config
         const effectiveModelId = effectiveConfig.modelId;
-
-        // Removed the complex logic that tried to parse chatModelId
 
         console.log(`[AiStreamer] Attempting to get instance for Provider: ${effectiveProviderId}, Model: ${effectiveModelId}`); // Existing LOGGING
 

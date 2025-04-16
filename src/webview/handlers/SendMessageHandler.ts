@@ -6,12 +6,13 @@ import { StreamProcessor } from '../../streamProcessor';
 import {
     UiMessageContentPart,
     ChatSession,
-    HistoryUpdateMessageStatusDelta, // Existing
+    // Removed HistoryUpdateMessageStatusDelta import
     UiMessage,                     // Added
-    HistoryAddMessageDelta         // Added
+    HistoryAddMessageDelta,        // Keep for now, might remove later
 } from '../../common/types';
 // Import the parsing function
 import { parseAndValidateSuggestedActions } from '../../utils/historyUtils';
+import { generatePatch } from '../../utils/patchUtils'; // Import patch generator
 
 export class SendMessageHandler implements RequestHandler {
     public readonly requestType = 'sendMessage';
@@ -31,6 +32,9 @@ export class SendMessageHandler implements RequestHandler {
         // Get dependencies from context
         const streamProcessor = context.aiService.streamProcessor;
         const subscriptionManager = context.aiService.getSubscriptionManager(); // Use getter
+
+        // Define oldHistoryBeforeStream outside the try block but capture inside
+        let oldHistoryBeforeStream: UiMessage[] = [];
 
         try {
             // Validate input (also get tempId)
@@ -91,9 +95,14 @@ export class SendMessageHandler implements RequestHandler {
             }
 
             // 3. Prepare and initiate AI stream
+            // --- Capture history state BEFORE stream ---
+            oldHistoryBeforeStream = JSON.parse(JSON.stringify(context.historyManager.getHistory(chatId))); // Deep clone BEFORE stream starts
+
             const { streamResult } = await this._prepareAndSendToAI(context, chatId, providerId, modelId); // Pass validated IDs
 
             // 4. Process the AI response stream and get the result
+            // StreamProcessor will modify the history in-memory via HistoryManager methods
+            // StreamProcessor will modify the history in-memory via internal HistoryManager methods
             const streamProcessingResult = await streamProcessor.processStream(
                 streamResult.fullStream,
                 chatId,
@@ -107,23 +116,15 @@ export class SendMessageHandler implements RequestHandler {
 
              console.log(`[SendMessageHandler|${chatId}] Stream processing completed. Result:`, streamProcessingResult);
 
-             // 5. Send final status notification AFTER processing
-             const finalDelta: { error?: any } = {};
+             // 5. Log stream outcome AFTER processing
+             // Patch pushing now happens during stream processing via HistoryManager methods
              if (streamProcessingResult.streamError) {
-                 finalDelta.error = streamProcessingResult.streamError;
-                 console.error(`[SendMessageHandler|${chatId}] Notifying UI of stream error for message ${assistantUiMsgId}:`, finalDelta.error);
+                  console.error(`[SendMessageHandler|${chatId}] Stream ended with error for message ${assistantUiMsgId}:`, streamProcessingResult.streamError);
+                  // HistoryManager's updateToolStatus (called via StreamProcessor) should handle pushing the error status patch.
              } else {
-                 // Only log successful finish reason if no error occurred
-                 console.log(`[SendMessageHandler|${chatId}] Notifying UI of successful stream completion for message ${assistantUiMsgId}. Finish reason: ${streamProcessingResult.finishReason}`);
+                  console.log(`[SendMessageHandler|${chatId}] Stream completed successfully for message ${assistantUiMsgId}. Finish reason: ${streamProcessingResult.finishReason}`);
+                  // HistoryManager's appendTextChunk or updateToolStatus should handle clearing pending status via patch.
              }
-
-             // Always send a final notification (error or undefined)
-             subscriptionManager.notifyChatHistoryUpdate(chatId, {
-                 type: 'historyUpdateMessageStatus',
-                 chatId: chatId,
-                 messageId: assistantUiMsgId,
-                 status: finalDelta.error ? 'error' : undefined
-             });
 
 
             // 6. Finalize after stream completion (success or error)
@@ -166,13 +167,34 @@ export class SendMessageHandler implements RequestHandler {
             vscode.window.showErrorMessage(`Failed to get AI response: ${error.message}`);
             // Notify UI about the error
             if (chatId && assistantUiMsgId) {
-                 console.error(`[SendMessageHandler|${chatId}] Notifying UI of stream processing error for message ${assistantUiMsgId}:`, error);
-                 subscriptionManager.notifyChatHistoryUpdate(chatId, {
-                     type: 'historyUpdateMessageStatus',
-                     chatId: chatId,
-                     messageId: assistantUiMsgId,
-                     status: 'error'
-                 });
+                 console.error(`[SendMessageHandler|${chatId}] Handling CATCH block error for message ${assistantUiMsgId}:`, error);
+                 // Attempt to update status to 'error' via HistoryManager method, which will push a patch
+                 try {
+                      // Use oldHistoryBeforeStream captured at the beginning of the main try block
+                      const currentHistoryState = context.historyManager.getHistory(chatId); // Get potentially modified state
+                      const messageIndexInError = currentHistoryState.findIndex(m => m.id === assistantUiMsgId);
+                      let historyForErrorPatch = currentHistoryState;
+
+                      if (messageIndexInError !== -1 && currentHistoryState[messageIndexInError].status !== 'error') {
+                           console.log(`[SendMessageHandler|${chatId}] Updating status to 'error' in CATCH block for ${assistantUiMsgId}.`);
+                           // Create a new history array with the updated status
+                           historyForErrorPatch = JSON.parse(JSON.stringify(currentHistoryState));
+                           historyForErrorPatch[messageIndexInError].status = 'error';
+                      }
+
+                      // Generate patch against the state *before* the stream started
+                      // Use oldHistoryBeforeStream which should be available in this scope
+                      const errorPatch = generatePatch(oldHistoryBeforeStream, historyForErrorPatch);
+                      if (errorPatch.length > 0) {
+                           subscriptionManager.notifyChatHistoryUpdate(chatId, errorPatch);
+                           console.log(`[SendMessageHandler|${chatId}] Pushed CATCH block error status patch for ${assistantUiMsgId}. Patch:`, JSON.stringify(errorPatch));
+                      } else {
+                           console.log(`[SendMessageHandler|${chatId}] No CATCH block error status patch generated for ${assistantUiMsgId}.`);
+                      }
+                 } catch (patchError) {
+                      console.error(`[SendMessageHandler|${chatId}] Error generating/pushing patch within CATCH block for ${assistantUiMsgId}:`, patchError);
+                 }
+
                  // Attempt to save state even after error (touchChatSession saves current state)
                  try {
                       console.warn(`[SendMessageHandler|${chatId}] Attempting final save for ${assistantUiMsgId} after error.`);

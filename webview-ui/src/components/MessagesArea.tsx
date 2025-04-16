@@ -26,7 +26,8 @@ interface MessageProps {
 }
 
 export interface MessagesAreaProps {
-  messages: UiMessage[];
+  messages: UiMessage[]; // This now comes from the store (optimistic ?? actual)
+  // removed optimisticMessages prop
   suggestedActionsMap: { [messageId: string]: SuggestedAction[] | undefined };
   isStreaming: boolean; // Overall streaming status
   handleSuggestedActionClick: (action: SuggestedAction) => void;
@@ -205,7 +206,8 @@ const Message: FunctionalComponent<MessageProps> = memo(({ message, isStreaming,
 // --- Messages Area Component ---
 
 export const MessagesArea: FunctionalComponent<MessagesAreaProps> = memo(({ // Wrap with memo
-    messages,
+    messages, // This is the combined list from the store
+    // removed optimisticMessages prop
     suggestedActionsMap,
     isStreaming,
     handleSuggestedActionClick,

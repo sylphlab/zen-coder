@@ -42,76 +42,27 @@ export interface UiMessage {
 
 // ----- History Deltas -----
 
-export interface HistorySetDelta {
-  type: 'historySet';
-  chatId: string;
-  history: UiMessage[];
-}
-// Delta payload for adding a message, now includes optional tempId
+// NOTE: Most specific history delta types are deprecated in favor of JSON Patch (Operation[]).
+// Keeping HistoryAddMessageDelta for potential use in frontend optimistic UI reconciliation.
+
+// Delta payload for adding a message, includes optional tempId for reconciliation
 export interface HistoryAddMessageDelta {
-  type: 'historyAddMessage';
+  type: 'historyAddMessage'; // Keep this type for potential frontend optimistic logic
   chatId: string;
   message: UiMessage; // This message might contain tempId from the backend
 }
 
-export interface HistoryAppendChunkDelta {
-  type: 'historyAppendChunk';
-  chatId: string;
-  messageId: string; // ID of the message being appended to
-  textChunk: string;
-}
+// Deprecated: Use JSON Patch instead
+// export interface HistorySetDelta { ... }
+// export interface HistoryAppendChunkDelta { ... }
+// export interface HistoryAddContentPartDelta { ... }
+// export interface HistoryUpdateToolCallDelta { ... }
+// export interface HistoryUpdateMessageStatusDelta { ... }
+// export interface HistoryDeleteMessageDelta { ... }
+// export interface HistoryClearDelta { ... }
 
-export interface HistoryAddContentPartDelta { // Added this new delta type
-  type: 'historyAddContentPart';
-  chatId: string;
-  messageId: string;
-  part: UiMessageContentPart; // The new part to add (e.g., a tool call)
-}
-
-export interface HistoryUpdateToolCallDelta {
-  type: 'historyUpdateToolCall';
-  chatId: string;
-  messageId: string;
-  toolCallId: string;
-  status?: UiToolCallPart['status'];
-  result?: any;
-  progress?: string;
-}
-
-// Delta to update the overall status of a message (e.g., from 'pending' to 'error' or remove status)
-// Also carries final model info when clearing 'pending' status.
-export interface HistoryUpdateMessageStatusDelta {
-    type: 'historyUpdateMessageStatus';
-    chatId: string;
-    messageId: string;
-    status?: UiMessage['status']; // New status (e.g., 'error') or undefined to clear 'pending'
-    // Include model info when finalizing (status becomes undefined)
-    providerId?: string;
-    providerName?: string;
-    modelId?: string;
-    modelName?: string;
-}
-
-export interface HistoryDeleteMessageDelta {
-  type: 'historyDeleteMessage';
-  chatId: string;
-  messageId: string;
-}
-
-export interface HistoryClearDelta {
-  type: 'historyClear';
-  chatId: string;
-}
-
-export type ChatHistoryUpdateData =
-  | HistorySetDelta
-  | HistoryAddMessageDelta
-  | HistoryAppendChunkDelta
-  | HistoryAddContentPartDelta // Add the new type to the union
-  | HistoryUpdateToolCallDelta
-  | HistoryUpdateMessageStatusDelta // Added message status update
-  | HistoryDeleteMessageDelta
-  | HistoryClearDelta;
+// Deprecated: Use Operation[] (JSON Patch) for updates pushed via SubscriptionManager
+// export type ChatHistoryUpdateData = ...
 
 
 // ----- Session Deltas -----
@@ -221,7 +172,9 @@ export type StructuredAiResponse = z.infer<typeof structuredAiResponseSchema>;
 // Configuration for a specific chat session
 export interface ChatConfig {
     providerId?: string;   // e.g., "anthropic" - Overrides default if set
-    modelId?: string;      // e.g., "claude-3-5-sonnet-latest" - Overrides default if set (Changed from modelName)
+    providerName?: string; // Optional user-friendly provider name (primarily for display)
+    modelId?: string;      // e.g., "claude-3-5-sonnet-latest" - Overrides default if set
+    modelName?: string;    // Optional user-friendly model name (primarily for display)
     // Keep image/optimize as combined IDs for now, or refactor later if needed
     imageModelId?: string; // Overrides default if set
     optimizeModelId?: string; // Overrides default if set

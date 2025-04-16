@@ -10,7 +10,9 @@ import {
     $clearChatHistory,
     $stopGeneration,
     $updateChatConfig,
-    $isStreamingResponse
+    $isStreamingResponse,
+    SendMessagePayload, // Import SendMessagePayload
+    $chatSessions // Import $chatSessions
 } from '../stores/chatStores';
 import { $activeChatHistory, $activeChatSession } from '../stores/activeChatHistoryStore';
 import { $defaultConfig } from '../stores/chatStores';
@@ -24,17 +26,18 @@ import {
     DefaultChatConfig,
     UiMessage
 } from '../../../src/common/types';
-import { MessagesArea, MessagesAreaProps } from './MessagesArea'; // Import props type
-import { InputArea, InputAreaProps } from './InputArea'; // Import props type
-import { ModelSelector } from './ModelSelector';
+import { MessagesArea } from './MessagesArea'; // Removed MessagesAreaProps
+import { InputArea } from './InputArea'; // Removed InputAreaProps
+// Removed ModelSelector import (unused)
 import { ConfirmationDialog } from './ConfirmationDialog';
-import { HeaderControls, HeaderControlsProps } from './HeaderControls'; // Import props type
+import { HeaderControls } from './HeaderControls'; // Removed HeaderControlsProps
 import { useImageUpload } from '../hooks/useImageUpload';
 import { SelectedImage } from './InputArea'; // Import SelectedImage from InputArea
 import { TargetedEvent } from 'preact/compat'; // Import for event type
 import { generateUniqueId } from '../utils/communication'; // Import ID generator
+import { Operation } from 'fast-json-patch'; // Import Operation type
 
-interface ChatViewProps {
+ interface ChatViewProps {
     // No props needed as chatId comes from router
 }
 
@@ -77,6 +80,7 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
     const [inputValue, _setInputValue] = useState('');
     // Local state for optimistic UI updates of provider/model selection
     const [optimisticConfig, setOptimisticConfig] = useState<{ providerId: string | null; modelId: string | null } | null>(null);
+    // No local optimisticMessages state needed anymore
     const setInputValue = useCallback((value: string) => {
         _setInputValue(value);
     }, []);
@@ -156,131 +160,150 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
     }, [messages, isHistoryLoading]);
 
     // Removed useEffect that resets optimisticConfig based on effectiveConfig catching up.
-    // Let optimistic state persist to ensure ModelSelector receives the correct providerId
-    // while fetchModels is potentially running.
 
-     // Handle input change event (needed by InputArea)
-    const handleInputChange = useCallback((event: TargetedEvent<HTMLTextAreaElement, Event>) => { // Correct event type
-        const target = event.target as HTMLTextAreaElement;
-        setInputValue(target.value);
-        // Auto-resize textarea
-        target.style.height = 'auto';
-        target.style.height = `${target.scrollHeight}px`;
-    }, [setInputValue]);
-
+    // Removed unused handleInputChange
 
     // --- Event Handlers ---
     const handleSend = useCallback(async () => {
         if ((inputValue.trim() || selectedImages.length > 0) && !isSending && !isStreaming && providerId && modelId && chatId) {
-            // 1. Prepare content parts for both optimistic update and backend payload
+            // 1. Prepare content parts
             const contentParts: UiMessageContentPart[] = selectedImages.map((img: SelectedImage) => {
                 const mediaType = img.mediaType ?? (img.data.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png');
-                return { type: 'image', mediaType, data: img.data.split(',')[1] } as UiImagePart; // Base64 for backend
+                return { type: 'image', mediaType, data: img.data.split(',')[1] } as UiImagePart;
             });
              const optimisticContentParts: UiMessageContentPart[] = selectedImages.map((img: SelectedImage) => {
-                 // Keep full data URI for optimistic display
                  return { type: 'image', mediaType: img.mediaType, data: img.data } as UiImagePart;
              });
 
             if (inputValue.trim()) {
                 const textPart = { type: 'text', text: inputValue.trim() } as UiTextMessagePart;
                 contentParts.push(textPart);
-                optimisticContentParts.push(textPart); // Add text to optimistic parts too
+                optimisticContentParts.push(textPart);
             }
 
-            // 2. Optimistic Updates
-            const timestamp = Date.now(); // Use consistent timestamp
-            const tempId = generateUniqueId(); // Generate temporary ID for reconciliation
-            // Use tempId as the initial ID for optimistic update
-            const optimisticAssistantId = `pending-assistant-${timestamp}`; // Temporary ID for pending message
+            // 2. Calculate Optimistic State
+            const timestamp = Date.now();
+            const tempId = generateUniqueId();
+            const optimisticAssistantId = `pending-assistant-${timestamp}`;
+            const optimisticUserMessage: UiMessage = { id: tempId, tempId: tempId, role: 'user', content: optimisticContentParts, timestamp: timestamp };
+            const optimisticPendingMessage: UiMessage = { id: optimisticAssistantId, role: 'assistant', content: [], timestamp: timestamp + 1, status: 'pending', providerId: providerId, providerName: session?.config?.providerName ?? providerId, modelId: modelId, modelName: session?.config?.modelName ?? modelId };
 
-            const currentHistoryState = $activeChatHistory.get();
-            console.log(`[ChatView|${chatId}] State before optimistic update:`, typeof currentHistoryState, Array.isArray(currentHistoryState) ? `Length: ${currentHistoryState.length}`: currentHistoryState); // Added chatId
-
-            if (Array.isArray(currentHistoryState)) {
-                const optimisticUserMessage: UiMessage = {
-                    id: tempId, // Use tempId as the initial ID
-                    tempId: tempId, // Also store it in the tempId field
-                    role: 'user',
-                    content: optimisticContentParts, // Use parts with full data URI for UI
-                    timestamp: timestamp
-                };
-
-                const optimisticPendingMessage: UiMessage = {
-                    id: optimisticAssistantId, // Use temporary ID
-                    role: 'assistant',
-                    content: [], // Empty content initially
-                    timestamp: timestamp + 1, // Ensure slightly later timestamp
-                    status: 'pending' // Mark as pending
-                };
-
-                console.log(`[ChatView|${chatId}] Optimistically adding user message: ${optimisticUserMessage.id}`); // Added chatId
-                console.log(`[ChatView|${chatId}] Optimistically adding assistant pending message: ${optimisticPendingMessage.id}`); // Added chatId
-                $activeChatHistory.set([...currentHistoryState, optimisticUserMessage, optimisticPendingMessage]); // Add both messages
-                console.log(`[ChatView|${chatId}] Called $activeChatHistory.set() for optimistic updates.`); // Added chatId
-
+            const currentActualHistory = $activeChatHistory.getActualState();
+            let optimisticState: UiMessage[] | null = null;
+            if (Array.isArray(currentActualHistory)) {
+                optimisticState = [...currentActualHistory, optimisticUserMessage, optimisticPendingMessage];
             } else {
-                console.warn(`[ChatView|${chatId}] Cannot optimistically update history, store state is not an array:`, currentHistoryState); // Added chatId
-                 // Even if optimistic update fails, proceed to send to backend
+                optimisticState = [optimisticUserMessage, optimisticPendingMessage];
             }
+            console.log(`[ChatView|${chatId}] Preparing optimistic state:`, optimisticState);
 
-            // 3. Clear inputs AFTER preparing content
+            // 3. Clear inputs
             setInputValue('');
             clearSelectedImages();
             if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-            // 4. Prepare Backend Payload (Include tempId)
-            const backendPayload = { chatId, content: contentParts, providerId, modelId, tempId };
+            // 4. Prepare Backend Payload
+            const backendPayload: SendMessagePayload = { chatId, content: contentParts, providerId, modelId, tempId };
 
-            // 5. Send to Backend
+            // 5. Send to Backend with Optimistic State
             try {
-                // *** ADDED LOGGING ***
                 console.log(`[ChatView|${chatId}] handleSend: Using providerId='${backendPayload.providerId}', modelId='${backendPayload.modelId}' for mutation.`);
-                console.log(`[ChatView|${chatId}] Sending payload to backend mutation:`, backendPayload); // Added chatId
-                await sendMessageMutate(backendPayload);
+                console.log(`[ChatView|${chatId}] Sending payload to backend mutation:`, backendPayload);
+                await sendMessageMutate(backendPayload, { optimisticState }); // Pass optimisticState
             } catch (error) {
-                console.error(`[ChatView|${chatId}] Error sending message via mutation:`, error); // Added chatId
-                // If sending fails, remove the optimistic messages (user and pending assistant)
-                 const latestState = $activeChatHistory.get();
-                 if (Array.isArray(latestState)) {
-                      console.log(`[ChatView|${chatId}] Rolling back optimistic messages due to send error.`); // Added chatId
-                      $activeChatHistory.set(latestState.filter(m => m.id !== tempId && m.id !== optimisticAssistantId)); // Filter using tempId for user msg
-                 }
+                console.error(`[ChatView|${chatId}] Error sending message via mutation:`, error);
+                // createMutationStore handles rollback
             }
         } else {
-            console.warn(`[ChatView|${chatId}] Conditions NOT met (chatId:${!!chatId}, sending:${isSending}, streaming:${isStreaming}, provider:${!!providerId}, model:${!!modelId}).`); // Added chatId
+            console.warn(`[ChatView|${chatId}] Conditions NOT met (chatId:${!!chatId}, sending:${isSending}, streaming:${isStreaming}, provider:${!!providerId}, model:${!!modelId}).`);
         }
-    // Add $activeChatHistory to dependencies for optimistic update
-    }, [ inputValue, selectedImages, isSending, isStreaming, chatId, providerId, modelId, setInputValue, clearSelectedImages, textareaRef, sendMessageMutate, $activeChatHistory ]);
+    }, [ inputValue, selectedImages, isSending, isStreaming, chatId, providerId, modelId, setInputValue, clearSelectedImages, textareaRef, sendMessageMutate, session ]);
 
-    const handleKeyDown = useCallback((e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey && !isSending && !isStreaming) { console.log(`[ChatView|${chatId}] Enter pressed, calling handleSend.`); e.preventDefault(); handleSend(); } }, [handleSend, isSending, isStreaming, chatId]); // Added chatId
-    const handleClearChat = useCallback(() => { if (chatId) setShowClearConfirm(true); }, [chatId]);
-    const confirmClearChat = useCallback(async () => { if (chatId) { setShowClearConfirm(false); try { await clearChatHistoryMutate({ chatId }); } catch (error) { console.error(`Error clearing chat history:`, error); } } }, [chatId, clearChatHistoryMutate]); // Use mutate function obtained at top level
+    const handleKeyDown = useCallback((e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey && !isSending && !isStreaming) { console.log(`[ChatView|${chatId}] Enter pressed, calling handleSend.`); e.preventDefault(); handleSend(); } }, [handleSend, isSending, isStreaming, chatId]);
+    // Removed unused handleClearChat
+    const confirmClearChat = useCallback(async () => { if (chatId) { setShowClearConfirm(false); try { await clearChatHistoryMutate({ chatId }); } catch (error) { console.error(`Error clearing chat history:`, error); } } }, [chatId, clearChatHistoryMutate]);
     const cancelClearChat = useCallback(() => { setShowClearConfirm(false); }, []);
-    const handleSuggestedActionClick = useCallback(async (action: SuggestedAction) => { if (!chatId || !providerId || !modelId) return; try { switch (action.action_type) { case 'send_message': if (typeof action.value === 'string') await sendMessageMutate({ chatId: chatId, content: [{ type: 'text', text: action.value }], providerId: providerId, modelId: modelId }); break; case 'run_tool': if (typeof action.value === 'object' && action.value?.toolName) await executeToolActionMutate({ toolName: action.value.toolName, args: action.value.args ?? {} }); break; case 'fill_input': if (typeof action.value === 'string') setInputValue(action.value); textareaRef.current?.focus(); break; } } catch (error) { console.error(`Error handling suggested action:`, error); } }, [ chatId, providerId, modelId, setInputValue, textareaRef, sendMessageMutate, executeToolActionMutate ]); // Use mutate functions obtained at top level
-    const handleStopGeneration = useCallback(async () => { try { await stopGenerationMutate(); } catch (error) { console.error('Error stopping generation:', error); } }, [stopGenerationMutate]); // Use mutate function obtained at top level
+    const handleSuggestedActionClick = useCallback(async (action: SuggestedAction) => {
+        if (!chatId || !providerId || !modelId) return;
+        try {
+            switch (action.action_type) {
+                case 'send_message':
+                    if (typeof action.value === 'string') {
+                        const text = action.value;
+                        const tempId = generateUniqueId();
+                        const payload: SendMessagePayload = { chatId, content: [{ type: 'text', text: text }], providerId, modelId, tempId };
+                        // Calculate optimistic state
+                        const currentActualHistoryAction = $activeChatHistory.getActualState();
+                        let optimisticStateAction: UiMessage[] | null = null;
+                        const optimisticUserMessageAction: UiMessage = { id: tempId, tempId: tempId, role: 'user', content: [{ type: 'text', text: text }], timestamp: Date.now() };
+                        const optimisticPendingMessageAction: UiMessage = { id: `pending-assistant-${Date.now()}`, role: 'assistant', content: [], timestamp: Date.now() + 1, status: 'pending', providerId: providerId, providerName: session?.config?.providerName ?? providerId, modelId: modelId, modelName: session?.config?.modelName ?? modelId };
+                        if (Array.isArray(currentActualHistoryAction)) {
+                            optimisticStateAction = [...currentActualHistoryAction, optimisticUserMessageAction, optimisticPendingMessageAction];
+                        } else {
+                            optimisticStateAction = [optimisticUserMessageAction, optimisticPendingMessageAction];
+                        }
+                        // Call mutate with payload and optimistic state
+                        await sendMessageMutate(payload, { optimisticState: optimisticStateAction }); // Pass optimisticState
+                    }
+                    break;
+                case 'run_tool':
+                    if (typeof action.value === 'object' && action.value?.toolName) {
+                        await executeToolActionMutate({ toolName: action.value.toolName, args: action.value.args ?? {} });
+                    }
+                    break;
+                case 'fill_input':
+                    if (typeof action.value === 'string') {
+                        setInputValue(action.value);
+                        textareaRef.current?.focus();
+                    }
+                    break;
+            }
+        } catch (error) {
+            console.error(`Error handling suggested action:`, error);
+            // createMutationStore handles rollback
+        }
+    }, [ chatId, providerId, modelId, setInputValue, textareaRef, sendMessageMutate, executeToolActionMutate, session ]);
+    const handleStopGeneration = useCallback(async () => { try { await stopGenerationMutate(); } catch (error) { console.error('Error stopping generation:', error); } }, [stopGenerationMutate]);
     const handleChatModelChange = useCallback(async (newProviderId: string | null, newModelId: string | null) => {
         if (chatId) {
             console.log(`[ChatView handleChatModelChange] User selected Provider: ${newProviderId}, Model: ${newModelId}`);
-            // Optimistically update local state
-            setOptimisticConfig({ providerId: newProviderId, modelId: newModelId });
+            setOptimisticConfig({ providerId: newProviderId, modelId: newModelId }); // Local optimistic update for selector UI
 
-            // Trigger backend update
-            const cfg: Partial<ChatConfig> = {
-                providerId: newProviderId ?? undefined,
-                modelId: newModelId ?? undefined,
-                useDefaults: false // Explicitly set useDefaults to false when user selects a model
-            };
+            const cfg: Partial<ChatConfig> = { providerId: newProviderId ?? undefined, modelId: newModelId ?? undefined, useDefaults: false };
             try {
-                await updateChatConfigMutate({ chatId: chatId, config: cfg });
+                // Calculate optimistic state for chat session config update
+                const currentSessions = $chatSessions.getActualState(); // Use getActualState
+                let optimisticStateSessions: ChatSession[] | null = null; // Initialize as null
+
+                if (Array.isArray(currentSessions)) {
+                    const sessionIndex = currentSessions.findIndex(s => s.id === chatId);
+                    if (sessionIndex !== -1) {
+                        optimisticStateSessions = JSON.parse(JSON.stringify(currentSessions)); // Deep clone
+                        // Safely access the element after confirming index
+                        // Check if optimisticStateSessions is not null before accessing index
+                        if (optimisticStateSessions) {
+                            optimisticStateSessions[sessionIndex].config.providerId = newProviderId ?? undefined;
+                            optimisticStateSessions[sessionIndex].config.modelId = newModelId ?? undefined;
+                            optimisticStateSessions[sessionIndex].config.useDefaults = false;
+                            optimisticStateSessions[sessionIndex].lastModified = Date.now(); // Optimistically update timestamp
+                            optimisticStateSessions.sort((a, b) => b.lastModified - a.lastModified); // Keep sorted
+                        }
+                    } else {
+                         // If session not found, pass the current state without modification
+                         optimisticStateSessions = currentSessions;
+                    }
+                }
+                // If currentSessions was not an array (loading/error/null), optimisticStateSessions remains null
+                // Call mutate with payload and optimistic state (which might be null)
+                await updateChatConfigMutate({ chatId: chatId, config: cfg }, { optimisticState: optimisticStateSessions }); // Pass optimisticState
                 console.log(`[ChatView handleChatModelChange] Backend update triggered for chat ${chatId}.`);
             } catch (e) {
                 console.error(`[ChatView handleChatModelChange] Error updating chat config:`, e);
-                // Optionally revert optimistic state on error?
-                // setOptimisticConfig(null); // Revert if backend fails
+                setOptimisticConfig(null); // Revert local optimistic config state on error
+                // createMutationStore handles rollback of the targetAtom ($chatSessions)
             }
         }
-    }, [chatId, updateChatConfigMutate]); // Use mutate function obtained at top level
+    }, [chatId, updateChatConfigMutate]); // Removed $chatSessions dependency
 
     const handleCopyMessage = useCallback((messageId: string) => {
         const msg = Array.isArray(messages) ? messages.find(m => m.id === messageId) : null;
@@ -289,7 +312,28 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
             if (txt) navigator.clipboard.writeText(txt).catch(err => console.error(`Copy failed:`, err));
         }
     }, [messages]);
-    const handleDeleteMessage = useCallback(async (messageId: string) => { if (!chatId) return; try { await deleteMessageMutate({ chatId, messageId }); } catch (error) { console.error(`Error deleting message:`, error); } }, [chatId, deleteMessageMutate]); // Use mutate function obtained at top level
+    const handleDeleteMessage = useCallback(async (messageId: string) => {
+        if (!chatId) return;
+        try {
+            // Calculate optimistic state for message deletion
+            const currentMessages = $activeChatHistory.getActualState();
+            let optimisticStateDelete: UiMessage[] | null = null;
+            if (Array.isArray(currentMessages)) {
+                const messageIndex = currentMessages.findIndex(m => m.id === messageId);
+                if (messageIndex !== -1) {
+                    optimisticStateDelete = [...currentMessages]; // Clone
+                    optimisticStateDelete.splice(messageIndex, 1); // Remove message
+                } else {
+                     optimisticStateDelete = currentMessages; // No change if message not found
+                }
+            }
+            // Call mutate with payload and optimistic state
+            await deleteMessageMutate({ chatId, messageId }, { optimisticState: optimisticStateDelete }); // Pass optimisticState
+        } catch (error) {
+            console.error(`Error deleting message:`, error);
+            // createMutationStore handles rollback
+        }
+     }, [chatId, deleteMessageMutate]);
 
     // --- Render Logic ---
     if (!chatId) {
@@ -297,8 +341,7 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
         return <div>Error: No chat selected.</div>;
     }
 
-    // Correct isLoading check
-    const isLoading = isLoadingSessionData || isHistoryLoading; // Remove || session === undefined as session is derived differently
+    const isLoading = isLoadingSessionData || isHistoryLoading;
 
     if (isLoading) {
         console.log(`[ChatView Render] Loading... isLoadingSession=${isLoadingSessionData}, isHistoryLoading=${isHistoryLoading}`);
@@ -317,8 +360,7 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
         );
     }
 
-    // suggestedActionsMap is derived correctly above, ensuring it's an object
-    const currentSuggestedActionsMap = suggestedActionsMap; // Just use the derived map
+    const currentSuggestedActionsMap = suggestedActionsMap;
 
     console.log(`[ChatView Render] Rendering main UI. Msgs: ${messages.length}`);
     return (
@@ -326,17 +368,16 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
             {/* Header */}
             <div class="p-2 border-b border-gray-200 dark:border-gray-700">
                 <HeaderControls
-                    selectedProviderId={providerId ?? null} // Use the determined providerId
-                    selectedModelId={modelId ?? null}     // Use the determined modelId
+                    selectedProviderId={providerId ?? null}
+                    selectedModelId={modelId ?? null}
                     onModelChange={handleChatModelChange}
-                    // Removed incorrect chatId prop
                 />
             </div>
 
             {/* Messages Area */}
             <MessagesArea
                 messages={messages}
-                suggestedActionsMap={currentSuggestedActionsMap} // Use corrected variable name
+                suggestedActionsMap={currentSuggestedActionsMap}
                 isStreaming={isStreaming}
                 handleSuggestedActionClick={handleSuggestedActionClick}
                 messagesEndRef={messagesEndRef}
@@ -351,18 +392,16 @@ export const ChatView: FunctionalComponent<ChatViewProps> = () => {
                 handleKeyDown={handleKeyDown}
                 handleSend={handleSend}
                 selectedImages={selectedImages}
-                handleImageFileChange={handleImageFileChange} // Use correct prop name from InputAreaProps
+                handleImageFileChange={handleImageFileChange}
                 triggerImageUpload={triggerImageUpload}
                 fileInputRef={fileInputRef}
                 removeSelectedImage={removeSelectedImage}
-                setSelectedImages={setSelectedImages} // Add missing prop
+                setSelectedImages={setSelectedImages}
                 handleStopGeneration={handleStopGeneration}
-                currentModelId={modelId ?? null} // Use the determined modelId
+                currentModelId={modelId ?? null}
                 inputValue={inputValue}
-                setInputValue={setInputValue} // Pass setInputValue
-                // handleInputChange is internal to ChatView, InputArea uses setInputValue
+                setInputValue={setInputValue}
                 isStreaming={isStreaming}
-                // Removed incorrect textareaRef prop
             />
              <ConfirmationDialog
                  show={showClearConfirm}

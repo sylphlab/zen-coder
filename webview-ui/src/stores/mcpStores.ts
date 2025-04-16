@@ -1,10 +1,9 @@
-// Removed createFetcherStore import
 import { McpConfiguredStatusPayload } from '../../../src/common/types';
+import { Operation } from 'fast-json-patch'; // Import Operation directly
 import { requestData } from '../utils/communication';
 import { StandardStore, createStore } from './utils/createStore'; // Import createStore and StandardStore
 import { McpServerStatus } from '../../../src/ai/mcpManager';
-import { createMutationStore, OptimisticUpdateResult } from './utils/createMutationStore';
-
+import { createMutationStore } from './utils/createMutationStore'; // Removed OptimisticUpdateResult import
 
 /**
  * Store that fetches and subscribes to the status of configured MCP servers.
@@ -14,7 +13,7 @@ export const $mcpStatus: StandardStore<McpConfiguredStatusPayload> = createStore
     McpConfiguredStatusPayload, // TData: The map of server statuses
     McpConfiguredStatusPayload, // TResponse: Fetch response type
     {},                         // PPayload: Fetch takes no payload
-    McpConfiguredStatusPayload  // UUpdateData: PubSub pushes the full map
+    Operation[]                 // UUpdateData: Expecting JSON Patch array
 >({
     key: 'mcpStatus',
     fetch: {
@@ -23,10 +22,7 @@ export const $mcpStatus: StandardStore<McpConfiguredStatusPayload> = createStore
     },
     subscribe: {
         topic: 'mcpStatus',
-        handleUpdate: (currentData, updateData) => {
-            // Update comes as the full McpConfiguredStatusPayload structure
-            return updateData ?? null;
-        }
+        // handleUpdate is now handled internally by createStore for JSON patches
     },
     initialData: null // Explicitly null, createStore handles 'loading'
 });
@@ -57,47 +53,16 @@ export const $openProjectMcpConfig = createMutationStore<
 // Retry MCP Connection
 type RetryMcpConnectionPayload = { identifier: string };
 export const $retryMcpConnection = createMutationStore<
-  typeof $mcpStatus,               // Target atom type
+  StandardStore<McpConfiguredStatusPayload>, // Use StandardStore type
   McpConfiguredStatusPayload,      // TData matches StandardStore
   RetryMcpConnectionPayload,       // Payload type
   void                             // performMutation return type
 >({
-  targetAtom: $mcpStatus, // Target the new store
+  targetAtom: $mcpStatus, // Keep targetAtom for potential optimistic patch
   performMutation: async (payload: RetryMcpConnectionPayload) => {
     await requestData<void>('retryMcpConnection', { identifier: payload.identifier });
-    // Actual state update will happen via $mcpStatus subscription push
+    // Actual state update will happen via $mcpStatus subscription push (as JSON Patch)
   },
-  getOptimisticUpdate: (
-    payload: RetryMcpConnectionPayload,
-    currentState: McpConfiguredStatusPayload | null | 'loading' | 'error'
-  ): OptimisticUpdateResult<McpConfiguredStatusPayload> => { // Return TData type
-    // Check if currentState is actually the data type
-    if (currentState === 'loading' || currentState === 'error' || currentState === null || !currentState[payload.identifier]) {
-       // Return placeholder empty object if cannot update
-       const placeholderState: McpConfiguredStatusPayload = {};
-       return { optimisticState: placeholderState, revertState: placeholderState };
-    }
-    // Now TypeScript knows currentState is McpConfiguredStatusPayload
-    const currentDataState = currentState;
-
-    // Create a deep copy for the optimistic state
-    const optimisticState: McpConfiguredStatusPayload = JSON.parse(JSON.stringify(currentDataState));
-
-    // Update the specific server's state optimistically using 'identifier'
-    const serverToUpdate = optimisticState[payload.identifier] as McpServerStatus;
-    serverToUpdate.isConnected = false; // Assume disconnection while retrying
-    serverToUpdate.lastError = 'Retrying...'; // Set status text
-    serverToUpdate.tools = {}; // Clear tools while retrying
-
-    // Return the optimistic state and the original state for reverting
-    return {
-      optimisticState: optimisticState, // TData
-      revertState: currentDataState,    // TData
-    };
-  },
-  applyMutationResult: (result: void, currentState: McpConfiguredStatusPayload | null | 'loading' | 'error') => {
-      // Type expected: TData | null = McpConfiguredStatusPayload | null
-      // Return the current state only if it's data, otherwise null.
-      return currentState !== 'loading' && currentState !== 'error' && currentState !== null ? currentState : null;
-  }
+  // Removed getOptimisticUpdate and applyMutationResult
+  // If optimistic update is needed later, calculate patch and pass via mutate options
 });

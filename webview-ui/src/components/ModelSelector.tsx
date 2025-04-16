@@ -37,10 +37,19 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
         fetchModels(selectedProviderId);
     }, [selectedProviderId]);
 
-    // REMOVED useEffect that forced input value to selectedModelId
-
+    // Effect to sync selectedModelId prop with local inputValue state
+    useEffect(() => {
+        console.log(`[ModelSelector useEffect/SyncInput] selectedModelId prop changed to: "${selectedModelId}". Updating inputValue.`);
+        // Only update if the prop is different from the current input value to avoid unnecessary updates/loops
+        if (selectedModelId !== inputValue) {
+             setInputValue(selectedModelId ?? '');
+        }
+        // Dependency array includes selectedModelId to trigger on prop change
+        // Also include inputValue to potentially handle external resets, though primarily driven by selectedModelId
+    }, [selectedModelId]);
+ 
     // Removed imperative useEffect for select update
-
+ 
     // --- Derived Data ---
     let uniqueProviders: { id: string; name: string }[] = [];
     if (Array.isArray(allProvidersStatus)) {

@@ -55,25 +55,37 @@
           "description": "Enable DeepSeek provider."
         },
         "zencoder.defaults.defaultProviderId": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "default": null,
           "description": "Default AI provider ID to use for new chats.",
           "scope": "window"
         },
         "zencoder.defaults.defaultModelId": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "default": null,
           "description": "Default model ID (providerId:modelName) to use for new chats.",
           "scope": "window"
         },
         "zencoder.defaults.imageModelId": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "default": null,
           "description": "Default model ID (providerId:modelName) to use for image generation (if supported). Leave null if none.",
           "scope": "window"
         },
         "zencoder.defaults.optimizeModelId": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "default": null,
           "description": "Default model ID (providerId:modelName) to use for optimizing instructions (if supported). Leave null if none.",
           "scope": "window"
@@ -293,6 +305,7 @@
     "@types/node-fetch": "^2.6.12",
     "@types/uuid": "^10.0.0",
     "ai": "^4.3.5",
+    "fast-json-patch": "^3.1.1",
     "node-fetch": "^3.3.2",
     "ollama-ai-provider": "^1.2.0",
     "uuid": "^11.1.0",

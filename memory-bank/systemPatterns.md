@@ -20,23 +20,39 @@
 - **Standard Data Communication Pattern (FE <-> BE):**
     - **Core Principle:** Explicit separation of state fetching (ReqRes) and update subscription (PubSub). PubSub **does not** send initial state upon subscription.
     - **Initial State Fetching (ReqRes):** Frontend uses `requestData(requestType, payload)` to request the initial state of data from the corresponding backend Handler (e.g., `getChatSessions`, `getChatHistory`).
-    - **Real-time Updates (PubSub):**
+    - **Real-time Updates (PubSub with JSON Patch):**
         - Frontend uses `listen(topic, handleUpdate)` to subscribe to a specific topic via the backend `SubscribeHandler`.
-        - Backend uses `pushUpdate(topic, data)` to push **updates** (not initial state) to subscribed clients.
-        - **Current:** Backend pushes the **full updated state** for simplicity (e.g., the entire updated `ChatSession[]` list).
-        - **Future Goal:** Refactor backend to push **incremental updates (patches)**, ideally using JSON Patch (RFC 6902), for better efficiency, especially for large data structures like chat history. Frontend `handleUpdate` will then apply these patches.
-    - **Mutation:** User actions that modify state are sent via `requestData(mutationRequestType, payload)`. Backend handlers process the mutation (e.g., using `HistoryManager` or `ChatSessionManager`) and typically trigger a PubSub `pushUpdate` with the changed state (full or patch).
-- **Standardized Frontend Store Creation (`createStore` Utility):**
+        - Backend uses `pushUpdate(topic, patch)` to push **incremental updates** as a standard **JSON Patch (RFC 6902)** array (`Operation[]`) to subscribed clients.
+        - Backend utilizes a utility (e.g., `src/utils/patchUtils.ts` with `fast-json-patch`) to generate these patches by comparing the state before and after a change. Simple patches (like adding an item) can also be constructed manually.
+        - Frontend's `createStore` utility internally uses a library (e.g., `fast-json-patch`) to apply the received patch array to its internal `actualState`.
+    - **Mutation:** User actions that modify state are sent via `requestData(mutationRequestType, payload)`. Backend handlers process the mutation, generate the corresponding JSON Patch, and trigger a PubSub `pushUpdate` with the patch.
+- **Standardized Frontend Store Creation (`createStore` Utility with Optimistic UI Support):**
     - Location: `webview-ui/src/stores/utils/createStore.ts`
-    - Purpose: Provides a consistent way to create Nanostores (`StandardStore`) that follow the ReqRes + PubSub pattern.
-    - API: `createStore({ key, fetch, subscribe?, initialData? })`
-        - `key`: String identifier for debugging.
-        - `fetch`: Configures the initial `requestData` call (`requestType`, `payload` (static or dynamic function), optional `transformResponse`).
-        - `subscribe` (Optional): Configures the `listen` subscription (`topic` (static or dynamic function), `handleUpdate` function to process pushed updates).
-        - `initialData` (Optional): Data to hold before the first fetch completes.
-    - State: The created store holds `'loading' | 'error' | TData | null`.
-    - Methods: Includes a `.refetch()` method.
-    - Lifecycle: Uses `onMount` to manage initial fetch, subscription, unsubscription, and handling changes in dynamic `payload`/`topic`.
+    - Purpose: Provides a consistent way to create Nanostores (`StandardStore`) that handle initial data fetching (ReqRes), real-time patch updates (PubSub), and optimistic UI updates.
+    - **Internal State:**
+        - `_actualState`: Holds the state confirmed by the backend (updated via fetch or applying backend patches).
+        - `_optimisticState`: Holds a temporary, predicted state after a user action but before backend confirmation. Initially `null`.
+    - **Exported Value:** The store exposes a computed value: `_optimisticState ?? _actualState`. UI components subscribe to this combined value.
+    - **API:** `createStore({ key, fetch, subscribe?, initialData?, dependsOn? })`
+        - `key`, `fetch`, `initialData`, `dependsOn`: Same as before.
+        - `subscribe`: Configures the `listen` subscription. The `handleUpdate` function provided here is **no longer used** for applying updates; `createStore` handles patch application internally using `fast-json-patch`. The `updateData` type for the subscription is expected to be `Operation[]`.
+    - **Methods:**
+        - `.refetch()`: Fetches initial state, clears optimistic state.
+        - `.applyOptimisticPatch(patch: Operation[])`: Applies a given JSON Patch to the current `_actualState` and stores the result in `_optimisticState`. Updates the store's exported value to reflect the optimistic state.
+        - `.clearOptimisticState()`: Resets `_optimisticState` to `null`. Updates the store's exported value to reflect the `_actualState`.
+        - `.getActualState()`: Returns the current `_actualState`.
+    - **Update Flow (Backend Patch):**
+        1. `listen` callback receives a patch (`Operation[]`).
+        2. Internal logic applies the patch to `_actualState` using `fast-json-patch`.
+        3. Sets `_optimisticState` to `null`.
+        4. Updates the store's exported value with the new `_actualState`.
+    - **Optimistic Update Flow (User Action):**
+        1. UI component calculates the optimistic patch (`Operation[]`) representing the user's action.
+        2. UI component calls `store.applyOptimisticPatch(optimisticPatch)`.
+        3. `createStore` applies the patch to `_actualState`, stores result in `_optimisticState`, updates exported value.
+        4. UI component triggers the backend mutation request.
+        5. **On mutation success:** Backend sends a patch. `createStore` applies it to `_actualState`, clears `_optimisticState`, store value updates to actual.
+        6. **On mutation failure:** UI component calls `store.clearOptimisticState()`. Store value reverts to `_actualState`.
 - **State Management (Persistence):** Session metadata (`ChatSession`) and chat history (`UiMessage[]`) persisted in `context.workspaceState` (per workspace) via `WorkspaceStateManager`, coordinated by `ChatSessionManager` and `HistoryManager`. API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`). Default chat config stored in VS Code settings (`zencoder.ai.*`).
 - **Tool Authorization:** Managed via VS Code setting `zencoder.toolAuthorization`. (Details remain the same).
 - **Configuration Files:** (Details remain the same).

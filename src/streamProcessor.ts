@@ -78,18 +78,19 @@ export class StreamProcessor {
 
                 switch (part.type) {
                     case 'text-delta':
-                         console.log(`[StreamProcessor|${chatId}] Step: text-delta`);
+                         // console.log(`[StreamProcessor|${chatId}] Step: text-delta`); // Less verbose logging
                         this._accumulatedText += part.textDelta;
-                        await this._historyManager.messageModifier.appendTextChunk(chatId, messageId, part.textDelta);
+                        // Call public HistoryManager method which handles state update, save, and patch push
+                        await this._historyManager.appendTextChunk(chatId, messageId, part.textDelta);
                         break;
                     case 'tool-call':
                         console.log(`[StreamProcessor|${chatId}] Step: tool-call`);
                         const toolCallId_call = part.toolCallId;
                         if (toolCallId_call) {
-                            // Removed tracking tool calls in progress here
-                             await this._historyManager.messageModifier.addToolCall(
-                                 chatId, messageId, toolCallId_call, part.toolName, part.args
-                             );
+                            // Call public HistoryManager method
+                            await this._historyManager.addToolCall(
+                                chatId, messageId, toolCallId_call, part.toolName, part.args
+                            );
                         } else {
                              console.warn(`[StreamProcessor|${chatId}] Received tool-call part without toolCallId.`);
                         }
@@ -98,9 +99,9 @@ export class StreamProcessor {
                          console.log(`[StreamProcessor|${chatId}] Step: tool-result`);
                         const toolCallId_result = part.toolCallId;
                          if (toolCallId_result) {
-                             // Removed checking tool calls in progress here
                              const status = (part as any).error ? 'error' : 'complete';
-                             await this._historyManager.messageModifier.updateToolStatus(
+                             // Call public HistoryManager method
+                             await this._historyManager.updateToolStatus(
                                   chatId, toolCallId_result, status, part.result
                              );
                          } else {

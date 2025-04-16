@@ -23,6 +23,9 @@ importers:
       '@types/react-syntax-highlighter':
         specifier: ^15.5.13
         version: 15.5.13
+      fast-json-patch:
+        specifier: ^3.1.1
+        version: 3.1.1
       gsap:
         specifier: ^3.12.7
         version: 3.12.7
@@ -837,6 +840,9 @@ packages:
 
   extend@3.0.2:
     resolution: {integrity: sha512-fjquC59cD7CyW6urNXK0FBufkZcoiGG80wTuPujX590cB5Ttln20E2UB4S/WARVqhXffZl2LNgS+gQdPIIim/g==}
+
+  fast-json-patch@3.1.1:
+    resolution: {integrity: sha512-vf6IHUX2SBcA+5/+4883dsIjpBTqmfBjmYiWK1savxQmFk4JfBMLa7ynTYOs1Rolp/T1betJxHiGD3g1Mn8lUQ==}
 
   fault@1.0.4:
     resolution: {integrity: sha512-CJ0HCB5tL5fYTEA7ToAq5+kTwd++Borf1/bifxd9iT70QcXr4MRrO3Llf8Ifs70q+SJcGHFtnIE/Nw6giCtECA==}
@@ -2301,6 +2307,8 @@ snapshots:
   exsolve@1.0.4: {}
 
   extend@3.0.2: {}
+
+  fast-json-patch@3.1.1: {}
 
   fault@1.0.4:
     dependencies:
