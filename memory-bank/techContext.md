@@ -44,8 +44,7 @@
 - `@ai-sdk/openai`: 1.3.10
 - `ollama-ai-provider`: 1.2.0
 - `@ai-sdk/google-vertex`: 2.2.15
-- `@google-cloud/resource-manager`: 6.0.1 // Added for Vertex project listing
-- `@google-cloud/aiplatform`: 4.1.0 // Added for Vertex location/model listing
+- *(Removed @google-cloud/resource-manager, @google-cloud/aiplatform, @types/long)*
 - *(Plus transitive dependencies)*
 
 ## Guideline Checksums

@@ -33,7 +33,30 @@ export function ProviderSettings(): JSX.Element {
     const [isFetchingLocations, setIsFetchingLocations] = useState(false);
 
     const handleCredentialsJsonChange = (providerId: string, value: string) => {
+        // Update the JSON input state immediately
         setCredentialsJsonInput(prev => ({ ...prev, [providerId]: value }));
+
+        // Attempt to parse and pre-fill project ID and location
+        if (providerId === 'vertex') { // Only do this for Vertex
+            try {
+                const parsedJson = JSON.parse(value);
+                if (parsedJson && typeof parsedJson === 'object') {
+                    if (parsedJson.project_id && typeof parsedJson.project_id === 'string') {
+                        // Pre-fill project ID only if the input field is currently empty
+                        // to avoid overwriting user's manual input during typing.
+                        // Alternatively, always update if JSON changes? Let's always update for simplicity.
+                        setProjectIdInput(prev => ({ ...prev, [providerId]: parsedJson.project_id }));
+                    }
+                    if (parsedJson.location && typeof parsedJson.location === 'string') {
+                        // Pre-fill location
+                        setLocationInput(prev => ({ ...prev, [providerId]: parsedJson.location }));
+                    }
+                }
+            } catch (e) {
+                // Ignore parsing errors, don't pre-fill if JSON is invalid
+                // console.debug("JSON parsing failed during pre-fill attempt:", e);
+            }
+        }
     };
 
     const handleProjectIdChange = (providerId: string, value: string) => {

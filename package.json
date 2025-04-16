@@ -283,7 +283,6 @@
     "webview-ui": "pnpm --filter webview-ui"
   },
   "devDependencies": {
-    "@types/long": "^5.0.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "~20.17.30",
     "@types/vscode": "^1.99.0",
@@ -303,8 +302,6 @@
     "@ai-sdk/google": "^1.2.10",
     "@ai-sdk/google-vertex": "^2.2.15",
     "@ai-sdk/openai": "^1.3.10",
-    "@google-cloud/aiplatform": "^4.1.0",
-    "@google-cloud/resource-manager": "^6.0.1",
     "@openrouter/ai-sdk-provider": "^0.4.5",
     "@types/node-fetch": "^2.6.12",
     "@types/uuid": "^10.0.0",

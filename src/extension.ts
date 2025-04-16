@@ -61,8 +61,7 @@ import { SubscribeHandler } from './webview/handlers/SubscribeHandler';
 import { UnsubscribeHandler } from './webview/handlers/UnsubscribeHandler';
 import { OpenGlobalMcpConfigHandler } from './webview/handlers/OpenGlobalMcpConfigHandler';
 import { OpenProjectMcpConfigHandler } from './webview/handlers/OpenProjectMcpConfigHandler';
-import { GetVertexProjectsHandler } from './webview/handlers/GetVertexProjectsHandler'; // Added
-import { GetVertexLocationsHandler } from './webview/handlers/GetVertexLocationsHandler'; // Added
+// Removed GetVertexProjectsHandler and GetVertexLocationsHandler imports
 
 let aiServiceInstance: AiService | undefined = undefined;
 
@@ -189,8 +188,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new ExecuteToolActionHandler(),
             new OpenGlobalMcpConfigHandler(),
             new OpenProjectMcpConfigHandler(),
-            new GetVertexProjectsHandler(), // Added
-            new GetVertexLocationsHandler(), // Added
+            // Removed GetVertexProjectsHandler and GetVertexLocationsHandler instances
         ];
 
         allHandlers.forEach(handler => {

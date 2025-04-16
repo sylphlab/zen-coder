@@ -112,48 +112,7 @@ export class VertexProvider implements AiProvider {
     return [...KNOWN_VERTEX_MODELS];
   }
 
-  /**
-   * Fetches available Google Cloud projects accessible by the credentials.
-   */
-  async getAvailableProjects(credentialsJsonString?: string): Promise<{ id: string; name: string }[]> {
-    if (!credentialsJsonString) {
-      console.warn('[VertexProvider] Cannot fetch projects without credentials JSON.');
-      return [];
-    }
-    try {
-      const clientOptions = { credentials: JSON.parse(credentialsJsonString) };
-      const projectsClient = new ProjectsClient(clientOptions); // Use ProjectsClient
-      const [projects] = await projectsClient.searchProjects(); // Use correct client method
-      console.log(`[VertexProvider] Fetched ${projects.length} projects.`);
-      return projects
-        .filter((p: any) => p.projectId && p.displayName) // Add 'any' type for filter param
-        .map((p: any) => ({ id: p.projectId!, name: p.displayName! })) // Add 'any' type for map param
-        .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)); // Add explicit types for sort params
-    } catch (error) {
-      console.error('[VertexProvider] Error fetching projects:', error);
-      // Inform the user about potential permission issues
-      vscode.window.showWarningMessage('Failed to fetch Google Cloud projects. Ensure the service account has "resourcemanager.projects.list" permission.');
-      return [];
-    }
-  }
-
-  /**
-   * Fetches available Google Cloud locations.
-   * Requires credentials and project ID.
-   * TODO: Implement dynamic location fetching. Still facing issues finding the correct client/method
-   * for `google.cloud.location.Locations` service within the available Node.js libraries.
-   * Requires credentials and project ID. Ensure service account has `aiplatform.locations.list` or similar permission.
-   */
-  async getAvailableLocations(credentialsJsonString?: string, projectId?: string): Promise<{ id: string; name: string }[]> {
-     if (!credentialsJsonString || !projectId) {
-       console.warn('[VertexProvider] Cannot fetch locations without credentials JSON and Project ID.');
-       return [];
-     }
-     console.warn(`[VertexProvider] Dynamic location fetching for project ${projectId} is not yet implemented due to SDK client issues. Returning empty list.`);
-     // Placeholder: Return empty array until implemented
-     return [];
-  }
-
+  // Removed getAvailableProjects and getAvailableLocations methods
 
   // --- Interface methods using stored secretStorage ---
 
