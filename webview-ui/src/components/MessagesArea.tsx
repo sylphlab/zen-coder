@@ -6,8 +6,9 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { ClipboardIcon, TrashIcon, ArrowPathIcon } from '@heroicons/react/24/outline'; // Use outline icons
+import { ClipboardIcon, TrashIcon, ArrowPathIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline'; // Use outline icons
 import { memo } from 'preact/compat'; // Import memo for optimization
+import { useState } from 'preact/hooks'; // Import useState
 
 // --- Component Types ---
 
@@ -52,28 +53,71 @@ const CodeBlock: FunctionalComponent<{ language: string | undefined; children: s
     );
 });
 
-// Component for rendering Tool Calls
+// Component for rendering Tool Calls (Collapsible)
+// Component for rendering Tool Calls (Collapsible)
 const ToolCallPart: FunctionalComponent<{ part: UiToolCallPart }> = ({ part }) => {
-    let statusIndicator = '';
-    if (part.status === 'pending' || part.status === 'running') {
-        statusIndicator = ' (Running...)';
-    } else if (part.status === 'error') {
-        statusIndicator = ' (Error)';
+    const [isExpanded, setIsExpanded] = useState(false); // Default to collapsed
+
+    let statusIcon = <ArrowPathIcon class="inline-block w-4 h-4 mr-1 animate-spin" />;
+    let statusText = 'Running...';
+    let statusColor = 'text-gray-600 dark:text-gray-300'; // Default/Running color
+
+    if (part.status === 'error') {
+        // Use ChevronRightIcon when collapsed, ChevronDownIcon when expanded for error state
+        statusIcon = isExpanded
+            ? <ChevronDownIcon class="inline-block w-4 h-4 mr-1 text-red-500" />
+            : <ChevronRightIcon class="inline-block w-4 h-4 mr-1 text-red-500" />;
+        statusText = 'Error';
+        statusColor = 'text-red-600 dark:text-red-400';
     } else if (part.status === 'complete') {
-        statusIndicator = ' (Completed)';
+         // Use ChevronRightIcon when collapsed, ChevronDownIcon when expanded for complete state
+        statusIcon = isExpanded
+            ? <ChevronDownIcon class="inline-block w-4 h-4 mr-1 text-green-500" />
+            : <ChevronRightIcon class="inline-block w-4 h-4 mr-1 text-green-500" />;
+        statusText = 'Completed';
+        statusColor = 'text-green-600 dark:text-green-400';
     }
+    // Keep spinner only for pending/running, otherwise use state-dependent icon
+    const displayIcon = (part.status === 'pending' || part.status === 'running') ? statusIcon : statusIcon;
+
+
+    const toggleExpand = () => setIsExpanded(!isExpanded);
 
     return (
-        <div class="my-2 p-3 border border-gray-300 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-700">
-            <p class="font-semibold text-sm text-gray-600 dark:text-gray-300">
-                <ArrowPathIcon class="inline-block w-4 h-4 mr-1 animate-spin" /> Tool Call: {part.toolName}{statusIndicator}
-            </p>
-            <pre class="text-xs mt-1 whitespace-pre-wrap"><code>{JSON.stringify(part.args, null, 2)}</code></pre>
-            {part.result && part.status === 'complete' && (
-                 <pre class="text-xs mt-1 pt-1 border-t border-gray-200 dark:border-gray-500 whitespace-pre-wrap"><code>Result: {JSON.stringify(part.result, null, 2)}</code></pre>
-            )}
-             {part.result && part.status === 'error' && (
-                 <pre class="text-xs mt-1 pt-1 border-t border-red-200 dark:border-red-500 text-red-600 dark:text-red-400 whitespace-pre-wrap"><code>Error: {JSON.stringify(part.result, null, 2)}</code></pre>
+        <div class="my-2 border border-gray-300 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-700 overflow-hidden">
+            {/* Clickable Header */}
+            <div
+                class="p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 flex justify-between items-center"
+                onClick={toggleExpand}
+                role="button"
+                aria-expanded={isExpanded}
+            >
+                <p class={`font-semibold text-sm ${statusColor}`}>
+                    {displayIcon} Tool Call: {part.toolName}
+                    {/* Show status text only if not pending/running */}
+                    {(part.status !== 'pending' && part.status !== 'running') && ` (${statusText})`}
+                </p>
+            </div>
+
+            {/* Collapsible Content */}
+            {isExpanded && (
+                <div class="p-3 border-t border-gray-200 dark:border-gray-500">
+                    <p class="text-xs font-medium mb-1 text-gray-500 dark:text-gray-400">Arguments:</p>
+                    <pre class="text-xs whitespace-pre-wrap bg-white dark:bg-gray-800 p-2 rounded"><code>{JSON.stringify(part.args, null, 2)}</code></pre>
+
+                    {part.result && part.status === 'complete' && (
+                        <>
+                            <p class="text-xs font-medium mt-2 mb-1 text-gray-500 dark:text-gray-400">Result:</p>
+                            <pre class="text-xs whitespace-pre-wrap bg-white dark:bg-gray-800 p-2 rounded"><code>{JSON.stringify(part.result, null, 2)}</code></pre>
+                        </>
+                    )}
+                    {part.result && part.status === 'error' && (
+                         <>
+                            <p class="text-xs font-medium mt-2 mb-1 text-red-500 dark:text-red-400">Error:</p>
+                            <pre class="text-xs whitespace-pre-wrap bg-red-50 dark:bg-red-900/20 p-2 rounded text-red-700 dark:text-red-300"><code>{JSON.stringify(part.result, null, 2)}</code></pre>
+                        </>
+                    )}
+                </div>
             )}
         </div>
     );

@@ -25,26 +25,25 @@
 *   **Fixed `$isStreamingResponse` Store:** Corrected definition.
 *   **Suggested Actions Pub/Sub:** Implemented backend push via `SubscriptionManager`, created frontend `$suggestedActions` store, integrated with UI.
 *   **Removed `reconcileFinalAssistantMessage`:** Eliminated redundant finalization logic.
+*   **Unified State Updates (JSON Patch):** Refactored backend managers and frontend stores (`createStore`, `createMutationStore`) to primarily use JSON Patch for state synchronization (except for simple boolean/full payload updates like streaming status/suggested actions).
+*   **Fixed `ConfigResolver` Logic:** Corrected provider/model validation and fallback logic.
+*   **Fixed Async Chain:** Ensured `async/await` is used correctly from `SendMessageHandler` down to `ConfigResolver`.
+*   **Fixed `$activeChatHistory` Store:** Removed conflicting `handleUpdate`.
+*   **Fixed `$defaultConfig` Store:** Corrected `SubscriptionManager` push logic (hopefully).
 
-## What's Left
-*   **BUGFIX: DeepSeek Model Resolution:** Still getting "Model: undefined" error. Need to trace `modelId` flow from `ConfigResolver` through `AiStreamer`. **(Immediate Priority)**
-*   **BUGFIX: Delayed Model Name Display:** Model/Provider names appear only after stream completion, not optimistically. Need to verify `addAssistantMessageFrame` and frontend store logic. **(Immediate Priority)**
-*   **Testing (Manual):** Thorough testing needed for core functionality, streaming, persistence, suggested actions, model display/selection, and delta updates once bugs are fixed.
+## What's Left / Known Issues
+*   **BUGFIX: Tool Call UI:** Spinner doesn't stop, default state isn't collapsed. (Lower Priority - Addressing collapsed state now)
+*   **BUGFIX: Error Message UI:** API errors (like function calling not supported) are logged but not shown in the UI. Need to update `Message` component to handle `status: 'error'`. (Medium Priority)
+*   **BUGFIX: `deepseek-reasoner` Function Calling Error:** While the error is correct (model doesn't support it), the UI should display the error gracefully instead of just stopping. (Related to Error Message UI bug).
+*   **BUGFIX: Settings Default Model Loading (Possible):** The "狂 load" issue might be fixed by the `SubscriptionManager` correction and Extension Host restart, but needs confirmation.
+*   **Testing (Manual):** Thorough testing needed once critical bugs are fixed.
 *   **Resume Image Upload (Backend & Full Test):** Review/update backend and test.
 *   **Compliance Review:** Apply `docs/general_guidelines.md`.
 *   **VS Code Tool Enhancements:** Implement remaining debug tools, enhance `runCommandTool`.
-*   **UI Refinements & Error Handling:** Ongoing task.
+*   **UI Refinements:** Ongoing task.
 *   **Address Timeout (If Needed):** Monitor if timeouts occur.
 
 ## Current Status
-*   **Refactoring Complete:** Removed `reconcileFinalAssistantMessage` and implemented incremental saves for text deltas. Model/Provider names are intended to be included in the initial message frame.
-*   **Critical Bugs Persist:** The "Model: undefined" error for DeepSeek and the delayed model name display indicate issues remain in the configuration resolution/passing or frontend state update logic.
-*   Core chat functionality is partially working but hampered by the above bugs.
-
-## Known Issues / TODOs
-*   **DeepSeek Model Resolution Error:** `modelId` becomes `undefined` during `sendMessage`.
-*   **Delayed Model Name Display:** Names not shown optimistically on pending messages.
-*   **Persistence on Abrupt Reload:** Partial messages being streamed might be lost. (Accepted Limitation)
-*   **Testing:** Blocked by critical bugs.
-*   **Timeout:** Potential issue needs monitoring.
-*   **Image Upload:** Backend needs verification/completion.
+*   **Major Refactoring Complete:** Unified state updates using JSON Patch, simplified optimistic UI handling.
+*   **Critical Bugs Persist:** The chat history clearing on send is the most critical issue blocking further testing. The missing model name on pending messages and lack of error display are also important UI bugs.
+*   Settings page stability needs re-verification after Extension Host restart.
