@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { useStore } from '@nanostores/react';
 import { JSX } from 'preact/jsx-runtime';
+import { Button } from '../ui/Button'; // Import the Button component
 import {
     $customInstructions,
     $setGlobalCustomInstructions,
@@ -107,13 +108,17 @@ export function CustomInstructionsSettings(): JSX.Element {
                     aria-label="Global Custom Instructions"
                     disabled={isLoading || isSavingGlobal}
                 />
-                <button
+                {/* Use Button component for Save Global */}
+                <Button
+                    variant="primary"
+                    size="md"
                     onClick={handleSaveGlobalInstructions}
-                    class={`mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 ${isSavingGlobal ? 'animate-pulse' : ''}`}
+                    className={`mt-2 bg-green-600 hover:bg-green-700`} // Override color
                     disabled={isLoading || isSavingGlobal}
+                    loading={isSavingGlobal} // Use loading prop
                 >
-                    {isSavingGlobal ? 'Saving...' : 'Save Global Instructions'}
-                </button>
+                    Save Global Instructions
+                </Button>
             </div>
 
             {/* Project Instructions */}
@@ -139,20 +144,27 @@ export function CustomInstructionsSettings(): JSX.Element {
                     disabled={isLoading || isSavingProject}
                 />
                  <div class="mt-2 flex space-x-2">
-                     <button
+                     {/* Use Button component for Save Project */}
+                     <Button
+                         variant="primary"
+                         size="md"
                          onClick={handleSaveProjectInstructions}
-                         class={`px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 ${isSavingProject ? 'animate-pulse' : ''}`}
+                         className={`bg-green-600 hover:bg-green-700`} // Override color
                          disabled={isLoading || isSavingProject}
+                         loading={isSavingProject} // Use loading prop
                      >
-                         {isSavingProject ? 'Saving...' : 'Save Project Instructions'}
-                     </button>
-                     <button
+                         Save Project Instructions
+                     </Button>
+                     {/* Use Button component for Open/Create File */}
+                     <Button
+                         variant="secondary"
+                         size="md"
                          onClick={handleOpenProjectInstructionsFile}
-                         class={`px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 ${isOpeningFile ? 'animate-pulse' : ''}`}
                          disabled={isOpeningFile}
+                         loading={isOpeningFile} // Use loading prop
                      >
                          Open/Create Project File
-                     </button>
+                     </Button>
                  </div>
             </div>
         </section>

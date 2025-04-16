@@ -9,6 +9,7 @@ import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { ClipboardIcon, TrashIcon, ArrowPathIcon, ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline'; // Use outline icons
 import { memo } from 'preact/compat'; // Import memo for optimization
 import { useState } from 'preact/hooks'; // Import useState
+import { Button } from './ui/Button'; // Import the Button component
 
 // --- Component Types ---
 
@@ -219,28 +220,33 @@ const Message: FunctionalComponent<MessageProps> = memo(({ message, isStreaming,
 
                 {/* Actions (Copy/Delete) - Show only for non-pending messages */}
                 {!isPending && (
-                     <div class="flex justify-end space-x-2 mt-1 opacity-50 group-hover:opacity-100 transition-opacity duration-150"> {/* Adjusted margin-top */}
-                         <button onClick={handleCopy} class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600" title="Copy">
+                     <div class="flex justify-end space-x-1 mt-1 opacity-50 group-hover:opacity-100 transition-opacity duration-150"> {/* Adjusted margin-top and space */}
+                         {/* Use Button component for Copy */}
+                         <Button variant="ghost" size="icon" onClick={handleCopy} title="Copy" className="!h-6 !w-6"> {/* Smaller icon button */}
                              <ClipboardIcon class="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                         </button>
-                         <button onClick={handleDelete} class="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600" title="Delete">
+                         </Button>
+                         {/* Use Button component for Delete */}
+                         <Button variant="ghost" size="icon" onClick={handleDelete} title="Delete" className="!h-6 !w-6"> {/* Smaller icon button */}
                              <TrashIcon class="h-4 w-4 text-gray-500 dark:text-gray-400" />
-                         </button>
+                         </Button>
                      </div>
                 )}
                 {/* Suggested Actions - Show only for the last assistant message when not streaming and not pending */}
                  {!isUser && !isStreaming && !isPending && suggestedActions && suggestedActions.length > 0 && (
-                     <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 flex flex-wrap gap-2">
-                         {suggestedActions.map((action, index) => (
-                             <button
-                                 key={index}
-                                 onClick={() => handleSuggestedActionClick(action)}
-                                 class="text-xs bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300 py-1 px-2 rounded"
-                             >
-                                 {action.label}
-                             </button>
-                         ))}
-                     </div>
+                      <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 flex flex-wrap gap-2">
+                          {suggestedActions.map((action, index) => (
+                              /* Use Button component for Suggested Actions */
+                              <Button
+                                  key={index}
+                                  variant="secondary" // Or maybe 'outline' or 'ghost' depending on desired look
+                                  size="sm"
+                                  onClick={() => handleSuggestedActionClick(action)}
+                                  className="text-xs !h-auto !px-2 !py-1 bg-blue-100 dark:bg-blue-900 hover:bg-blue-200 dark:hover:bg-blue-800 text-blue-700 dark:text-blue-300" // Override styles for specific look
+                              >
+                                  {action.label}
+                              </Button>
+                          ))}
+                      </div>
                  )}
             </div>
         </div>

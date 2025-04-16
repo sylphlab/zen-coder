@@ -1,4 +1,5 @@
 import { FunctionalComponent } from 'preact';
+import { Button } from './ui/Button'; // Import the Button component
 
 interface ConfirmationDialogProps {
     show: boolean;
@@ -29,12 +30,14 @@ export const ConfirmationDialog: FunctionalComponent<ConfirmationDialogProps> = 
                 <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100">{title}</h3>
                 <p class="mb-6 text-gray-700 dark:text-gray-300">{message}</p>
                 <div class="flex justify-end space-x-3">
-                    <button onClick={onCancel} class="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 rounded hover:bg-gray-400 dark:hover:bg-gray-500">
+                    {/* Use Button component for Cancel */}
+                    <Button variant="secondary" onClick={onCancel}>
                         {cancelText}
-                    </button>
-                    <button onClick={onConfirm} class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                    </Button>
+                    {/* Use Button component for Confirm, potentially with a destructive variant */}
+                    <Button variant="primary" onClick={onConfirm} className="bg-red-600 hover:bg-red-700"> {/* Override primary for destructive */}
                         {confirmText}
-                    </button>
+                    </Button>
                 </div>
             </div>
         </div>

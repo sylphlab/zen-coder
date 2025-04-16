@@ -4,6 +4,7 @@ import { JSX } from 'preact/jsx-runtime';
 import { ProviderInfoAndStatus } from '../../../../src/common/types'; // Removed LocationWithRegion import
 import { requestData } from '../../utils/communication'; // Added requestData import
 import { CustomSelect } from '../ui/CustomSelect'; // Updated import path
+import { Button } from '../ui/Button'; // Import the Button component
 import {
     $providerStatus,
     $setApiKey,
@@ -264,23 +265,30 @@ export function ProviderSettings(): JSX.Element {
                                 )}
                                 {/* Buttons (Set/Delete) */}
                                 <div class="flex flex-col space-y-1 flex-shrink-0">
-                                    <button
-                                        class={`px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isSettingKey ? 'animate-pulse' : ''}`}
-                                        onClick={() => handleSetCredentials(id, !!usesComplexCredentials)} // Pass complex flag
+                                    {/* Use Button component for Set */}
+                                    <Button
+                                        variant="primary"
+                                        size="sm" // Use smaller size to fit better
+                                        onClick={() => handleSetCredentials(id, !!usesComplexCredentials)}
                                         disabled={isSetButtonDisabled}
+                                        loading={isSettingKey} // Use loading prop
                                         aria-label={`Set ${name} ${keyLabel}`}
                                     >
-                                        {isSettingKey ? '設定中...' : '設定'}
-                                    </button>
+                                        設定
+                                    </Button>
                                     {credentialsSet && (
-                                        <button
-                                            class={`px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${isDeletingKey ? 'animate-pulse' : ''}`}
-                                            onClick={() => handleDeleteApiKey(id)} // Delete still uses the same logic
+                                        /* Use Button component for Delete */
+                                        <Button
+                                            variant="secondary" // Use secondary or a dedicated destructive variant
+                                            size="sm" // Use smaller size
+                                            onClick={() => handleDeleteApiKey(id)}
                                             disabled={isSettingKey || isDeletingKey}
+                                            loading={isDeletingKey} // Use loading prop
+                                            className={`bg-red-600 hover:bg-red-700 text-white`} // Override for destructive
                                             aria-label={`Delete ${name} ${keyLabel}`}
                                         >
                                             刪除
-                                        </button>
+                                        </Button>
                                     )}
                                 </div>
                             </div>

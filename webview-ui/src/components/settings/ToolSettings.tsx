@@ -20,6 +20,7 @@ import {
     $retryMcpConnection
 } from '../../stores/mcpStores';
 import { McpServerStatus } from '../../../../src/ai/mcpManager';
+import { Button } from '../ui/Button'; // Import the Button component
 
 // --- Mock Icons (Ensure these are defined or replaced with actual imports) ---
 const ChevronRightIcon = () => (
@@ -77,15 +78,18 @@ const renderToolItem = (
                     <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 whitespace-normal">{description}</p>
                 )}
             </div>
-            {/* Action Button */}
-            <button
-                class={`flex-shrink-0 ${buttonClass} ${isSavingAuth ? 'opacity-50 cursor-not-allowed' : ''}`}
+            {/* Action Button - Use Button component */}
+            <Button
+                // Determine variant based on status? Or keep it simple? Let's use secondary for now.
+                variant="secondary"
+                size="sm" // Use smaller size
+                className={`flex-shrink-0 ${buttonClass.replace(/px-\d+|py-\d+|text-xs|rounded|focus:outline-none|focus:ring-\d+|focus:ring-offset-\d+|focus:ring-\w+-\d+/g, '').trim()} ${isSavingAuth ? 'opacity-50 cursor-not-allowed' : ''}`} // Apply base color/hover from original class, remove sizing/focus
                 onClick={() => handleToolToggle(toolId, configuredStatus)}
                 disabled={isSavingAuth}
                 title={resolvedTooltip}
             >
                 {buttonText}
-            </button>
+            </Button>
         </li>
     );
 };
@@ -201,12 +205,30 @@ export function ToolSettings(): JSX.Element {
                     </div>
                     {/* Right: Buttons */}
                     <div class="flex items-center space-x-2 flex-shrink-0">
+                        {/* Use Button component for Retry */}
                         {isMcpCategory && mcpShowRetryButton && serverIdentifier && (
-                            <button onClick={(e) => { e.stopPropagation(); handleRetryConnection(serverIdentifier); }} class={`px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`} disabled={retryingServerName !== null} aria-label={`Retry connection for ${category.name}`}>Retry</button>
+                            <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); handleRetryConnection(serverIdentifier); }}
+                                className="!py-1 !px-2 text-xs" // Override padding/text size
+                                disabled={retryingServerName !== null}
+                                aria-label={`Retry connection for ${category.name}`}
+                            >
+                                Retry
+                            </Button>
                         )}
-                        <button onClick={(e) => { e.stopPropagation(); handleCategoryStatusToggle(category.id, category.status); }} class={`text-xs px-2 py-1 rounded focus:outline-none focus:ring-2 focus:ring-offset-1 ${isSavingAuth ? 'opacity-50 cursor-not-allowed' : ''} ${ category.status === CategoryStatus.AlwaysAvailable ? 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-400' : category.status === CategoryStatus.RequiresAuthorization ? 'bg-yellow-500 text-black hover:bg-yellow-600 focus:ring-yellow-400' : 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-400' }`} title={`Click to change ${isMcpCategory ? 'server' : 'category'} status (Current: ${category.status})`} disabled={isSavingAuth}>
+                        {/* Use Button component for Category Status Toggle */}
+                        <Button
+                            variant="secondary" // Or determine based on status
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); handleCategoryStatusToggle(category.id, category.status); }}
+                            className={`!py-1 !px-2 text-xs ${isSavingAuth ? 'opacity-50 cursor-not-allowed' : ''} ${ category.status === CategoryStatus.AlwaysAvailable ? 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-400' : category.status === CategoryStatus.RequiresAuthorization ? 'bg-yellow-500 text-black hover:bg-yellow-600 focus:ring-yellow-400' : 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-400' }`.replace(/focus:ring-\d+|focus:ring-offset-\d+|focus:ring-\w+-\d+/g, '').trim()} // Apply colors, remove focus rings handled by Button
+                            title={`Click to change ${isMcpCategory ? 'server' : 'category'} status (Current: ${category.status})`}
+                            disabled={isSavingAuth}
+                        >
                             {isMcpCategory ? 'Server' : 'Category'}: {category.status}
-                        </button>
+                        </Button>
                     </div>
                 </div>
                 {/* Collapsible Tool List */}
@@ -233,14 +255,28 @@ export function ToolSettings(): JSX.Element {
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
                 Toggle individual tools or entire categories/servers on/off for the AI to use. Configure MCP server connections via JSON files (Project settings override Global).
             </p>
-            {/* MCP Config Buttons */}
+            {/* MCP Config Buttons - Use Button component */}
             <div class="flex space-x-4 mb-4">
-                <button onClick={handleOpenGlobalMcpConfig} class={`px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${isOpeningGlobal ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isOpeningGlobal}>
-                    {isOpeningGlobal ? 'Opening...' : 'Configure Global Servers'}
-                </button>
-                <button onClick={handleOpenProjectMcpConfig} class={`px-4 py-2 bg-teal-600 text-white rounded hover:bg-teal-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 ${isOpeningProject ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={isOpeningProject}>
-                    {isOpeningProject ? 'Opening...' : 'Configure Project Servers'}
-                </button>
+                <Button
+                    variant="primary" // Or a specific color variant if defined
+                    size="md"
+                    onClick={handleOpenGlobalMcpConfig}
+                    className={`bg-indigo-600 hover:bg-indigo-700`} // Override color
+                    disabled={isOpeningGlobal}
+                    loading={isOpeningGlobal} // Use loading prop
+                >
+                    Configure Global Servers
+                </Button>
+                <Button
+                    variant="primary" // Or a specific color variant if defined
+                    size="md"
+                    onClick={handleOpenProjectMcpConfig}
+                    className={`bg-teal-600 hover:bg-teal-700`} // Override color
+                    disabled={isOpeningProject}
+                    loading={isOpeningProject} // Use loading prop
+                >
+                    Configure Project Servers
+                </Button>
             </div>
 
             {/* Loading Status */}
