@@ -172,20 +172,9 @@ export class StreamProcessor {
          modelName: string // Added
      ): Promise<void> {
           console.log(`[StreamProcessor|${chatId}] Starting post-stream processing for message ${messageId}.`);
-          try {
-               await this._historyManager.messageModifier.reconcileFinalAssistantMessage(
-                   chatId,
-                   messageId,
-                   null,
-                   providerId, // Pass through
-                   providerName, // Pass through
-                   modelId, // Pass through
-                   modelName, // Pass through
-                   () => {} // Dummy callback
-               );
-                console.log(`[StreamProcessor|${chatId}] Completed post-stream processing (reconcile) for message ${messageId}.`);
-          } catch (error) {
-               console.error(`[StreamProcessor|${chatId}] Error during reconcileFinalAssistantMessage for message ${messageId}:`, error);
-          }
+          // The reconcileFinalAssistantMessage function has been removed.
+          // Finalization logic (parsing suggested actions, pushing final status/model info)
+          // is now handled directly in SendMessageHandler after processStream completes or errors.
+          console.log(`[StreamProcessor|${chatId}] Post-stream processing logic moved to SendMessageHandler for message ${messageId}.`);
      }
 }

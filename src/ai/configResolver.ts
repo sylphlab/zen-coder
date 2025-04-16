@@ -59,6 +59,7 @@ export class ConfigResolver {
             effectiveConfig.optimizeModelId = chat.config.optimizeModelId;
         } else {
             // Use defaults, overridden by chat specifics if they exist
+            console.log(`[ConfigResolver|${chatId}] Using defaults. Chat Provider: ${chat?.config.providerId}, Chat Model: ${chat?.config.modelId}, Default Provider: ${defaults.defaultProviderId}, Default Model: ${defaults.defaultModelId}`); // *** ADDED LOGGING ***
             finalProviderId = chat?.config.providerId ?? defaults.defaultProviderId;
             finalModelId = chat?.config.modelId ?? defaults.defaultModelId;
             effectiveConfig.imageModelId = chat?.config.imageModelId ?? defaults.defaultImageModelId;

@@ -10,6 +10,8 @@ import {
     UiMessage,                     // Added
     HistoryAddMessageDelta         // Added
 } from '../../common/types';
+// Import the parsing function
+import { parseAndValidateSuggestedActions } from '../../utils/historyUtils';
 
 export class SendMessageHandler implements RequestHandler {
     public readonly requestType = 'sendMessage';
@@ -124,9 +126,40 @@ export class SendMessageHandler implements RequestHandler {
              });
 
 
-            // 6. Finalize history (reconcile text, extract suggested actions, add model info)
-            // Use the already fetched names from higher scope
-            await this._finalizeHistory(chatId, assistantUiMsgId, providerId, providerName, modelId, modelName, context); // Pass details
+            // 6. Finalize after stream completion (success or error)
+            try {
+                console.log(`[SendMessageHandler|${chatId}] Finalizing message ${assistantUiMsgId} after stream.`);
+                // Get the final message content (which should have been saved incrementally)
+                const finalMessage = context.historyManager.getMessage(chatId, assistantUiMsgId);
+                const finalAccumulatedText = finalMessage?.content
+                    .filter((part): part is { type: 'text', text: string } => part.type === 'text')
+                    .map(part => part.text)
+                    .join('') ?? '';
+
+                // Parse suggested actions from the final text
+                const { actions: parsedActions, textWithoutBlock } = parseAndValidateSuggestedActions(finalAccumulatedText);
+
+                // If the text changed due to action block removal, we might need a way
+                // to update just the text part without re-saving everything,
+                // or accept that the final save might include the block if parsing failed.
+                // For now, we assume incremental saves handled the text.
+
+                // Push suggested actions update
+                subscriptionManager.notifySuggestedActionsUpdate({
+                    type: 'setActions',
+                    chatId: chatId,
+                    messageId: assistantUiMsgId,
+                    actions: parsedActions ?? []
+                });
+                console.log(`[SendMessageHandler|${chatId}] Pushed suggested actions for ${assistantUiMsgId} (Count: ${parsedActions?.length ?? 0}).`);
+
+                // Optional: Trigger one final save as a safeguard, though incremental saves should cover it.
+                // await context.chatSessionManager.touchChatSession(chatId);
+                // console.log(`[SendMessageHandler|${chatId}] Optional final save triggered for ${assistantUiMsgId}.`);
+
+            } catch (finalizationError) {
+                 console.error(`[SendMessageHandler|${chatId}] Error during finalization for ${assistantUiMsgId}:`, finalizationError);
+            }
 
         } catch (error: any) {
             console.error("[SendMessageHandler] Error processing AI stream:", error);
@@ -140,30 +173,25 @@ export class SendMessageHandler implements RequestHandler {
                      messageId: assistantUiMsgId,
                      status: 'error'
                  });
+                 // Attempt to save state even after error (touchChatSession saves current state)
+                 try {
+                      console.warn(`[SendMessageHandler|${chatId}] Attempting final save for ${assistantUiMsgId} after error.`);
+                      await context.chatSessionManager.touchChatSession(chatId); // Save whatever state exists
+                      // Clear suggested actions on error
+                      subscriptionManager.notifySuggestedActionsUpdate({
+                          type: 'setActions',
+                          chatId: chatId,
+                          messageId: assistantUiMsgId,
+                          actions: []
+                      });
+                 } catch (saveError) {
+                      console.error(`[SendMessageHandler|${chatId}] Error during post-error save for ${assistantUiMsgId}:`, saveError);
+                 }
             } else {
                  // If we don't have IDs, send a general error message
                  context.postMessage({ type: 'addMessage', sender: 'assistant', text: `Sorry, an error occurred: ${error.message}` });
             }
-
-            // Reconciliation is now handled in finalizeHistory, which might still be useful
-            // even after an error (e.g., to save partial text). Let finalize run.
-            if (chatId && assistantUiMsgId) {
-                try {
-                     console.warn(`[SendMessageHandler|${chatId}] Attempting to finalize history for ${assistantUiMsgId} after error.`);
-                    // Use higher-scoped variables, provide fallbacks if they are somehow still undefined
-                    await this._finalizeHistory(
-                        chatId,
-                        assistantUiMsgId,
-                        providerId ?? 'unknown',
-                        providerName ?? 'Unknown',
-                        modelId ?? 'unknown',
-                        modelName ?? 'Unknown',
-                        context
-                    );
-                } catch (finalizationError) {
-                    console.error(`[SendMessageHandler|${chatId}] Error during post-error history finalization for ${assistantUiMsgId}:`, finalizationError);
-                }
-            }
+            // Removed the second _finalizeHistory call from catch block
         }
     }
 
@@ -265,53 +293,5 @@ export class SendMessageHandler implements RequestHandler {
         return { streamResult };
     }
 
-    // Removed _processAIResponse method - logic moved into handle
-
-    /** Finalizes the history after stream processing (reconciles text, extracts actions, adds model info). */
-    private async _finalizeHistory(
-        chatId: string,
-        assistantUiMsgId: string,
-        providerId: string | undefined, // Allow undefined from catch block
-        providerName: string | undefined, // Allow undefined
-        modelId: string | undefined, // Allow undefined
-        modelName: string | undefined, // Allow undefined
-        context: HandlerContext
-    ): Promise<void> {
-        try {
-            console.log(`[SendMessageHandler|${chatId}] Finalizing history for message ${assistantUiMsgId}.`);
-            // Reconcile history using accumulated text and null for finalCoreMessage via messageModifier
-            // Use fallbacks directly in the call if values might be undefined
-            await context.historyManager.messageModifier.reconcileFinalAssistantMessage(
-                chatId,
-                assistantUiMsgId,
-                null,
-                providerId ?? 'unknown',
-                providerName ?? 'Unknown',
-                modelId ?? 'unknown',
-                modelName ?? 'Unknown',
-                context.postMessage // Pass callback (though likely unused now)
-            );
-// Get the updated session data AFTER reconciliation via ChatSessionManager
-const updatedSession = context.chatSessionManager.getChatSession(chatId); // Use chatSessionManager
-if (updatedSession) {
-    // Trigger a push update for the specific chat session
-    const topic = `chatSessionUpdate/${chatId}`;
-    context.postMessage({
-        type: 'pushUpdate',
-        payload: {
-            topic: topic,
-            data: updatedSession // Send the full updated session object
-        }
-    });
-    console.log(`[SendMessageHandler] History reconciled for chat ${chatId} and ${topic} pushed.`);
-} else {
-     console.warn(`[SendMessageHandler] Could not find session ${chatId} after reconciliation to push.`);
-}
-
-        } catch (finalMsgError) {
-            console.error(`[SendMessageHandler] Error during final history reconciliation for ID ${assistantUiMsgId}:`, finalMsgError);
-            // Optionally re-throw or handle further? For now, just log.
-            // Consider if we should still push state even if reconciliation fails partially? Probably not.
-        }
-    }
+    // Removed _finalizeHistory method
 }
