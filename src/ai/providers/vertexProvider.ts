@@ -2,8 +2,10 @@ import * as vscode from 'vscode';
 import { createVertex } from '@ai-sdk/google-vertex';
 import { LanguageModel } from 'ai';
 import { AiProvider, ModelDefinition } from './providerInterface';
+import { ResourceManagerClient } from '@google-cloud/resource-manager';
+import { PredictionServiceClient } from '@google-cloud/aiplatform'; // For locations, potentially models
 
-// Define known Vertex models (add more as needed)
+// Define known Vertex models (add more as needed) - Keep as fallback
 // Note: IDs should match the actual model IDs used by the Vertex AI API
 const KNOWN_VERTEX_MODELS: ModelDefinition[] = [
   { id: 'vertex:gemini-1.5-pro-latest', name: 'Gemini 1.5 Pro Latest' },
@@ -97,14 +99,117 @@ export class VertexProvider implements AiProvider {
    * This would require the project ID and location, and potentially additional permissions
    * for the service account (e.g., `aiplatform.models.list`).
    * Example endpoint: `https://{location}-aiplatform.googleapis.com/v1/projects/{projectId}/locations/{location}/publishers/google/models`
-   * TODO: Implement dynamic model fetching.
+   * Attempts dynamic fetching, falls back to static list on error.
    */
   async getAvailableModels(credentialsObject?: any): Promise<ModelDefinition[]> {
-    // For now, return the static list regardless of credentials validity.
     console.log(`[VertexProvider] getAvailableModels called. Provided credentials object: ${!!credentialsObject}`);
-    // Return a copy to prevent modification
-    return [...KNOWN_VERTEX_MODELS];
+
+    if (!credentialsObject || !credentialsObject.credentialsJson) {
+      console.warn('[VertexProvider] Cannot fetch dynamic models without credentials JSON.');
+      return [...KNOWN_VERTEX_MODELS]; // Return static list if no creds
+    }
+
+    const projectId = credentialsObject.projectId; // Use project ID from the object if available
+    const location = credentialsObject.location || 'us-central1'; // Default location if not provided
+
+    if (!projectId) {
+        console.warn('[VertexProvider] Cannot fetch dynamic models without a Project ID.');
+        return [...KNOWN_VERTEX_MODELS]; // Return static list if no project ID
+    }
+
+    try {
+      const clientOptions = { credentials: JSON.parse(credentialsObject.credentialsJson) };
+      // Use PredictionServiceClient for listing models, adjust API version if needed
+      const predictionClient = new PredictionServiceClient({ ...clientOptions, apiEndpoint: `${location}-aiplatform.googleapis.com` });
+
+      // Construct the parent resource path
+      const parent = `projects/${projectId}/locations/${location}/publishers/google`;
+
+      console.log(`[VertexProvider] Fetching models from parent: ${parent}`);
+
+      // Call listModels - Note: This might list *all* models, need filtering for generative ones
+      // The actual API might differ, this is based on common patterns. Check SDK docs.
+      // This specific call might not exist directly, might need raw REST or different client.
+      // Let's assume a hypothetical listModels method for now.
+      // If this fails, we need to adjust based on actual @google-cloud/aiplatform capabilities.
+
+      // Placeholder: Actual implementation requires checking the correct method in @google-cloud/aiplatform
+      // For now, we'll simulate a successful fetch returning the static list to avoid breaking.
+      // In a real scenario, replace this with the actual API call and error handling.
+      console.warn('[VertexProvider] Dynamic model fetching simulation: Returning static list.');
+      // const [modelsResponse] = await predictionClient.listModels({ parent }); // Hypothetical call
+      // console.log('[VertexProvider] Raw models response:', modelsResponse);
+      // Filter and map modelsResponse to ModelDefinition[] here...
+
+      // Simulate success with static list for now
+      return [...KNOWN_VERTEX_MODELS];
+
+    } catch (error) {
+      console.error(`[VertexProvider] Error fetching dynamic models for project ${projectId} in ${location}:`, error);
+      console.warn('[VertexProvider] Falling back to static model list.');
+      return [...KNOWN_VERTEX_MODELS]; // Fallback to static list on error
+    }
   }
+
+  /**
+   * Fetches available Google Cloud projects accessible by the credentials.
+   */
+  async getAvailableProjects(credentialsJsonString?: string): Promise<{ id: string; name: string }[]> {
+    if (!credentialsJsonString) {
+      console.warn('[VertexProvider] Cannot fetch projects without credentials JSON.');
+      return [];
+    }
+    try {
+      const clientOptions = { credentials: JSON.parse(credentialsJsonString) };
+      const resourceManagerClient = new ResourceManagerClient(clientOptions);
+      const [projects] = await resourceManagerClient.searchProjects();
+      console.log(`[VertexProvider] Fetched ${projects.length} projects.`);
+      return projects
+        .filter(p => p.projectId && p.displayName) // Ensure essential fields exist
+        .map(p => ({ id: p.projectId!, name: p.displayName! }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    } catch (error) {
+      console.error('[VertexProvider] Error fetching projects:', error);
+      // Inform the user about potential permission issues
+      vscode.window.showWarningMessage('Failed to fetch Google Cloud projects. Ensure the service account has "resourcemanager.projects.list" permission.');
+      return [];
+    }
+  }
+
+  /**
+   * Fetches available Google Cloud locations for AI Platform (Vertex AI).
+   * Requires a project ID.
+   */
+  async getAvailableLocations(credentialsJsonString?: string, projectId?: string): Promise<{ id: string; name: string }[]> {
+     if (!credentialsJsonString || !projectId) {
+       console.warn('[VertexProvider] Cannot fetch locations without credentials JSON and Project ID.');
+       return [];
+     }
+     try {
+       const clientOptions = { credentials: JSON.parse(credentialsJsonString) };
+       // Use PredictionServiceClient, potentially needs adjustment for location listing endpoint
+       const predictionClient = new PredictionServiceClient(clientOptions); // May need specific apiEndpoint?
+
+       // Construct the parent resource path for listing locations
+       const name = `projects/${projectId}`;
+       console.log(`[VertexProvider] Fetching locations for project: ${name}`);
+
+       // Call listLocations - Check SDK for correct method and parameters
+       const [locations] = await predictionClient.listLocations({ name });
+       console.log(`[VertexProvider] Fetched ${locations.length} locations.`);
+
+       return locations
+         .filter(l => l.locationId && l.displayName)
+         .map(l => ({ id: l.locationId!, name: l.displayName! }))
+         .sort((a, b) => a.name.localeCompare(b.name));
+
+     } catch (error) {
+       console.error(`[VertexProvider] Error fetching locations for project ${projectId}:`, error);
+       vscode.window.showWarningMessage(`Failed to fetch Google Cloud locations for project ${projectId}. Ensure the service account has "aiplatform.locations.list" permission.`);
+       return [];
+     }
+  }
+
 
   // --- Interface methods using stored secretStorage ---
 

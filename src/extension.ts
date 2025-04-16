@@ -61,6 +61,8 @@ import { SubscribeHandler } from './webview/handlers/SubscribeHandler';
 import { UnsubscribeHandler } from './webview/handlers/UnsubscribeHandler';
 import { OpenGlobalMcpConfigHandler } from './webview/handlers/OpenGlobalMcpConfigHandler';
 import { OpenProjectMcpConfigHandler } from './webview/handlers/OpenProjectMcpConfigHandler';
+import { GetVertexProjectsHandler } from './webview/handlers/GetVertexProjectsHandler'; // Added
+import { GetVertexLocationsHandler } from './webview/handlers/GetVertexLocationsHandler'; // Added
 
 let aiServiceInstance: AiService | undefined = undefined;
 
@@ -141,7 +143,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._aiService = aiService;
         this._chatSessionManager = chatSessionManager;
         this._historyManager = historyManager; // Store the passed instance
-        this._configResolver = new ConfigResolver(this._chatSessionManager);
+        // Pass ProviderManager from AiService to ConfigResolver
+        this._configResolver = new ConfigResolver(this._chatSessionManager, aiService.providerManager);
         this._modelResolver = new ModelResolver(context, aiService.providerStatusManager, aiService);
         this._handlers = new Map();
         // Pass postMessageCallback directly to McpManager constructor
@@ -186,6 +189,8 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new ExecuteToolActionHandler(),
             new OpenGlobalMcpConfigHandler(),
             new OpenProjectMcpConfigHandler(),
+            new GetVertexProjectsHandler(), // Added
+            new GetVertexLocationsHandler(), // Added
         ];
 
         allHandlers.forEach(handler => {

@@ -1,7 +1,8 @@
-import { useState, useMemo, useCallback } from 'preact/hooks';
+import { useState, useMemo, useCallback, useEffect } from 'preact/hooks'; // Added useEffect
 import { useStore } from '@nanostores/react';
 import { JSX } from 'preact/jsx-runtime';
 import { ProviderInfoAndStatus } from '../../../../src/common/types';
+import { requestData } from '../../utils/communication'; // Added requestData import
 import {
     $providerStatus,
     $setApiKey,
@@ -25,6 +26,11 @@ export function ProviderSettings(): JSX.Element {
     const [projectIdInput, setProjectIdInput] = useState<{ [providerId: string]: string }>({});
     const [locationInput, setLocationInput] = useState<{ [providerId: string]: string }>({});
     const [searchQuery, setSearchQuery] = useState('');
+    // State for fetched projects and locations
+    const [vertexProjects, setVertexProjects] = useState<{ id: string; name: string }[]>([]);
+    const [vertexLocations, setVertexLocations] = useState<{ id: string; name: string }[]>([]);
+    const [isFetchingProjects, setIsFetchingProjects] = useState(false);
+    const [isFetchingLocations, setIsFetchingLocations] = useState(false);
 
     const handleCredentialsJsonChange = (providerId: string, value: string) => {
         setCredentialsJsonInput(prev => ({ ...prev, [providerId]: value }));
@@ -124,6 +130,57 @@ export function ProviderSettings(): JSX.Element {
         );
     }, [searchQuery, providerStatus]);
 
+    // Effect to fetch projects/locations when Vertex credentials are set
+    useEffect(() => {
+        const vertexStatus = Array.isArray(providerStatus)
+            ? providerStatus.find(p => p.id === 'vertex')
+            : undefined;
+
+        if (vertexStatus?.credentialsSet && vertexStatus.enabled) {
+            // Fetch projects if not already fetched
+            if (vertexProjects.length === 0 && !isFetchingProjects) {
+                console.log('[ProviderSettings Effect] Fetching Vertex projects...');
+                setIsFetchingProjects(true);
+                requestData<{ id: string; name: string }[]>('getVertexProjects')
+                    .then(projects => {
+                        console.log('[ProviderSettings Effect] Fetched projects:', projects);
+                        setVertexProjects(projects || []);
+                    })
+                    .catch(error => {
+                        console.error('[ProviderSettings Effect] Error fetching Vertex projects:', error);
+                        // Optionally show error to user
+                    })
+                    .finally(() => setIsFetchingProjects(false));
+            }
+
+            // Fetch locations if project ID is selected/available and not already fetched
+            const selectedProjectId = projectIdInput['vertex'] || vertexStatus.currentProjectId;
+            if (selectedProjectId && vertexLocations.length === 0 && !isFetchingLocations) {
+                 console.log(`[ProviderSettings Effect] Fetching Vertex locations for project ${selectedProjectId}...`);
+                 setIsFetchingLocations(true);
+                 requestData<{ id: string; name: string }[]>('getVertexLocations', { projectId: selectedProjectId })
+                     .then(locations => {
+                         console.log('[ProviderSettings Effect] Fetched locations:', locations);
+                         setVertexLocations(locations || []);
+                     })
+                     .catch(error => {
+                         console.error(`[ProviderSettings Effect] Error fetching Vertex locations for project ${selectedProjectId}:`, error);
+                         // Optionally show error to user
+                     })
+                     .finally(() => setIsFetchingLocations(false));
+            } else if (!selectedProjectId && vertexLocations.length > 0) {
+                // Clear locations if project ID is removed
+                setVertexLocations([]);
+            }
+        } else {
+            // Clear projects/locations if credentials are removed or provider disabled
+            if (vertexProjects.length > 0) setVertexProjects([]);
+            if (vertexLocations.length > 0) setVertexLocations([]);
+        }
+    // Depend on providerStatus to refetch when credentials change, and projectIdInput for locations
+    }, [providerStatus, projectIdInput, vertexProjects.length, vertexLocations.length, isFetchingProjects, isFetchingLocations]);
+
+
     const renderProviderSetting = (providerInfo: ProviderInfoAndStatus): JSX.Element => {
         // Destructure all properties including new ones
         const { id, name, apiKeyUrl, apiKeyDescription, requiresApiKey, enabled, credentialsSet, usesComplexCredentials, currentProjectId, currentLocation } = providerInfo;
@@ -203,29 +260,61 @@ export function ProviderSettings(): JSX.Element {
                                 <div class="grid grid-cols-2 gap-2 mt-2">
                                     <div>
                                         <label htmlFor={`project-id-${id}`} class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Project ID (選填)</label>
-                                        <input
-                                            type="text"
-                                            id={`project-id-${id}`}
-                                            class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                            placeholder={currentProjectId || "你的 GCP Project ID"}
-                                            value={projectIdInput[id] || ''}
-                                            onInput={(e) => handleProjectIdChange(id, (e.target as HTMLInputElement).value)}
-                                            aria-label={`${name} Project ID Input`}
-                                            disabled={isSettingKey || isDeletingKey}
-                                        />
+                                        {vertexProjects.length > 0 ? (
+                                            <select
+                                                id={`project-id-${id}`}
+                                                class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                value={projectIdInput[id] || currentProjectId || ''} // Use currentProjectId from status as initial value
+                                                onChange={(e) => handleProjectIdChange(id, (e.target as HTMLSelectElement).value)}
+                                                aria-label={`${name} Project ID Select`}
+                                                disabled={isSettingKey || isDeletingKey || isFetchingProjects}
+                                            >
+                                                <option value="">{isFetchingProjects ? '載入中...' : '-- 選擇 Project --'}</option>
+                                                {vertexProjects.map(proj => (
+                                                    <option key={proj.id} value={proj.id}>{proj.name} ({proj.id})</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                id={`project-id-${id}`}
+                                                class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                placeholder={currentProjectId || (isFetchingProjects ? '載入中...' : "你的 GCP Project ID")}
+                                                value={projectIdInput[id] || ''}
+                                                onInput={(e) => handleProjectIdChange(id, (e.target as HTMLInputElement).value)}
+                                                aria-label={`${name} Project ID Input`}
+                                                disabled={isSettingKey || isDeletingKey || isFetchingProjects}
+                                            />
+                                        )}
                                     </div>
                                     <div>
                                         <label htmlFor={`location-${id}`} class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Location (選填)</label>
-                                        <input
-                                            type="text"
-                                            id={`location-${id}`}
-                                            class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                            placeholder={currentLocation || "例如: us-central1, asia-east1"}
-                                            value={locationInput[id] || ''}
-                                            onInput={(e) => handleLocationChange(id, (e.target as HTMLInputElement).value)}
-                                            aria-label={`${name} Location Input`}
-                                            disabled={isSettingKey || isDeletingKey}
-                                        />
+                                        {vertexLocations.length > 0 ? (
+                                            <select
+                                                id={`location-${id}`}
+                                                class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                value={locationInput[id] || currentLocation || ''} // Use currentLocation from status
+                                                onChange={(e) => handleLocationChange(id, (e.target as HTMLSelectElement).value)}
+                                                aria-label={`${name} Location Select`}
+                                                disabled={isSettingKey || isDeletingKey || isFetchingLocations || !projectIdInput[id] && !currentProjectId} // Disable if no project selected
+                                            >
+                                                <option value="">{isFetchingLocations ? '載入中...' : '-- 選擇 Location --'}</option>
+                                                {vertexLocations.map(loc => (
+                                                    <option key={loc.id} value={loc.id}>{loc.name} ({loc.id})</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                id={`location-${id}`}
+                                                class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                placeholder={currentLocation || (isFetchingLocations ? '載入中...' : "例如: us-central1")}
+                                                value={locationInput[id] || ''}
+                                                onInput={(e) => handleLocationChange(id, (e.target as HTMLInputElement).value)}
+                                                aria-label={`${name} Location Input`}
+                                                disabled={isSettingKey || isDeletingKey || isFetchingLocations}
+                                            />
+                                        )}
                                     </div>
                                 </div>
                             )}
