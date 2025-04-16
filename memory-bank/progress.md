@@ -1,7 +1,7 @@
 # Project Progress
 
 ## What Works
-*   **Vertex AI Provider (Enhanced):** Updated support for Google Vertex AI to handle JSON service account credentials, optional Project ID, and optional Location via dedicated inputs in settings.
+*   **Vertex AI Provider (Enhanced):** Updated support for Google Vertex AI to handle JSON service account credentials, optional Project ID, and optional Location via dedicated inputs in settings. UI pre-fills Project ID/Location from JSON if available. Project ID fetching/dropdown implemented.
 *   **Persistence (Completed/Stopped Messages):** AI responses that finish streaming or are manually stopped are saved and persist after reloading (subject to async save completion before termination).
 *   **Incremental Text Saves:** Text deltas (`appendTextChunk`) now trigger saves, persisting streamed text incrementally.
 *   **Fixed Chat Loading/Redirect Issue:** Consolidated logic in `ChatPage.tsx`.
@@ -34,8 +34,8 @@
 *   **Refactored Credential Handling:** Updated provider interface, backend logic, and UI to support complex credentials (JSON + optional fields) alongside simple API keys.
 
 ## What's Left / Known Issues
-*   **Vertex AI Testing:** Need to test Vertex AI functionality thoroughly with JSON credentials and optional project/location text inputs (pre-filled from JSON).
-*   **Vertex AI Dynamic Locations/Models (Deferred):** Dynamic fetching for locations and models was attempted but reverted due to SDK complexities. TODOs remain in `vertexProvider.ts` for future implementation if desired.
+*   **Vertex AI Testing:** Need to test Vertex AI functionality thoroughly, including JSON credential input, dynamic project ID fetching/selection, location text input (pre-filled), and static model list.
+*   **Vertex AI Dynamic Locations/Models (Deferred):** Dynamic fetching for locations and models was attempted but reverted due to SDK complexities. `getAvailableProjects` is implemented, but `getAvailableLocations` and `getAvailableModels` currently return static/empty lists with TODOs.
 *   **Vertex AI Error Handling:** Improve error handling for API calls (project/location/model fetching) and display informative messages to the user (e.g., permission errors).
 *   **BUGFIX: Tool Call UI:** Spinner doesn't stop, default state isn't collapsed. (Lower Priority - Addressing collapsed state now)
 *   **BUGFIX: Error Message UI:** API errors (like function calling not supported) are logged but not shown in the UI. Need to update `Message` component to handle `status: 'error'`. (Medium Priority)
