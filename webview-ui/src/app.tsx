@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/preact';
 import { ComponentChild } from 'preact';
 import './app.css';
+// Removed MainLayout import
 import { SettingPage } from './pages/SettingPage';
 import { ChatListPage } from './pages/ChatListPage';
 import { ChatView } from './components/ChatView';
@@ -12,27 +13,6 @@ import { router, $location } from './stores/router'; // Import router and $locat
 export function App() {
     // Get the current router page object and location state
     const page = useStore(router);
-    const locationValue = useStore($location); // Track location state
-
-    // --- Loading and Error Handling ---
-    // Show loading indicator while initial location is being fetched
-    if (locationValue === 'loading') {
-        return (
-            <div class="flex justify-center items-center h-screen text-gray-500 dark:text-gray-400">
-                Initializing...
-            </div>
-        );
-    }
-
-    // Show error if location fetch failed
-    if (locationValue === 'error') {
-         return (
-             <div class="flex justify-center items-center h-screen text-red-500 dark:text-red-400">
-                 Error loading initial application state. Please check console or reload.
-             </div>
-         );
-    }
-
     // --- Page Routing (only after location is loaded AND router state is initialized) ---
     let CurrentPage: ComponentChild = null;
 
@@ -50,8 +30,9 @@ export function App() {
     if (page.route === 'home') {
         CurrentPage = <ChatListPage />;
     } else if (page.route === 'chat' && page.params && page.params.chatId) {
-        // Pass chatId as a prop, key forces re-render on ID change
-        CurrentPage = <ChatView key={page.params.chatId} chatIdFromRoute={page.params.chatId} />;
+        // ChatView gets chatId from the router store, no need to pass as prop
+        // Use key to force re-render when chatId changes in the route
+        CurrentPage = <ChatView key={page.params.chatId} />;
     } else if (page.route === 'settings') {
         CurrentPage = <SettingPage />;
     } else {
@@ -60,9 +41,11 @@ export function App() {
     }
 
     return (
-        <div class="app-layout h-screen flex flex-col bg-gray-100 dark:bg-gray-850 text-gray-900 dark:text-gray-100">
-            {/* Render the current page component */}
-            {CurrentPage}
+        <div class="flex w-screen h-screen bg-gray-100 dark:bg-gray-850 text-gray-900 dark:text-gray-100 overflow-hidden">
+            {/* Main Content */}
+            <div class="flex-grow flex flex-col overflow-y-auto">
+                {CurrentPage}
+            </div>
         </div>
     );
 }

@@ -10,6 +10,7 @@ import {
     $deleteChat
 } from '../stores/chatStores'; // Ensure activeChatIdAtom is NOT imported
 import { ConfirmationDialog } from '../components/ConfirmationDialog';
+import { Button } from '../components/ui/Button';
 
 export const ChatListPage: FunctionalComponent = () => {
     // --- Nanostores ---
@@ -89,15 +90,18 @@ export const ChatListPage: FunctionalComponent = () => {
     // --- Render ---
     return (
         <div class="p-4 flex flex-col h-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+            <div class="sticky top-0 z-10 bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 mb-4 flex flex-col items-center">
             <h1 class="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-200">Chat Sessions</h1>
-            <button
-                onClick={handleCreateChat}
-                disabled={isActionLoading || isSessionsLoading || sessionsError} // Disable if loading or error
-                class={`mb-6 w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-150 ease-in-out ${isActionLoading ? 'opacity-60 cursor-not-allowed animate-pulse' : ''} ${(isSessionsLoading || sessionsError) ? 'opacity-60 cursor-not-allowed' : ''}`}
-            >
-                {isActionLoading ? 'Creating...' : (isSessionsLoading ? 'Loading Chats...' : (sessionsError ? 'Error Loading' : 'Start New Chat'))}
-            </button>
-            <div class="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                <Button
+                    onClick={handleCreateChat}
+                    loading={isActionLoading || isSessionsLoading || sessionsError} // Show loading state
+                    disabled={isActionLoading || isSessionsLoading || sessionsError} // Disable if loading or error
+                    class={`mb-6 w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-75 transition duration-150 ease-in-out ${isActionLoading ? 'opacity-60 cursor-not-allowed animate-pulse' : ''} ${(isSessionsLoading || sessionsError) ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
+                    Start New Chat
+                </Button>
+            </div>
+            <div class="flex-1 space-y-3 pr-2 scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
                 {isSessionsLoading && (
                      <p class="text-center text-gray-500 dark:text-gray-400 mt-10">Loading chats...</p>
                 )}
