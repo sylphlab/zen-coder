@@ -6,6 +6,7 @@ import { OpenRouterProvider } from './providers/openRouterProvider';
 import { DeepseekProvider } from './providers/deepseekProvider';
 import { OpenAiProvider } from './providers/openaiProvider';
 import { OllamaProvider } from './providers/ollamaProvider';
+import { VertexProvider } from './providers/vertexProvider'; // Import VertexProvider
 import { ProviderInfoAndStatus } from '../common/types';
 import { ProviderStatusManager } from './providerStatusManager'; // ProviderManager might use this
 
@@ -32,7 +33,7 @@ export class ProviderManager {
         // Initialize all known providers
         const providerClasses = [
             AnthropicProvider, GoogleProvider, OpenRouterProvider,
-            DeepseekProvider, OpenAiProvider, OllamaProvider,
+            DeepseekProvider, OpenAiProvider, OllamaProvider, VertexProvider, // Add VertexProvider
         ];
         this.allProviders = providerClasses.map(ProviderClass => new ProviderClass(context));
         this.providerMap = new Map(this.allProviders.map(provider => [provider.id, provider]));

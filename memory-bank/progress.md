@@ -1,6 +1,7 @@
 # Project Progress
 
 ## What Works
+*   **Vertex AI Provider:** Added support for Google Vertex AI, including handling JSON service account credentials via text area input in settings.
 *   **Persistence (Completed/Stopped Messages):** AI responses that finish streaming or are manually stopped are saved and persist after reloading (subject to async save completion before termination).
 *   **Incremental Text Saves:** Text deltas (`appendTextChunk`) now trigger saves, persisting streamed text incrementally.
 *   **Fixed Chat Loading/Redirect Issue:** Consolidated logic in `ChatPage.tsx`.
@@ -30,8 +31,10 @@
 *   **Fixed Async Chain:** Ensured `async/await` is used correctly from `SendMessageHandler` down to `ConfigResolver`.
 *   **Fixed `$activeChatHistory` Store:** Removed conflicting `handleUpdate`.
 *   **Fixed `$defaultConfig` Store:** Corrected `SubscriptionManager` push logic (hopefully).
+*   **Refactored Credential Handling:** Updated provider interface and UI to support complex credentials (like Vertex AI's JSON key) alongside simple API keys.
 
 ## What's Left / Known Issues
+*   **Vertex AI Testing:** Need to test Vertex AI functionality thoroughly with valid credentials.
 *   **BUGFIX: Tool Call UI:** Spinner doesn't stop, default state isn't collapsed. (Lower Priority - Addressing collapsed state now)
 *   **BUGFIX: Error Message UI:** API errors (like function calling not supported) are logged but not shown in the UI. Need to update `Message` component to handle `status: 'error'`. (Medium Priority)
 *   **BUGFIX: `deepseek-reasoner` Function Calling Error:** While the error is correct (model doesn't support it), the UI should display the error gracefully instead of just stopping. (Related to Error Message UI bug).

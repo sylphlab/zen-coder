@@ -92,6 +92,10 @@ export class ProviderStatusManager {
                 id: provider.id,
                 name: providerDetails?.name ?? provider.id, // Fallback to ID if name not in map
                 apiKeyUrl: providerDetails?.apiKeyUrl,
+                // @ts-ignore - Access potentially existing properties from the concrete class instance
+                apiKeyDescription: providerDetails?.apiKeyDescription,
+                // @ts-ignore - Access potentially existing properties from the concrete class instance
+                usesComplexCredentials: providerDetails?.usesComplexCredentials,
                 requiresApiKey: provider.requiresApiKey,
                 enabled: isEnabled,
                 apiKeySet: hasApiKey,

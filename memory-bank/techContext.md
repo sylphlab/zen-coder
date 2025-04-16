@@ -43,6 +43,7 @@
 - `@types/node-fetch`: ^2.6.12
 - `@ai-sdk/openai`: 1.3.10
 - `ollama-ai-provider`: 1.2.0
+- `@ai-sdk/google-vertex`: 2.2.15 // Added
 - *(Plus transitive dependencies)*
 
 ## Guideline Checksums

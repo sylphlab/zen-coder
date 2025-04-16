@@ -90,9 +90,11 @@ export function ProviderSettings(): JSX.Element {
 
     // Ensure explicit type annotation for providerInfo parameter
     const renderProviderSetting = (providerInfo: ProviderInfoAndStatus): JSX.Element => {
-        const { id, name, apiKeyUrl, requiresApiKey, enabled, apiKeySet } = providerInfo;
-        const apiKeyText = apiKeySet ? '(Key 已設定)' : '(Key 未設定)';
-        const apiKeyColor = apiKeySet ? 'green' : 'red';
+        // Destructure potential new property
+        const { id, name, apiKeyUrl, apiKeyDescription, requiresApiKey, enabled, apiKeySet, usesComplexCredentials } = providerInfo;
+        const keyLabel = usesComplexCredentials ? '憑證 (JSON)' : 'API Key';
+        const keyStatusText = apiKeySet ? `(${keyLabel} 已設定)` : `(${keyLabel} 未設定)`;
+        const keyStatusColor = apiKeySet ? 'green' : 'red';
 
         return (
             <li key={id} class="provider-setting-item mb-4 p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
@@ -106,42 +108,57 @@ export function ProviderSettings(): JSX.Element {
                         />
                         {name}
                     </label>
-                    <span class={`text-sm font-medium ${apiKeyColor === 'green' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{apiKeyText}</span>
+                    <span class={`text-sm font-medium ${keyStatusColor === 'green' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{keyStatusText}</span>
                 </div>
                 {requiresApiKey && (
                     <div class="mt-3 space-y-2">
-                        <div class="flex items-center space-x-2">
-                            <input
-                                type="password"
-                                class="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                placeholder={`輸入 ${name} API Key...`}
-                                value={apiKeysInput[id] || ''}
-                                onInput={(e) => handleApiKeyInputChange(id, (e.target as HTMLInputElement).value)}
-                                aria-label={`${name} API Key Input`}
-                                disabled={isSettingKey || isDeletingKey} // Disable input during actions
-                            />
-                            <button
-                                class={`px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isSettingKey ? 'animate-pulse' : ''}`}
-                                onClick={() => handleSetApiKey(id)}
-                                disabled={!apiKeysInput[id]?.trim() || isSettingKey || isDeletingKey}
-                                aria-label={`Set ${name} API Key`}
-                            >
-                                {isSettingKey ? 'Setting...' : 'Set'}
-                            </button>
-                            {apiKeySet && (
-                                <button
-                                    class={`px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${isDeletingKey ? 'animate-pulse' : ''}`}
-                                    onClick={() => handleDeleteApiKey(id)}
+                        <div class="flex items-start space-x-2"> {/* Changed to items-start for textarea */}
+                            {usesComplexCredentials ? (
+                                <textarea
+                                    class="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-xs" // Added font-mono, text-xs
+                                    placeholder={`貼上 ${name} ${keyLabel}...`}
+                                    value={apiKeysInput[id] || ''}
+                                    onInput={(e) => handleApiKeyInputChange(id, (e.target as HTMLTextAreaElement).value)}
+                                    aria-label={`${name} ${keyLabel} Input`}
                                     disabled={isSettingKey || isDeletingKey}
-                                    aria-label={`Delete ${name} API Key`}
-                                >
-                                    刪除
-                                </button>
+                                    rows={4} // Give textarea some height
+                                />
+                            ) : (
+                                <input
+                                    type="password"
+                                    class="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                    placeholder={`輸入 ${name} ${keyLabel}...`}
+                                    value={apiKeysInput[id] || ''}
+                                    onInput={(e) => handleApiKeyInputChange(id, (e.target as HTMLInputElement).value)}
+                                    aria-label={`${name} ${keyLabel} Input`}
+                                    disabled={isSettingKey || isDeletingKey}
+                                />
                             )}
+                            <div class="flex flex-col space-y-1"> {/* Wrap buttons vertically */}
+                                <button
+                                    class={`px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${isSettingKey ? 'animate-pulse' : ''}`}
+                                    onClick={() => handleSetApiKey(id)}
+                                    disabled={!apiKeysInput[id]?.trim() || isSettingKey || isDeletingKey}
+                                    aria-label={`Set ${name} ${keyLabel}`}
+                                >
+                                    {isSettingKey ? '設定中...' : '設定'}
+                                </button>
+                                {apiKeySet && (
+                                    <button
+                                        class={`px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${isDeletingKey ? 'animate-pulse' : ''}`}
+                                        onClick={() => handleDeleteApiKey(id)}
+                                        disabled={isSettingKey || isDeletingKey}
+                                        aria-label={`Delete ${name} ${keyLabel}`}
+                                    >
+                                        刪除
+                                    </button>
+                                )}
+                            </div>
                         </div>
-                        {apiKeyUrl && (
+                        {(apiKeyUrl || apiKeyDescription) && ( // Show description if available
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                喺呢度攞 API Key: <a href={apiKeyUrl} target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">{apiKeyUrl}</a>
+                                {apiKeyDescription || `喺呢度攞 ${keyLabel}:`} {/* Use description or default text */}
+                                {apiKeyUrl && <a href={apiKeyUrl} target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline ml-1">{apiKeyUrl}</a>}
                             </p>
                         )}
                     </div>

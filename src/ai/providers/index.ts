@@ -6,6 +6,7 @@ import { OpenRouterProvider } from './openRouterProvider'; // Assuming class exp
 import { DeepseekProvider } from './deepseekProvider';   // Assuming class export now
 import { OpenAiProvider } from './openaiProvider';
 import { OllamaProvider } from './ollamaProvider';
+import { VertexProvider } from './vertexProvider'; // Add VertexProvider import
 
 // Remove comments related to instantiation here
 // Remove instantiation logic and instance imports
@@ -29,6 +30,7 @@ export {
   DeepseekProvider,
   OpenAiProvider,
   OllamaProvider,
+  VertexProvider, // Add VertexProvider export
 };
 
 // Export the core interface as well

@@ -129,6 +129,8 @@ export interface ProviderInfoAndStatus {
     apiKeySet: boolean | undefined; // Allow undefined for synchronous status checks
     enabled: boolean;
     apiKeyUrl?: string; // Optional URL to get the API key
+    apiKeyDescription?: string; // Optional description for the key/credentials
+    usesComplexCredentials?: boolean; // Optional flag for JSON/complex credentials
     models: { id: string; name: string }[]; // Available models for this provider
 }
 
