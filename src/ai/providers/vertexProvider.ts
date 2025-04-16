@@ -3,9 +3,9 @@ import { createVertex } from '@ai-sdk/google-vertex';
 import { LanguageModel } from 'ai';
 import { AiProvider, ModelDefinition } from './providerInterface';
 import { ProjectsClient } from '@google-cloud/resource-manager'; // Correct client for searching projects
-import { PredictionServiceClient } from '@google-cloud/aiplatform'; // Keep for potential model listing
-// import { LocationsClient } from 'google-gax'; // Cannot find module or correct export
-// import { LocationsClient } from '@google-cloud/common'; // Cannot find module
+// Use ModelServiceClient for listing publisher models
+import { ModelServiceClient, protos } from '@google-cloud/aiplatform';
+// import { LocationsClient } from 'google-gax'; // Reverted - Cannot find module or correct export
 
 // Define known Vertex models (add more as needed) - Keep as fallback
 // Note: IDs should match the actual model IDs used by the Vertex AI API
@@ -97,60 +97,19 @@ export class VertexProvider implements AiProvider {
 
   /**
    * Retrieves the list of known available Vertex models.
-   * TODO: Implement dynamic fetching using Google Cloud Discovery Service API.
-   * This would require the project ID and location, and potentially additional permissions
-   * for the service account (e.g., `aiplatform.models.list`).
-   * Example endpoint: `https://{location}-aiplatform.googleapis.com/v1/projects/{projectId}/locations/{location}/publishers/google/models`
-   * Attempts dynamic fetching, falls back to static list on error.
+   * TODO: Implement dynamic model fetching. Requires investigating the correct method
+   * in `@google-cloud/aiplatform` v4.1.0 (e.g., `modelServiceClient.listModels` or similar)
+   * and the correct response structure to extract model ID and display name.
+   * The `publishers.models.list` endpoint might require a different client or method call
+   * than initially assumed (`listPublisherModelsAsync` seems incorrect for this SDK version).
+   * Requires credentials, project ID, and location. Ensure service account has
+   * `aiplatform.models.list` or `aiplatform.publisherModels.list` permission.
    */
   async getAvailableModels(credentialsObject?: any): Promise<ModelDefinition[]> {
     console.log(`[VertexProvider] getAvailableModels called. Provided credentials object: ${!!credentialsObject}`);
-
-    if (!credentialsObject || !credentialsObject.credentialsJson) {
-      console.warn('[VertexProvider] Cannot fetch dynamic models without credentials JSON.');
-      return [...KNOWN_VERTEX_MODELS]; // Return static list if no creds
-    }
-
-    const projectId = credentialsObject.projectId; // Use project ID from the object if available
-    const location = credentialsObject.location || 'us-central1'; // Default location if not provided
-
-    if (!projectId) {
-        console.warn('[VertexProvider] Cannot fetch dynamic models without a Project ID.');
-        return [...KNOWN_VERTEX_MODELS]; // Return static list if no project ID
-    }
-
-    try {
-      const clientOptions = { credentials: JSON.parse(credentialsObject.credentialsJson) };
-      // Use PredictionServiceClient for listing models, adjust API version if needed
-      const predictionClient = new PredictionServiceClient({ ...clientOptions, apiEndpoint: `${location}-aiplatform.googleapis.com` });
-
-      // Construct the parent resource path
-      const parent = `projects/${projectId}/locations/${location}/publishers/google`;
-
-      console.log(`[VertexProvider] Fetching models from parent: ${parent}`);
-
-      // Call listModels - Note: This might list *all* models, need filtering for generative ones
-      // The actual API might differ, this is based on common patterns. Check SDK docs.
-      // This specific call might not exist directly, might need raw REST or different client.
-      // Let's assume a hypothetical listModels method for now.
-      // If this fails, we need to adjust based on actual @google-cloud/aiplatform capabilities.
-
-      // Placeholder: Actual implementation requires checking the correct method in @google-cloud/aiplatform
-      // For now, we'll simulate a successful fetch returning the static list to avoid breaking.
-      // In a real scenario, replace this with the actual API call and error handling.
-      console.warn('[VertexProvider] Dynamic model fetching simulation: Returning static list.');
-      // const [modelsResponse] = await predictionClient.listModels({ parent }); // Hypothetical call
-      // console.log('[VertexProvider] Raw models response:', modelsResponse);
-      // Filter and map modelsResponse to ModelDefinition[] here...
-
-      // Simulate success with static list for now
-      return [...KNOWN_VERTEX_MODELS];
-
-    } catch (error) {
-      console.error(`[VertexProvider] Error fetching dynamic models for project ${projectId} in ${location}:`, error);
-      console.warn('[VertexProvider] Falling back to static model list.');
-      return [...KNOWN_VERTEX_MODELS]; // Fallback to static list on error
-    }
+    console.warn('[VertexProvider] Dynamic model fetching is not yet correctly implemented. Returning static list.');
+    // Placeholder: Return static list until dynamic fetching is fixed.
+    return [...KNOWN_VERTEX_MODELS];
   }
 
   /**
@@ -179,28 +138,19 @@ export class VertexProvider implements AiProvider {
   }
 
   /**
-   * Fetches available Google Cloud locations for AI Platform (Vertex AI).
-   * Requires a project ID.
-   * TODO: Implement dynamic location fetching. Need to find the correct Node.js client
-   * and method for listing locations (e.g., via google.cloud.location.Locations service).
-   * The correct client might be part of google-gax, @google-cloud/location, or another core library.
-   * Requires credentials and project ID. Ensure service account has `aiplatform.locations.list` permission.
+   * Fetches available Google Cloud locations.
+   * Requires credentials and project ID.
+   * TODO: Implement dynamic location fetching. Still facing issues finding the correct client/method
+   * for `google.cloud.location.Locations` service within the available Node.js libraries.
+   * Requires credentials and project ID. Ensure service account has `aiplatform.locations.list` or similar permission.
    */
   async getAvailableLocations(credentialsJsonString?: string, projectId?: string): Promise<{ id: string; name: string }[]> {
      if (!credentialsJsonString || !projectId) {
        console.warn('[VertexProvider] Cannot fetch locations without credentials JSON and Project ID.');
        return [];
      }
-     console.warn(`[VertexProvider] Dynamic location fetching for project ${projectId} is not yet implemented. Returning empty list.`);
+     console.warn(`[VertexProvider] Dynamic location fetching for project ${projectId} is not yet implemented due to SDK client issues. Returning empty list.`);
      // Placeholder: Return empty array until implemented
-     // In the future, implement the API call here using the correct client library.
-     // Example (pseudo-code):
-     // try {
-     //   const clientOptions = { credentials: JSON.parse(credentialsJsonString) };
-     //   const locationClient = new CorrectLocationsClient(clientOptions); // Replace with actual client
-     //   const [locations] = await locationClient.listLocations({ name: `projects/${projectId}` });
-     //   return locations.map(l => ({ id: l.locationId!, name: l.displayName! })).sort(...);
-     // } catch (error) { ... handle error ... }
      return [];
   }
 
