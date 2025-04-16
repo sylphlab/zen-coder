@@ -92,8 +92,8 @@ export class ProviderStatusManager {
                         }
                     }
 
-                    // Fetch models using the appropriate credentials format
-                    const fetchedModels = await provider.getAvailableModels(credentialsForModelFetch);
+                    // Fetch models using the appropriate credentials format, enabling static fallback
+                    const fetchedModels = await provider.getAvailableModels(credentialsForModelFetch, true);
                     // Ensure models have both id and name, provide fallback if name is missing
                     models = fetchedModels.map(m => ({
                         id: m.id,

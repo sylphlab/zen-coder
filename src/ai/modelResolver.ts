@@ -132,10 +132,11 @@ export class ModelResolver {
                  return []; // Return empty AvailableModel array, don't update cache on key error
             }
         }
+try {
+    // Pass credentials and enable static fallback
+    const modelDefinitions = await provider.getAvailableModels(apiKey, true);
+    console.log(`[ModelResolver] Successfully fetched/retrieved ${modelDefinitions.length} model definitions from ${provider.name}.`);
 
-        try {
-            const modelDefinitions = await provider.getAvailableModels(apiKey);
-            console.log(`[ModelResolver] Successfully fetched ${modelDefinitions.length} fresh model definitions from ${provider.name}.`);
 
             // Convert ModelDefinition[] to AvailableModel[] and add provider info
             const availableModels: AvailableModel[] = modelDefinitions.map(def => ({

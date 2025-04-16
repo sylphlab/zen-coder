@@ -45,13 +45,31 @@ export class DeepseekProvider implements AiProvider {
     /**
      * Retrieves the list of known available DeepSeek models.
      */
-    async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
+    async getAvailableModels(apiKey?: string, useStaticFallback: boolean = true): Promise<ModelDefinition[]> {
+        console.log(`[DeepseekProvider] getAvailableModels called. Provided apiKey: ${!!apiKey}, useStaticFallback: ${useStaticFallback}`);
         const keyToUse = apiKey || await this.getApiKey(this._secretStorage);
         if (!keyToUse) {
-            console.warn("[DeepseekProvider] API key not available for fetching models.");
-            return [];
+            console.warn("[DeepseekProvider] API key not available for fetching DeepSeek models.");
+            if (useStaticFallback) {
+                console.warn("[DeepseekProvider] Falling back to static model list due to missing API key.");
+                const { deepseekStaticModels } = await import('../staticModelData/deepseek');
+                return Object.values(deepseekStaticModels).map(m => ({ id: m.id.split(':')[1], name: m.name }));
+            } else {
+                return [];
+            }
         }
-        return await this._fetchModelsFromApi(keyToUse);
+        try {
+            return await this._fetchModelsFromApi(keyToUse);
+        } catch (error) {
+            console.error("[DeepseekProvider] Error fetching models from API:", error);
+            if (useStaticFallback) {
+                console.warn("[DeepseekProvider] Falling back to static model list due to API error.");
+                const { deepseekStaticModels } = await import('../staticModelData/deepseek');
+                return Object.values(deepseekStaticModels).map(m => ({ id: m.id.split(':')[1], name: m.name }));
+            } else {
+                throw error;
+            }
+        }
     }
 
     /**

@@ -73,12 +73,20 @@ export class OllamaProvider implements AiProvider { // Add export back to class
     }
 
     // --- getAvailableModels Implementation ---
-    async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
+    async getAvailableModels(apiKey?: string, useStaticFallback: boolean = true): Promise<ModelDefinition[]> {
+        console.log(`[OllamaProvider] getAvailableModels called. useStaticFallback: ${useStaticFallback}`);
         if (!this.isEnabled()) {
             return [];
         }
         // apiKey is ignored for Ollama
-        return await this._fetchModelsFromApi();
+        try {
+            return await this._fetchModelsFromApi();
+        } catch (error) {
+            console.error("[OllamaProvider] Error fetching models from API:", error);
+            // Ollama has no static list defined yet, so return empty on error regardless of fallback flag
+            console.warn("[OllamaProvider] Returning empty model list due to API error.");
+            return [];
+        }
     }
 
     /**
@@ -108,8 +116,8 @@ export class OllamaProvider implements AiProvider { // Add export back to class
 
             const models: ModelDefinition[] = jsonResponse.models
                 .map((model: any) => ({
-                    // Standardize the ID format
-                    id: `${this.id}:${model.name}`,
+                    // Return only id and name
+                    id: model.name, // Ollama uses the name as the ID
                     name: model.name,
                 }))
                 .sort((a: ModelDefinition, b: ModelDefinition) => a.name.localeCompare(b.name));

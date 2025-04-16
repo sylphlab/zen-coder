@@ -46,15 +46,33 @@ export class AnthropicProvider implements AiProvider {
     /**
      * Retrieves the list of known available Anthropic models.
      */
-    async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
-        console.log(`[AnthropicProvider] getAvailableModels called. Provided apiKey: ${!!apiKey}`);
+    async getAvailableModels(apiKey?: string, useStaticFallback: boolean = true): Promise<ModelDefinition[]> {
+        console.log(`[AnthropicProvider] getAvailableModels called. Provided apiKey: ${!!apiKey}, useStaticFallback: ${useStaticFallback}`);
         const keyToUse = apiKey || await this.getApiKey(this._secretStorage);
         console.log(`[AnthropicProvider] Using API key: ${keyToUse ? '******' + keyToUse.slice(-4) : 'Not found'}`);
         if (!keyToUse) {
             console.warn("[AnthropicProvider] API key not available for fetching Anthropic models.");
-            return [];
+            if (useStaticFallback) {
+                console.warn("[AnthropicProvider] Falling back to static model list due to missing API key.");
+                // Import static data and return it
+                const { anthropicStaticModels } = await import('../staticModelData/anthropic');
+                return Object.values(anthropicStaticModels).map(m => ({ id: m.id.split(':')[1], name: m.name })); // Return ModelDefinition format
+            } else {
+                return []; // Or throw error if fallback is disabled
+            }
         }
-        return await this._fetchModelsFromApi(keyToUse);
+        try {
+            return await this._fetchModelsFromApi(keyToUse);
+        } catch (error) {
+            console.error("[AnthropicProvider] Error fetching models from API:", error);
+            if (useStaticFallback) {
+                console.warn("[AnthropicProvider] Falling back to static model list due to API error.");
+                const { anthropicStaticModels } = await import('../staticModelData/anthropic');
+                return Object.values(anthropicStaticModels).map(m => ({ id: m.id.split(':')[1], name: m.name }));
+            } else {
+                throw error; // Re-throw if fallback is disabled
+            }
+        }
     }
 
     /**
@@ -90,8 +108,8 @@ export class AnthropicProvider implements AiProvider {
 
             const models: ModelDefinition[] = jsonResponse.data
                 .map((model: any) => ({
-                    // Standardize the ID format
-                    id: `${this.id}:${model.id}`,
+                    // Return only id and name as per ModelDefinition
+                    id: model.id, // Don't prefix here, let the caller handle it if needed
                     name: model.display_name || model.id,
                 }))
                 .sort((a: ModelDefinition, b: ModelDefinition) => a.name.localeCompare(b.name));

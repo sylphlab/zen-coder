@@ -147,6 +147,52 @@ export interface AvailableModel {
     providerName: string; // Name of the provider (e.g., 'Anthropic')
 }
 
+/**
+ * Represents static information about an AI model, used as a fallback or reference.
+ */
+export interface PriceTier {
+  tokenLimit: number; // Upper limit (inclusive) of *input* tokens for this price. Use Infinity for the highest tier.
+  price: number; // Price per million tokens for this tier.
+}
+
+export interface StaticModelInfo {
+  // Core Info
+  id: string; // Full model ID (e.g., "anthropic:claude-3-7-sonnet-20250219")
+  name: string; // User-friendly name
+  providerId: string; // Provider ID (e.g., "anthropic")
+  providerName: string; // Provider Name (e.g., "Anthropic")
+  description?: string;
+
+  // Capabilities (Based on Vercel AI SDK table and provider docs)
+  supportsImages?: boolean; // Corresponds to "Image Input"
+  supportsObjectGeneration?: boolean; // Corresponds to "Object Generation"
+  supportsTools?: boolean; // Corresponds to "Tool Usage"
+  supportsToolStreaming?: boolean; // Corresponds to "Tool Streaming"
+  supportsComputerUse?: boolean; // From Cline data
+  supportsPromptCache?: boolean; // From Cline data
+
+  // Limits
+  contextWindow?: number;
+  maxTokens?: number; // Max output tokens
+
+  // Pricing (per million tokens)
+  inputPrice?: number; // For non-tiered input
+  inputPriceTiers?: PriceTier[]; // For tiered input
+  outputPrice?: number; // For non-tiered output
+  outputPriceTiers?: PriceTier[]; // For tiered output
+  cacheWritesPrice?: number; // For prompt caching
+  cacheReadsPrice?: number; // For prompt caching
+
+  // Other flags/info
+  thinking?: boolean; // Specific to Anthropic thinking models
+  reasoningEffort?: "low" | "medium" | "high"; // Specific to o3-mini
+  isR1FormatRequired?: boolean; // Specific to OpenAI compatible
+  minTokensPerCachePoint?: number; // Bedrock cache info
+  maxCachePoints?: number; // Bedrock cache info
+  cachableFields?: string[]; // Bedrock cache info
+}
+
+
 // --- Schemas for Structured AI Response ---
 
 /**

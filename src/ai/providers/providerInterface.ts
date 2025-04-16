@@ -48,11 +48,12 @@ export interface AiProvider {
    * Retrieves the list of models available from this provider.
    * This might involve an API call (requiring an API key for some providers) or return a predefined list.
    *
-   * @param apiKey - The API key, required by some providers to list their available models. Passed as `undefined` if not needed or not set.
+   * @param credentials - The credentials (API key string or complex object) required by some providers to list their available models. Passed as `undefined` if not needed or not set.
+   * @param useStaticFallback - If true, return static data if dynamic fetching fails or is not implemented.
    * @returns A promise that resolves to an array of `ModelDefinition` objects.
-   * @throws {Error} If an API key is required for fetching but not provided, or if the API request fails.
+   * @throws {Error} If credentials are required for fetching but not provided, or if the API request fails and `useStaticFallback` is false.
    */
-  getAvailableModels(apiKey?: string): Promise<ModelDefinition[]>;
+  getAvailableModels(credentials?: any, useStaticFallback?: boolean): Promise<ModelDefinition[]>;
 
   /**
    * Optional: Provides a URL or information about where to obtain an API key for this provider.

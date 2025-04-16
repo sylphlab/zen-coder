@@ -148,13 +148,31 @@ export class OpenAiProvider implements AiProvider { // Add export back to class
     // Implement getAvailableModels from the interface
     // Match interface: remove secretStorage param, apiKey is optional
     // Match interface: apiKey is optional
-    async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
+    async getAvailableModels(apiKey?: string, useStaticFallback: boolean = true): Promise<ModelDefinition[]> {
+        console.log(`[OpenAIProvider] getAvailableModels called. Provided apiKey: ${!!apiKey}, useStaticFallback: ${useStaticFallback}`);
         const keyToUse = apiKey || await this.getApiKey(this._secretStorage);
         if (!keyToUse) {
-            console.warn("[OpenAIProvider] API key not available for fetching models.");
-            return [];
+            console.warn("[OpenAIProvider] API key not available for fetching OpenAI models.");
+            if (useStaticFallback) {
+                console.warn("[OpenAIProvider] Falling back to static model list due to missing API key.");
+                const { openaiStaticModels } = await import('../staticModelData/openai');
+                return Object.values(openaiStaticModels).map(m => ({ id: m.id.split(':')[1], name: m.name }));
+            } else {
+                return [];
+            }
         }
-        return await this._fetchModelsFromApi(keyToUse);
+        try {
+            return await this._fetchModelsFromApi(keyToUse);
+        } catch (error) {
+            console.error("[OpenAIProvider] Error fetching models from API:", error);
+            if (useStaticFallback) {
+                console.warn("[OpenAIProvider] Falling back to static model list due to API error.");
+                const { openaiStaticModels } = await import('../staticModelData/openai');
+                return Object.values(openaiStaticModels).map(m => ({ id: m.id.split(':')[1], name: m.name }));
+            } else {
+                throw error;
+            }
+        }
     }
 
     /**
@@ -189,8 +207,8 @@ export class OpenAiProvider implements AiProvider { // Add export back to class
                 // Basic filtering for likely chat models
                 .filter((model: any) => model.id.includes('gpt') || model.id.includes('instruct'))
                 .map((model: any) => ({
-                    // Standardize the ID format
-                    id: `${this.id}:${model.id}`,
+                    // Return only id and name
+                    id: model.id, // Don't prefix
                     name: model.id, // Use ID as name for OpenAI
                 }))
                 .sort((a: ModelDefinition, b: ModelDefinition) => a.id.localeCompare(b.id));

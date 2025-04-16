@@ -60,17 +60,18 @@ export class GoogleProvider implements AiProvider {
     /**
      * Retrieves the list of known available Google Gemini models.
      */
-    async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
+    async getAvailableModels(apiKey?: string, useStaticFallback: boolean = true): Promise<ModelDefinition[]> {
         // Google doesn't have a simple public API to list models dynamically easily.
-        // Return the hardcoded list for now.
-        // We could potentially try the discovery API if authenticated, but keep it simple.
-        // Return the hardcoded list, but format the IDs correctly
-        const GOOGLE_MODELS_STATIC: ModelDefinition[] = [
-            { id: `${this.id}:models/gemini-1.5-pro-latest`, name: 'Gemini 1.5 Pro (latest)' },
-            { id: `${this.id}:models/gemini-1.5-flash-latest`, name: 'Gemini 1.5 Flash (latest)' },
-            { id: `${this.id}:models/gemini-1.0-pro`, name: 'Gemini 1.0 Pro' },
-        ];
-        return Promise.resolve(GOOGLE_MODELS_STATIC);
+        // Return the static list from our data source.
+        console.log(`[GoogleProvider] getAvailableModels called. Returning static list.`);
+        try {
+            const { googleStaticModels } = await import('../staticModelData/google');
+            // Return ModelDefinition format (id without prefix, name)
+            return Object.values(googleStaticModels).map(m => ({ id: m.id.split(':')[1], name: m.name }));
+        } catch (error) {
+            console.error("[GoogleProvider] Error loading static models:", error);
+            return []; // Return empty if static data fails to load
+        }
     }
     // --- Interface methods using stored secretStorage ---
 

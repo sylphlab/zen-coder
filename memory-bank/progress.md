@@ -1,6 +1,8 @@
 # Project Progress
 
 ## What Works
+*   **Static Model Data:** Created static data files (`src/ai/staticModelData/`) for Anthropic, Google, Vertex, OpenAI, DeepSeek, and Mistral based on provided info, including capabilities from Vercel AI SDK table.
+*   **Provider Model Fallback:** Updated `getAvailableModels` in provider implementations to use static data as a fallback if dynamic fetching fails or is not implemented.
 *   **Vertex AI Provider (Enhanced):** Updated support for Google Vertex AI to handle JSON service account credentials, optional Project ID, and optional Location via dedicated inputs in settings. UI pre-fills Project ID/Location from JSON if available. Project ID fetching/dropdown implemented.
 *   **Persistence (Completed/Stopped Messages):** AI responses that finish streaming or are manually stopped are saved and persist after reloading (subject to async save completion before termination).
 *   **Incremental Text Saves:** Text deltas (`appendTextChunk`) now trigger saves, persisting streamed text incrementally.
@@ -34,7 +36,9 @@
 *   **Refactored Credential Handling:** Updated provider interface, backend logic, and UI to support complex credentials (JSON + optional fields) alongside simple API keys.
 
 ## What's Left / Known Issues
-*   **Vertex AI Testing:** Need to test Vertex AI functionality thoroughly, including JSON credential input, dynamic project ID fetching/selection, location text input (pre-filled), and static model list.
+*   **Complete Static Data:** Add static data for remaining providers (OpenRouter, Ollama, etc.).
+*   **Verify Static Data:** Double-check accuracy of static model info (capabilities, pricing, limits) against latest documentation.
+*   **Vertex AI Testing:** Need to test Vertex AI functionality thoroughly, including JSON credential input, dynamic project ID fetching/selection, location text input (pre-filled), and static model list fallback.
 *   **Vertex AI Dynamic Locations/Models (Deferred):** Dynamic fetching for locations and models was attempted but reverted due to SDK complexities. `getAvailableProjects` is implemented, but `getAvailableLocations` and `getAvailableModels` currently return static/empty lists with TODOs.
 *   **Vertex AI Error Handling:** Improve error handling for API calls (project/location/model fetching) and display informative messages to the user (e.g., permission errors).
 *   **BUGFIX: Tool Call UI:** Spinner doesn't stop, default state isn't collapsed. (Lower Priority - Addressing collapsed state now)

@@ -104,11 +104,25 @@ export class VertexProvider implements AiProvider {
    * Requires credentials, project ID, and location. Ensure service account has
    * `aiplatform.models.list` or `aiplatform.publisherModels.list` permission.
    */
-  async getAvailableModels(credentialsObject?: any): Promise<ModelDefinition[]> {
-    console.log(`[VertexProvider] getAvailableModels called. Provided credentials object: ${!!credentialsObject}`);
-    console.warn('[VertexProvider] Dynamic model fetching is not yet correctly implemented due to SDK issues. Returning static list.');
-    // Placeholder: Return static list until dynamic fetching is fixed.
-    return [...KNOWN_VERTEX_MODELS];
+  async getAvailableModels(credentialsObject?: any, useStaticFallback: boolean = true): Promise<ModelDefinition[]> {
+    console.log(`[VertexProvider] getAvailableModels called. Provided credentials object: ${!!credentialsObject}, useStaticFallback: ${useStaticFallback}`);
+    console.warn('[VertexProvider] Dynamic model fetching is not yet correctly implemented due to SDK issues.');
+
+    if (useStaticFallback) {
+        console.warn('[VertexProvider] Falling back to static model list.');
+        try {
+            const { vertexStaticModels } = await import('../staticModelData/vertex');
+            // Return ModelDefinition format (id without prefix, name)
+            return Object.values(vertexStaticModels).map(m => ({ id: m.id.split(':')[1], name: m.name }));
+        } catch (error) {
+            console.error("[VertexProvider] Error loading static models:", error);
+            return []; // Return empty if static data fails
+        }
+    } else {
+        // If dynamic fetching were implemented, we'd attempt it here and throw on error if fallback is false.
+        console.error('[VertexProvider] Dynamic fetching not implemented and fallback disabled.');
+        throw new Error('Dynamic model fetching for Vertex AI is not implemented.');
+    }
   }
 
   /**

@@ -84,7 +84,8 @@ export class OpenRouterProvider implements AiProvider {
      * Retrieves the list of available models from the OpenRouter API.
      * Uses caching to avoid excessive API calls.
      */
-    async getAvailableModels(apiKey?: string): Promise<ModelDefinition[]> {
+    async getAvailableModels(apiKey?: string, useStaticFallback: boolean = true): Promise<ModelDefinition[]> {
+        console.log(`[OpenRouterProvider] getAvailableModels called. Provided apiKey: ${!!apiKey}, useStaticFallback: ${useStaticFallback}`);
         const now = Date.now();
         if (cachedModels && cacheTimestamp && (now - cacheTimestamp < CACHE_DURATION_MS)) {
             console.log('[OpenRouterProvider] Returning cached models.');
@@ -93,17 +94,31 @@ export class OpenRouterProvider implements AiProvider {
 
         const keyToUse = apiKey || await this.getApiKey(this._secretStorage);
         if (!keyToUse && this.requiresApiKey) {
-            console.warn('[OpenRouterProvider] API key needed to fetch models. Returning empty list.');
+            console.warn('[OpenRouterProvider] API key needed to fetch models.');
+            // OpenRouter has no static list defined yet, return empty if no key
+            console.warn('[OpenRouterProvider] Returning empty list due to missing API key.');
             return Promise.resolve([]);
         }
 
-        const models = await this._fetchModelsFromApi(keyToUse);
+        let models: ModelDefinition[] = [];
+        try {
+            models = await this._fetchModelsFromApi(keyToUse);
+        } catch (error) {
+            console.error("[OpenRouterProvider] Error fetching models from API:", error);
+            // No static fallback defined for OpenRouter yet
+            if (!useStaticFallback) {
+                throw error; // Re-throw if fallback is disabled
+            }
+            console.warn("[OpenRouterProvider] Returning empty list due to API error (no static fallback).");
+            models = []; // Ensure models is empty on error
+        }
+
         if (models.length > 0) {
-            cachedModels = models;
+            cachedModels = models; // Cache the successfully fetched models
             cacheTimestamp = now;
             console.log(`[OpenRouterProvider] Fetched and cached ${models.length} models.`);
         } else {
-            // Clear cache if fetch failed
+            // Clear cache if fetch failed or returned empty
             cachedModels = null;
             cacheTimestamp = null;
         }
@@ -142,7 +157,7 @@ export class OpenRouterProvider implements AiProvider {
                 .filter((model): model is OpenRouterApiModel => !!model && !!model.id && !!model.name)
                 .map((model) => ({
                     // ID should be just the model identifier from the API
-                    id: model.id, // Let ModelResolver add the provider prefix
+                    id: model.id, // Don't prefix
                     name: model.name, // Use API name for display
                 }))
                 .sort((a, b) => a.name.localeCompare(b.name));
