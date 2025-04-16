@@ -1,0 +1,6 @@
+packages:
+  - webview-ui
+
+onlyBuiltDependencies:
+  - esbuild
+  - protobufjs
