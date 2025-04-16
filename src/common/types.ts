@@ -126,11 +126,14 @@ export interface ProviderInfoAndStatus {
     id: string; // e.g., 'anthropic', 'google'
     name: string; // e.g., 'Anthropic', 'Google Gemini'
     requiresApiKey: boolean; // Does the provider need an API key?
-    apiKeySet: boolean | undefined; // Allow undefined for synchronous status checks
+    credentialsSet: boolean | undefined; // Renamed from apiKeySet for clarity, indicates if key/credentials object is stored
     enabled: boolean;
     apiKeyUrl?: string; // Optional URL to get the API key
     apiKeyDescription?: string; // Optional description for the key/credentials
     usesComplexCredentials?: boolean; // Optional flag for JSON/complex credentials
+    // Store current project/location if applicable (mainly for Vertex)
+    currentProjectId?: string;
+    currentLocation?: string;
     models: { id: string; name: string }[]; // Available models for this provider
 }
 

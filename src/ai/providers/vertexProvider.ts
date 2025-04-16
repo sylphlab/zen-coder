@@ -23,6 +23,7 @@ export class VertexProvider implements AiProvider {
   readonly supportsImages = true; // Gemini Pro Vision supports images
   readonly supportsAudio = false; // Check specific model capabilities
   readonly supportsVideo = false; // Check specific model capabilities
+  readonly usesComplexCredentials = true; // Explicitly mark as using complex credentials
 
   // Store context for secretStorage access
   private _secretStorage: vscode.SecretStorage;
@@ -33,43 +34,46 @@ export class VertexProvider implements AiProvider {
 
   /**
    * Creates a Vertex language model instance.
+   * Expects credentialsObject to contain { credentialsJson: string, projectId?: string, location?: string }
    */
-  createModel(credentialsJsonString: string | undefined, modelId: string): LanguageModel {
-    if (!credentialsJsonString) {
-      throw new Error('Vertex credentials (JSON string) are required to create a model instance but were not provided.');
+  createModel(credentialsObject: any | undefined, modelId: string): LanguageModel {
+    if (!credentialsObject || typeof credentialsObject !== 'object' || !credentialsObject.credentialsJson) {
+      throw new Error('Vertex credentials object (with credentialsJson) is required but was not provided or invalid.');
     }
+
+    const { credentialsJson, projectId, location } = credentialsObject;
 
     let parsedCredentials: any;
     try {
-      parsedCredentials = JSON.parse(credentialsJsonString);
+      parsedCredentials = JSON.parse(credentialsJson);
     } catch (parseError) {
       console.error('[VertexProvider] Failed to parse credentials JSON string:', parseError);
       throw new Error('Failed to parse Vertex credentials JSON string.');
     }
 
-    // Basic validation
+    // Basic validation of the parsed JSON content
     if (
       typeof parsedCredentials !== 'object' ||
       parsedCredentials === null ||
       !('client_email' in parsedCredentials) ||
       !('private_key' in parsedCredentials)
     ) {
-      console.error('[VertexProvider] Invalid credentials structure: Missing client_email or private_key');
-      throw new Error('Invalid Vertex credentials structure: Missing client_email or private_key.');
+      console.error('[VertexProvider] Invalid credentials JSON structure: Missing client_email or private_key');
+      throw new Error('Invalid Vertex credentials JSON structure: Missing client_email or private_key.');
     }
 
-    // Extract project and location if provided, otherwise let the SDK use defaults/env vars
-    const project = parsedCredentials.project_id || undefined; // Common field in service account keys
-    const location = parsedCredentials.location || undefined; // Allow overriding location
+    // Use provided project/location, fallback to JSON content, then undefined (SDK default)
+    const effectiveProjectId = projectId || parsedCredentials.project_id || undefined;
+    const effectiveLocation = location || parsedCredentials.location || undefined; // Allow overriding location from JSON
 
-    console.log(`[VertexProvider] Creating Vertex instance with project: ${project}, location: ${location}`);
+    console.log(`[VertexProvider] Creating Vertex instance with project: ${effectiveProjectId}, location: ${effectiveLocation}`);
 
     try {
       const vertex = createVertex({
-        project: project,
-        location: location,
+        project: effectiveProjectId,
+        location: effectiveLocation,
         googleAuthOptions: {
-          credentials: parsedCredentials, // Pass the parsed object
+          credentials: parsedCredentials, // Pass the parsed JSON object
         },
       });
 
@@ -89,28 +93,39 @@ export class VertexProvider implements AiProvider {
 
   /**
    * Retrieves the list of known available Vertex models.
-   * TODO: Implement dynamic fetching if possible and desired.
+   * TODO: Implement dynamic fetching using Google Cloud Discovery Service API.
+   * This would require the project ID and location, and potentially additional permissions
+   * for the service account (e.g., `aiplatform.models.list`).
+   * Example endpoint: `https://{location}-aiplatform.googleapis.com/v1/projects/{projectId}/locations/{location}/publishers/google/models`
    */
-  async getAvailableModels(credentialsJsonString?: string): Promise<ModelDefinition[]> {
+  async getAvailableModels(credentialsObject?: any): Promise<ModelDefinition[]> {
     // For now, return the static list regardless of credentials validity.
-    // A more robust implementation might try a simple API call to verify credentials
-    // before returning models, but that adds complexity and potential cost/rate limits.
-    console.log(`[VertexProvider] getAvailableModels called. Provided credentials: ${!!credentialsJsonString}`);
+    console.log(`[VertexProvider] getAvailableModels called. Provided credentials object: ${!!credentialsObject}`);
     // Return a copy to prevent modification
     return [...KNOWN_VERTEX_MODELS];
   }
 
   // --- Interface methods using stored secretStorage ---
 
+  /**
+   * Retrieves the credentials object { credentialsJson: string, projectId?: string, location?: string }
+   * stored as a JSON string in secret storage.
+   */
   async getApiKey(secretStorage: vscode.SecretStorage): Promise<string | undefined> {
     // Parameter secretStorage is ignored, use the instance's _secretStorage
+    // Returns the JSON *string* representation of the credentials object
     return await this._secretStorage.get(this.secretStorageKey);
   }
 
-  async setApiKey(secretStorage: vscode.SecretStorage, apiKey: string): Promise<void> {
+  /**
+   * Stores the credentials object { credentialsJson: string, projectId?: string, location?: string }
+   * as a JSON string in secret storage.
+   * The 'apiKey' parameter here is expected to be the JSON string representation of the object.
+   */
+  async setApiKey(secretStorage: vscode.SecretStorage, credentialsObjectJsonString: string): Promise<void> {
     // Parameter secretStorage is ignored, use the instance's _secretStorage
-    // We expect 'apiKey' here to be the JSON string
-    await this._secretStorage.store(this.secretStorageKey, apiKey);
+    // We expect 'credentialsObjectJsonString' here to be the JSON string of the object
+    await this._secretStorage.store(this.secretStorageKey, credentialsObjectJsonString);
   }
 
   async deleteApiKey(secretStorage: vscode.SecretStorage): Promise<void> {

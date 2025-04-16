@@ -62,18 +62,38 @@ export class ProviderStatusManager {
         // Use passed-in providers
         for (const provider of allProviders) {
             const isEnabled = provider.isEnabled(); // Use provider's method
-            const hasApiKey = apiKeyStatusMap[provider.id] ?? false;
+            const hasCredentials = apiKeyStatusMap[provider.id] ?? false; // Renamed from hasApiKey
             let models: { id: string; name: string }[] = []; // Initialize models array
+            let currentProjectId: string | undefined;
+            let currentLocation: string | undefined;
 
             // Find the provider details from the map to get name, URL etc.
             // Use passed-in providerMap
             const providerDetails = providerMap.get(provider.id);
 
-            // Fetch models only if the provider is enabled and has the necessary API key (if required)
-            if (isEnabled && (hasApiKey || !provider.requiresApiKey)) {
+            // Fetch models only if the provider is enabled and has the necessary credentials (if required)
+            if (isEnabled && (hasCredentials || !provider.requiresApiKey)) {
                 try {
-                    const apiKey = provider.requiresApiKey ? await provider.getApiKey(this.context.secrets) : undefined;
-                    const fetchedModels = await provider.getAvailableModels(apiKey);
+                    // Get credentials (might be simple key string or complex object string)
+                    const credentialsString = provider.requiresApiKey ? await provider.getApiKey(this.context.secrets) : undefined;
+                    let credentialsForModelFetch: any = credentialsString; // Default to string for simple providers
+
+                    // If complex credentials, parse the object string
+                    // @ts-ignore - Check for usesComplexCredentials property
+                    if (provider.usesComplexCredentials && credentialsString) {
+                        try {
+                            const parsedCreds = JSON.parse(credentialsString);
+                            credentialsForModelFetch = parsedCreds; // Pass the parsed object
+                            currentProjectId = parsedCreds.projectId; // Extract project/location
+                            currentLocation = parsedCreds.location;
+                        } catch (e) {
+                            console.error(`[ProviderStatusManager] Failed to parse complex credentials for ${provider.id}:`, e);
+                            credentialsForModelFetch = undefined; // Prevent model fetch if parsing fails
+                        }
+                    }
+
+                    // Fetch models using the appropriate credentials format
+                    const fetchedModels = await provider.getAvailableModels(credentialsForModelFetch);
                     // Ensure models have both id and name, provide fallback if name is missing
                     models = fetchedModels.map(m => ({
                         id: m.id,
@@ -85,7 +105,7 @@ export class ProviderStatusManager {
                     // Keep models as empty array on error
                 }
             } else {
-                 console.log(`[ProviderStatusManager] Skipping model fetch for disabled/key-missing provider ${provider.id}`);
+                 console.log(`[ProviderStatusManager] Skipping model fetch for disabled/credentials-missing provider ${provider.id}`);
             }
 
             combinedStatusList.push({
@@ -98,7 +118,9 @@ export class ProviderStatusManager {
                 usesComplexCredentials: providerDetails?.usesComplexCredentials,
                 requiresApiKey: provider.requiresApiKey,
                 enabled: isEnabled,
-                apiKeySet: hasApiKey,
+                credentialsSet: hasCredentials, // Use renamed variable
+                currentProjectId: currentProjectId, // Add current project/location
+                currentLocation: currentLocation,
                 models: models, // Include fetched models
             });
         }
