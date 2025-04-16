@@ -207,7 +207,7 @@ export function ProviderSettings(): JSX.Element {
                                             type="text"
                                             id={`project-id-${id}`}
                                             class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                            placeholder={currentProjectId || "e.g., my-gcp-project"}
+                                            placeholder={currentProjectId || "你的 GCP Project ID"}
                                             value={projectIdInput[id] || ''}
                                             onInput={(e) => handleProjectIdChange(id, (e.target as HTMLInputElement).value)}
                                             aria-label={`${name} Project ID Input`}
@@ -220,7 +220,7 @@ export function ProviderSettings(): JSX.Element {
                                             type="text"
                                             id={`location-${id}`}
                                             class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                            placeholder={currentLocation || "e.g., us-central1"}
+                                            placeholder={currentLocation || "例如: us-central1, asia-east1"}
                                             value={locationInput[id] || ''}
                                             onInput={(e) => handleLocationChange(id, (e.target as HTMLInputElement).value)}
                                             aria-label={`${name} Location Input`}

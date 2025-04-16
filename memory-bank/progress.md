@@ -36,6 +36,7 @@
 ## What's Left / Known Issues
 *   **Vertex AI Testing:** Need to test Vertex AI functionality thoroughly with valid credentials, Project ID, and Location.
 *   **Vertex AI Dynamic Models:** Implement dynamic model fetching for Vertex AI (currently uses static list).
+*   **Vertex AI Settings UI Enhancement:** Consider adding dropdowns for Project ID and Location (requires Google Cloud auth or hardcoded lists - complex). (Low Priority)
 *   **BUGFIX: Tool Call UI:** Spinner doesn't stop, default state isn't collapsed. (Lower Priority - Addressing collapsed state now)
 *   **BUGFIX: Error Message UI:** API errors (like function calling not supported) are logged but not shown in the UI. Need to update `Message` component to handle `status: 'error'`. (Medium Priority)
 *   **BUGFIX: `deepseek-reasoner` Function Calling Error:** While the error is correct (model doesn't support it), the UI should display the error gracefully instead of just stopping. (Related to Error Message UI bug).

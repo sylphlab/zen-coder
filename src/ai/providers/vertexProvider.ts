@@ -17,7 +17,7 @@ export class VertexProvider implements AiProvider {
   readonly name = 'Google Vertex AI';
   readonly requiresApiKey = true; // Technically requires credentials, handled via getApiKey returning JSON string
   readonly apiKeyUrl = 'https://console.cloud.google.com/apis/credentials/serviceaccountkey';
-  readonly apiKeyDescription = 'Requires a JSON key file content (Service Account). Paste the entire JSON content here.';
+  readonly apiKeyDescription = '需要服務帳戶的 JSON 密鑰文件內容。將整個 JSON 內容貼在此處。Project ID 和 Location 是可選的（如果留空，將嘗試從 JSON 或環境變量中讀取）。';
   readonly secretStorageKey = 'zenCoder.vertexCredentialsJson'; // Store the JSON string
   readonly settingsEnabledKey = 'zencoder.provider.vertex.enabled';
   readonly supportsImages = true; // Gemini Pro Vision supports images
@@ -97,6 +97,7 @@ export class VertexProvider implements AiProvider {
    * This would require the project ID and location, and potentially additional permissions
    * for the service account (e.g., `aiplatform.models.list`).
    * Example endpoint: `https://{location}-aiplatform.googleapis.com/v1/projects/{projectId}/locations/{location}/publishers/google/models`
+   * TODO: Implement dynamic model fetching.
    */
   async getAvailableModels(credentialsObject?: any): Promise<ModelDefinition[]> {
     // For now, return the static list regardless of credentials validity.
