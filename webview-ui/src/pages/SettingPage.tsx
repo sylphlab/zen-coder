@@ -30,7 +30,7 @@ export function SettingPage(): JSX.Element {
            {/* Back Button */}
            <button
                onClick={handleBackClick}
-               class="absolute top-4 left-4 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 z-10"
+               class="absolute top-4 left-4 p-2 rounded-full hover:bg-transparent text-gray-600 dark:text-gray-300 z-10"
                title="Back to Chat"
            >
                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

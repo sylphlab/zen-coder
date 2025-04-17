@@ -41,7 +41,7 @@ export function App() {
     }
 
     return (
-        <div class="flex w-screen h-screen text-gray-900 dark:text-gray-100 overflow-hidden">
+        <div class="flex w-screen h-screen text-gray-900 dark:text-gray-100 overflow-hidden bg-transparent">
             {/* Main Content */}
             <div class="flex-grow flex flex-col overflow-y-auto">
                 {CurrentPage}

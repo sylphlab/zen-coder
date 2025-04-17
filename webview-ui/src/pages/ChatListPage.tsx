@@ -74,7 +74,7 @@ export const ChatListPage: FunctionalComponent = () => {
         console.log(`[ChatListPage] Calling deleteMutate for ${idToDelete}`);
 
         try {
-            await deleteMutate(idToDelete);
+            await deleteMutate({ chatId: idToDelete }); // Pass payload object
             console.log(`[ChatListPage] Delete mutation for ${idToDelete} completed.`);
         } catch (error) {
             console.error(`Error deleting chat ${idToDelete}:`, error);
@@ -89,8 +89,8 @@ export const ChatListPage: FunctionalComponent = () => {
 
     // --- Render ---
     return (
-        <div class="p-4 flex flex-col h-full bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-            <div class="sticky top-0 z-10 bg-white dark:bg-gray-800 shadow-md rounded-lg p-4 mb-4 flex flex-col items-center">
+        <div class="p-4 flex flex-col h-full bg-transparent text-gray-900 dark:text-gray-100">
+            <div class="sticky top-0 z-10 bg-transparent shadow-md rounded-lg p-4 mb-4 flex flex-col items-center">
             <h1 class="text-2xl font-bold mb-6 text-center text-gray-800 dark:text-gray-200">Chat Sessions</h1>
                 <Button
                     onClick={handleCreateChat}
@@ -115,7 +115,7 @@ export const ChatListPage: FunctionalComponent = () => {
                 {!isSessionsLoading && !sessionsError && Array.isArray(chatSessions) && sortedSessions.map((session: ChatSession) => (
                     <div
                         key={session?.id || `invalid-${Math.random()}`} // Use fallback key if id is missing
-                        class={`flex items-center justify-between p-3 rounded-lg shadow-sm cursor-pointer transition-all duration-150 ease-in-out border border-transparent bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 hover:shadow-md`}
+                        class={`flex items-center justify-between p-3 rounded-lg shadow-sm cursor-pointer transition-all duration-150 ease-in-out border border-transparent bg-transparent hover:bg-[var(--vscode-list-hoverBackground)] hover:shadow-md`}
                         onClick={() => handleSelectChat(session.id)}
                     >
                         <div class="flex-1 overflow-hidden mr-2">
@@ -136,7 +136,7 @@ export const ChatListPage: FunctionalComponent = () => {
                                 }
                             }}
                             disabled={isActionLoading || !session?.id} // Disable if no valid id
-                            class={`p-1.5 text-red-500 hover:text-red-700 dark:hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 rounded-full transition-colors ${(isActionLoading || !session?.id) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-100 dark:hover:bg-red-900/50'}`}
+                            class={`p-1.5 text-red-500 hover:text-red-700 dark:hover:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 rounded-full transition-colors ${(isActionLoading || !session?.id) ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-100/20 dark:hover:bg-red-900/20'}`}
                             aria-label={`Delete chat ${session?.name || session?.id || 'invalid session'}`}
                             title={`Delete chat ${session?.name || session?.id || 'invalid session'}`}
                         >

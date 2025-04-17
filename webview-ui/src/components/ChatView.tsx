@@ -305,7 +305,7 @@ export const ChatView: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
                     variant="ghost"
                     size="sm"
                     onClick={handleChatsClick}
-                    className="text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10"
+                    className="text-gray-600 dark:text-gray-300 hover:bg-transparent" // Remove hover background
                 >
                     <ChatsIcon className="h-4 w-4 mr-1.5" />
                     <span class="text-xs">Chats</span>
@@ -321,7 +321,7 @@ export const ChatView: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
                     variant="ghost"
                     size="icon-sm"
                     onClick={handleSettingsClick}
-                    className="text-gray-600 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 h-8 w-8"
+                    className="text-gray-600 dark:text-gray-300 hover:bg-transparent h-8 w-8" // Remove hover background
                 >
                     <SettingsIcon className="h-4 w-4" />
                 </Button>
