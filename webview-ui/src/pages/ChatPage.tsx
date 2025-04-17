@@ -360,12 +360,13 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
             <MessagesArea
                 messages={messages}
                 suggestedActionsMap={currentSuggestedActionsMap}
-                isStreaming={isStreaming}
+                // Removed isStreaming prop
                 handleSuggestedActionClick={handleSuggestedActionClick}
                 messagesEndRef={messagesEndRef}
                 onCopyMessage={handleCopyMessage}
                 onDeleteMessage={handleDeleteMessage}
                 className="flex-1 overflow-y-auto px-3 py-4"
+                onSamplePromptSelect={setInputValue} // Pass setInputValue to handle sample prompt clicks
             />
 
             {/* Input area with suggestion chips that appear when empty */}

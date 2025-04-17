@@ -250,7 +250,8 @@ export const ChatListPage: FunctionalComponent = () => {
                                                         handleDeleteClick(session.id);
                                                     }
                                                 }}
-                                                disabled={isActionLoading || !session?.id}
+                                                // Disable only if this specific chat is being deleted OR a create is in progress
+                                                disabled={ (deleteLoading && chatToDeleteId === session.id) || createLoading || !session?.id }
                                                 class="opacity-0 hover:opacity-100 group-hover:opacity-100 p-1 rounded-full hover:bg-[var(--vscode-inputValidation-errorBackground)] transition-all duration-200"
                                                 aria-label={`Delete chat ${session?.name || session?.id || 'invalid session'}`}
                                                 title={`Delete chat ${session?.name || session?.id || 'invalid session'}`}

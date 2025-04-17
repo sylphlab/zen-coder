@@ -311,7 +311,7 @@ export function ToolSettings(): JSX.Element {
                     loading={isOpeningGlobal}
                     className="flex items-center space-x-2"
                 >
-                    <span class="i-carbon-server h-4 w-4"></span>
+                    <span class="i-carbon-data-base h-4 w-4"></span> {/* Changed server to data-base */}
                     <span>Configure Global Servers</span>
                 </Button>
                 <Button

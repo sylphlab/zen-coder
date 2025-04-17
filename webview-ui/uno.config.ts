@@ -7,6 +7,10 @@ export default defineConfig({
     presetIcons({ // Enable icon preset
       scale: 1.2,
       warn: true,
+      collections: {
+        // Explicitly define the 'carbon' collection
+        carbon: () => import('@iconify-json/carbon/icons.json').then(i => i.default),
+      }
     }),
   ],
   theme: {

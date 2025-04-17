@@ -1,11 +1,21 @@
-import { FunctionalComponent } from 'preact';
+import { FunctionalComponent, ComponentChildren } from 'preact';
 import { Ref } from 'preact';
-import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
+import { useState, useRef } from 'preact/hooks';
+import { JSX } from 'preact/jsx-runtime'; // Import JSX namespace
 import { UiMessage, SuggestedAction, UiToolCallPart } from '../../../src/common/types';
-import { ToolStatusDisplay } from './ToolStatusDisplay';
+import ReactMarkdown, { Options, ExtraProps } from 'react-markdown'; // Import Options and ExtraProps
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+// Choose a style, e.g., vscDarkPlus or oneDark. Ensure it matches VS Code theme variables if possible.
+// Using oneDark for now as a common choice.
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
+// Removed ToolStatusDisplay import
 import { Button } from './ui/Button';
+// Removed duplicate ExtraProps import
 
 // --- SVG Icons ---
+// Removed unused icons: DeleteIcon, LoadingSpinner, TickIcon, ErrorIcon, ChevronDownIcon, ArrowRightIcon, InfoIcon
 const CopyIcon: FunctionalComponent<{ className?: string }> = ({ className = "h-3.5 w-3.5" }) => (
     <svg class={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
@@ -65,7 +75,7 @@ const formatTime = (timestamp: number): string => {
 interface MessagesAreaProps {
     messages: UiMessage[];
     suggestedActionsMap: { [messageId: string]: SuggestedAction[] };
-    isStreaming: boolean;
+    // Removed isStreaming prop
     handleSuggestedActionClick: (action: SuggestedAction) => void;
     messagesEndRef: Ref<HTMLDivElement>;
     onCopyMessage: (messageId: string) => void;
@@ -77,7 +87,7 @@ interface MessagesAreaProps {
 export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
     messages,
     suggestedActionsMap,
-    isStreaming,
+    // Removed isStreaming prop
     handleSuggestedActionClick,
     messagesEndRef,
     onCopyMessage,
@@ -378,17 +388,69 @@ const MessageItem: FunctionalComponent<MessageItemProps> = ({
                         >
                             {message.content.map((part, index) => {
                                 if (part.type === 'text') {
-                                    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-                                    const textWithCodeBlocks = part.text.replace(codeBlockRegex, (match, lang, code) => {
-                                        return `<pre class="bg-[var(--vscode-editor-lineHighlightBackground)] p-3 rounded my-3 overflow-x-auto text-xs font-mono"><code>${code.trim()}</code></pre>`;
-                                    });
-                                    const inlineCodeRegex = /`([^`]+)`/g;
-                                    const textWithInlineCode = textWithCodeBlocks.replace(inlineCodeRegex, '<code class="bg-[var(--vscode-editor-lineHighlightBackground)] px-1.5 py-0.5 rounded text-xs font-mono">$1</code>');
-                                    const boldRegex = /\*\*([^\*]+)\*\*/g;
-                                    const textWithBold = textWithInlineCode.replace(boldRegex, '<strong class="font-semibold">$1</strong>');
-                                    const listItemRegex = /^- (.+)$/gm;
-                                    const textWithListItems = textWithBold.replace(listItemRegex, '<div class="flex"><span class="mr-2">•</span><span>$1</span></div>');
-                                    return <div key={index} class="whitespace-pre-wrap leading-relaxed" dangerouslySetInnerHTML={{ __html: textWithListItems }} />;
+                                    // Wrap ReactMarkdown in a div to apply prose styles
+                                    return (
+                                        <div key={index} className="prose prose-sm dark:prose-invert max-w-none leading-relaxed">
+                                            <ReactMarkdown
+                                                remarkPlugins={[remarkGfm]} // Enable GitHub Flavored Markdown
+                                                rehypePlugins={[rehypeRaw]} // Allow raw HTML (use with caution)
+                                                components={{
+                                                    // Use node properties to differentiate block vs inline code
+                                                    // Correct type annotation using imported JSX and ExtraProps
+                                                    code(props: JSX.IntrinsicElements['code'] & ExtraProps) {
+                                                        const { children, className, node, ...rest } = props;
+                                                        // Ensure className is a string before matching
+                                                        const languageClassName = typeof className === 'string' ? className : '';
+                                                        const match = /language-(\w+)/.exec(languageClassName);
+                                                        const codeText = String(children).replace(/\n$/, ''); // Remove trailing newline
+
+                                                        // Check if it's a block code (parent is <pre>)
+                                                        // Safely check node.properties.className
+                                                        const nodeProperties = node?.properties || {};
+                                                        const nodeClassName = nodeProperties.className;
+                                                        const isBlock = Array.isArray(nodeClassName) && nodeClassName.some((cn) => typeof cn === 'string' && cn.startsWith('language-'));
+
+
+                                                        return isBlock && match ? (
+                                                            <div class="code-block relative group/code my-3">
+                                                                <SyntaxHighlighter
+                                                                    style={oneDark as any} // Cast style to any to bypass potential type issue
+                                                                    language={String(match[1])} // Explicitly cast language to string
+                                                                    PreTag="div"
+                                                                    className="!bg-[var(--vscode-editor-background)] !p-3 !rounded !text-xs !font-mono overflow-x-auto" // Override default style background/padding
+                                                                    {...rest} // Pass down other props
+                                                                >
+                                                                    {codeText}
+                                                                </SyntaxHighlighter>
+                                                                <button
+                                                                    onClick={() => navigator.clipboard.writeText(codeText)}
+                                                                    class="absolute top-1.5 right-1.5 p-1 rounded bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] opacity-0 group-hover/code:opacity-100 transition-opacity duration-150"
+                                                                    title="Copy code"
+                                                                >
+                                                                    <CopyIcon className="h-3 w-3" />
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            // Inline code
+                                                            <code className={`bg-[var(--vscode-editorWidget-background)] px-1.5 py-0.5 rounded text-xs font-mono ${className ?? ''}`} {...rest}>
+                                                                {children}
+                                                            </code>
+                                                        );
+                                                    },
+                                                    // Ensure links open externally
+                                                    // Correct type annotation using imported JSX and ExtraProps
+                                                    a: ({ node, ...props }: JSX.IntrinsicElements['a'] & ExtraProps) => <a target="_blank" rel="noopener noreferrer" {...props} />,
+                                                    // Add basic list styling if prose classes aren't sufficient
+                                                    // Correct type annotation using imported JSX and ExtraProps
+                                                    ul: ({ node, ...props }: JSX.IntrinsicElements['ul'] & ExtraProps) => <ul class="list-disc list-inside my-2 pl-4" {...props} />,
+                                                    ol: ({ node, ...props }: JSX.IntrinsicElements['ol'] & ExtraProps) => <ol class="list-decimal list-inside my-2 pl-4" {...props} />,
+                                                    li: ({ node, ...props }: JSX.IntrinsicElements['li'] & ExtraProps) => <li class="mb-1" {...props} />,
+                                                } as Options['components']} // Cast components object to satisfy Options type
+                                            >
+                                                {part.text}
+                                            </ReactMarkdown>
+                                        </div>
+                                    );
                                 } else if (part.type === 'image') {
                                     return (
                                         <div key={index} class="my-2 relative group/image">
@@ -405,13 +467,25 @@ const MessageItem: FunctionalComponent<MessageItemProps> = ({
                             })}
 
                             {/* Enhanced Tool Status Display with subtle animations */}
+                            {/* Pending status indicator */}
                             {isAssistant && message.status === 'pending' && (
-                                <div class="mt-3 pt-3 border-t border-[var(--vscode-foreground)] border-opacity-10">
-                                    <div class="flex items-center text-[var(--vscode-button-background)]">
-                                        <span class="i-carbon-rotate-clockwise animate-spin h-3 w-3 mr-2"></span>
-                                        <span class="opacity-80 text-xs" style={{ animation: 'pulse 1.5s infinite ease-in-out' }}>
+                                <div class="mt-2 pt-2 border-t border-[var(--vscode-foreground)] border-opacity-10">
+                                    <div class="flex items-center text-[var(--vscode-button-background)] opacity-80">
+                                        <span class="i-carbon-rotate-clockwise animate-spin h-3 w-3 mr-1.5"></span>
+                                        <span class="text-xs" style={{ animation: 'pulse 1.5s infinite ease-in-out' }}>
                                             Working...
                                         </span>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Error status indicator */}
+                            {isAssistant && message.status === 'error' && (
+                                <div class="mt-2 pt-2 border-t border-[var(--vscode-foreground)] border-opacity-10">
+                                    <div class="flex items-center text-[var(--vscode-notificationsErrorIcon)]">
+                                        <span class="i-carbon-warning-alt h-3.5 w-3.5 mr-1.5"></span>
+                                        <span class="text-xs">Error generating response.</span>
+                                        {/* TODO: Add retry button? */}
                                     </div>
                                 </div>
                             )}

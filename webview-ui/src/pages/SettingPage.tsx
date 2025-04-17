@@ -325,7 +325,7 @@ export function SettingPage(): JSX.Element {
                        
                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl w-full">
                            <div class="bg-[var(--vscode-editorWidget-background)] p-4 rounded-xl border border-[var(--vscode-panel-border)] border-opacity-30 flex flex-col items-center text-center hover:shadow-md transition-shadow duration-300 cursor-pointer">
-                               <span class="i-carbon-feedback h-10 w-10 text-[var(--vscode-button-background)] mb-2"></span>
+                               <span class="i-carbon-chat h-10 w-10 text-[var(--vscode-button-background)] mb-2"></span> {/* Changed feedback to chat */}
                                <h3 class="text-sm font-medium text-[var(--vscode-foreground)] mb-1">Feedback</h3>
                                <p class="text-xs text-[var(--vscode-foreground)] opacity-70">Share your thoughts</p>
                            </div>
