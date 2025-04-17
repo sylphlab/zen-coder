@@ -53,6 +53,7 @@ interface MessagesAreaProps {
     onCopyMessage: (messageId: string) => void;
     onDeleteMessage: (messageId: string) => void;
     className?: string;
+    onSamplePromptSelect?: (prompt: string) => void; // Optional callback for sample prompt selection
 }
 
 export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
@@ -63,13 +64,194 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
     messagesEndRef,
     onCopyMessage,
     onDeleteMessage,
-    className
+    className,
+    onSamplePromptSelect = () => {} // Default no-op function if not provided
 }) => {
+    // Sample prompts that can be clicked to auto-fill - focused on real development tasks
+    const samplePrompts = [
+        "Analyze this code and suggest performance optimizations",
+        "Refactor this function to use async/await instead of callbacks",
+        "Help me debug this TypeScript error in my React component",
+        "Create a Jest test suite for this utility function",
+        "Explain the design pattern used in this code and suggest improvements"
+    ];
+    
+    // Handle prompt selection
+    const handlePromptSelect = (prompt: string) => {
+        if (onSamplePromptSelect) {
+            onSamplePromptSelect(prompt);
+        }
+    };
     return (
-        <div class={`messages-area px-2 py-4 space-y-5 ${className ?? ''}`}>
-            {messages.map((message) => {
-                const isUser = message.role === 'user';
-                const isAssistant = message.role === 'assistant';
+        <div class={`messages-area px-2 py-4 space-y-5 flex flex-col ${className ?? ''}`}>
+            {/* Show Welcome Message if messages array is empty */}
+            {messages.length === 0 ? (
+                <div class="flex-1 flex flex-col items-center justify-center px-6 select-none">
+                    {/* VS Code-themed welcome screen */}
+                    <div class="w-full max-w-2xl">
+                        {/* Header with VS Code-themed styling */}
+                        <div class="relative mb-8 flex flex-col items-center">
+                            {/* VS Code extension badge */}
+                            <div class="absolute -top-4 right-0 px-2 py-0.5 text-xs font-semibold rounded flex items-center gap-1 bg-[var(--vscode-activityBarBadge-background,#007acc)] text-[var(--vscode-activityBarBadge-foreground,#ffffff)]">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M13.5 16.5L21 12L13.5 7.5M21 12H3" />
+                                </svg>
+                                <span>VS Code Extension</span>
+                            </div>
+                            
+                            {/* ZenCoder Logo */}
+                            <div class="mb-4 relative flex items-center justify-center">
+                                <svg viewBox="0 0 100 100" class="w-24 h-24">
+                                    <circle cx="50" cy="50" r="46" fill="none" stroke="var(--vscode-button-background,#0078d4)" stroke-width="3" opacity="0.2" />
+                                    <circle cx="50" cy="50" r="38" fill="none" stroke="var(--vscode-button-background,#0078d4)" stroke-width="3" opacity="0.4" />
+                                    <circle cx="50" cy="50" r="30" fill="var(--vscode-button-background,#0078d4)" />
+                                    
+                                    {/* Code-like symbol in the center */}
+                                    <path d="M37 50L45 58L63 40" stroke="var(--vscode-button-foreground,#ffffff)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+                                    
+                                    {/* Outer pulsing ring animation */}
+                                    <circle cx="50" cy="50" r="46" fill="none" stroke="var(--vscode-button-background,#0078d4)" stroke-width="3" opacity="0.2">
+                                        <animate attributeName="r" values="46;50;46" dur="3s" repeatCount="indefinite" />
+                                        <animate attributeName="opacity" values="0.2;0.4;0.2" dur="3s" repeatCount="indefinite" />
+                                    </circle>
+                                </svg>
+                            </div>
+                            
+                            {/* Title in VS Code style */}
+                            <h1 class="text-4xl font-bold mb-2 text-[var(--vscode-editor-foreground)]">ZenCoder</h1>
+                            
+                            {/* Subtitle */}
+                            <p class="text-xl text-[var(--vscode-descriptionForeground)] mb-2">Open-Source AI Coding Partner</p>
+                            
+                            {/* Tagline */}
+                            <div class="text-center mb-3">
+                                <span class="bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)] px-2 py-0.5 rounded text-xs inline-block">
+                                    Performance • Stability • Efficiency
+                                </span>
+                            </div>
+                        </div>
+                        
+                        {/* Main content area with VS Code-like panels */}
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            {/* Core strengths panel */}
+                                <div class="bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border,rgba(128,128,128,0.35))] rounded overflow-hidden shadow-sm col-span-2">
+                                    <div class="bg-[var(--vscode-titleBar-activeBackground)] px-3 py-1.5 text-xs font-medium text-[var(--vscode-titleBar-activeForeground)] flex items-center justify-between">
+                                        <span>WHY ZENCODER</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <div class="p-4 text-[var(--vscode-editor-foreground)]">
+                                        <div class="space-y-3">
+                                            <div class="flex items-start">
+                                                <div class="flex-shrink-0 w-5 h-5 rounded-full bg-[var(--vscode-button-background,#0078d4)] flex items-center justify-center text-[var(--vscode-button-foreground,#ffffff)] text-xs mt-0.5 mr-2">⚡</div>
+                                                <div>
+                                                    <h3 class="font-semibold">High-Performance & Lightweight</h3>
+                                                    <p class="text-sm text-[var(--vscode-descriptionForeground)]">Built for speed and efficiency with minimal resource usage, keeping your development environment responsive</p>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-start">
+                                                <div class="flex-shrink-0 w-5 h-5 rounded-full bg-[var(--vscode-button-background,#0078d4)] flex items-center justify-center text-[var(--vscode-button-foreground,#ffffff)] text-xs mt-0.5 mr-2">🛠️</div>
+                                                <div>
+                                                    <h3 class="font-semibold">Development-First Design</h3>
+                                                    <p class="text-sm text-[var(--vscode-descriptionForeground)]">Focused on real coding workflows with practical file operations, terminal access, and context-aware assistance</p>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-start">
+                                                <div class="flex-shrink-0 w-5 h-5 rounded-full bg-[var(--vscode-button-background,#0078d4)] flex items-center justify-center text-[var(--vscode-button-foreground,#ffffff)] text-xs mt-0.5 mr-2">🔓</div>
+                                                <div>
+                                                    <h3 class="font-semibold">Open Source & Transparent</h3>
+                                                    <p class="text-sm text-[var(--vscode-descriptionForeground)]">Full visibility into how your data is processed, with the freedom to modify and extend functionality</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* AI Providers panel */}
+                                <div class="bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border,rgba(128,128,128,0.35))] rounded overflow-hidden shadow-sm">
+                                    <div class="bg-[var(--vscode-titleBar-activeBackground)] px-3 py-1.5 text-xs font-medium text-[var(--vscode-titleBar-activeForeground)] flex items-center justify-between">
+                                        <span>AI PROVIDERS</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                        </svg>
+                                    </div>
+                                    <div class="p-4 text-[var(--vscode-editor-foreground)] space-y-2">
+                                        {/* This would typically be populated from a store, using placeholder data for now */}
+                                        {[
+                                            { name: 'Anthropic', color: 'green' },
+                                            { name: 'Google', color: 'blue' },
+                                            { name: 'OpenRouter', color: 'purple' },
+                                            { name: 'DeepSeek', color: 'yellow' },
+                                            { name: 'OpenAI', color: 'red' },
+                                            { name: 'Vertex AI', color: 'teal' },
+                                            { name: 'Ollama', color: 'orange' }
+                                        ].map((provider, index) => (
+                                            <div key={index} class="flex items-center">
+                                                <div class={`w-3 h-3 bg-${provider.color}-500 rounded-full mr-2`}></div>
+                                                <span>{provider.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                        </div>
+                        
+                        {/* Clickable sample prompts in VS Code terminal style */}
+                        <div class="w-full bg-[var(--vscode-terminal-background,#1e1e1e)] rounded-md overflow-hidden border border-[var(--vscode-widget-border,rgba(128,128,128,0.35))] mb-6">
+                            <div class="bg-[var(--vscode-titleBar-activeBackground)] px-3 py-1.5 text-xs font-medium text-[var(--vscode-titleBar-activeForeground)] flex items-center justify-between">
+                                <span>SAMPLE PROMPTS</span>
+                                <div class="flex gap-1">
+                                    <div class="w-3 h-3 rounded-full bg-[var(--vscode-terminal-ansiRed,#ff0000)] opacity-80"></div>
+                                    <div class="w-3 h-3 rounded-full bg-[var(--vscode-terminal-ansiYellow,#ffff00)] opacity-80"></div>
+                                    <div class="w-3 h-3 rounded-full bg-[var(--vscode-terminal-ansiGreen,#00ff00)] opacity-80"></div>
+                                </div>
+                            </div>
+                            <div class="p-3 font-mono text-sm space-y-2 text-[var(--vscode-terminal-foreground,#cccccc)]">
+                                {samplePrompts.map((prompt, index) => (
+                                    <div
+                                        key={index}
+                                        class="flex cursor-pointer hover:bg-[var(--vscode-list-hoverBackground,rgba(255,255,255,0.1))] p-1 rounded transition-colors group"
+                                        onClick={() => handlePromptSelect(prompt)}
+                                    >
+                                        <span class="text-[var(--vscode-terminal-ansiBlue,#3794ff)] mr-2">{'>'}</span>
+                                        <span>{prompt}</span>
+                                        <span class="ml-auto text-[var(--vscode-terminal-ansiGreen,#00ff00)] opacity-0 group-hover:opacity-100 transition-opacity">
+                                            Click to use
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {/* Prompt tip */}
+                        <div class="text-center mb-6">
+                            <span class="inline-flex items-center gap-1.5 text-[var(--vscode-descriptionForeground)] text-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Click on any sample prompt to use it, or type your own below
+                            </span>
+                        </div>
+                        
+                        {/* Add typing animation to keyframes */}
+                        <style jsx>{`
+                            @keyframes typing {
+                                from { width: 0 }
+                                to { width: 100% }
+                            }
+                            
+                            @keyframes blink-caret {
+                                from, to { border-color: transparent }
+                                50% { border-color: var(--vscode-terminal-ansiCyan, #00ffff) }
+                            }
+                        `}</style>
+                    </div>
+                </div>
+            ) : (
+                // Otherwise, render the messages
+                messages.map((message) => {
+                    const isUser = message.role === 'user';
+                    const isAssistant = message.role === 'assistant';
                 const messageActions = suggestedActionsMap[message.id] || [];
 
                 if (!isUser && !isAssistant) return null; // Hide other roles
@@ -87,8 +269,9 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
                         onDeleteMessage={onDeleteMessage}
                     />
                 );
-            })}
-            
+                })
+            )}
+
             {/* Messages end reference point */}
             <div ref={messagesEndRef} />
             
