@@ -5,7 +5,8 @@ import 'uno.css';
 
 // Enhanced button variants with texture-oriented design
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'link' | 'glass';
-type ButtonSize = 'sm' | 'md' | 'lg' | 'icon' | 'pill';
+// Added 'icon-sm' size
+type ButtonSize = 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm' | 'pill';
 type ButtonElevation = 'flat' | 'raised' | 'floating';
 
 // Define custom props with enhanced options
@@ -59,7 +60,6 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
   }, ref) => {
     const buttonRef = useRef<HTMLButtonElement>(null);
     const combinedRef = (node: HTMLButtonElement | null) => {
-      // Forward ref while keeping local ref
       if (typeof ref === 'function') ref(node);
       else if (ref) ref.current = node;
       buttonRef.current = node;
@@ -70,24 +70,19 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
     const isDisabled = loading || disabled;
 
-    // Clean up ripples on unmount
     useEffect(() => {
       return () => setRipples([]);
     }, []);
 
-    // Handle mouse movement for gradient effect
     const handleMouseMove = useCallback((event: h.JSX.TargetedMouseEvent<HTMLButtonElement>) => {
       if (isDisabled || variant === 'link') return;
-      
       const button = event.currentTarget;
       const rect = button.getBoundingClientRect();
       const x = ((event.clientX - rect.left) / rect.width) * 100;
       const y = ((event.clientY - rect.top) / rect.height) * 100;
-      
       setHoverPosition({ x, y });
     }, [isDisabled, variant]);
 
-    // Base styles with modern design principles
     const baseStyles = `
       inline-flex items-center justify-center gap-2 whitespace-nowrap
       font-medium transition-all
@@ -98,7 +93,6 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
       motion-reduce:transition-none
     `;
 
-    // More refined elevation styles
     const elevationStyles = useMemo(() => {
       switch (elevation) {
         case 'raised': return 'shadow-sm hover:shadow transition-shadow duration-200';
@@ -107,7 +101,6 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
       }
     }, [elevation]);
 
-    // Enhanced variant styles with modern aesthetics
     const variantStyles = useMemo(() => {
       switch (variant) {
         case 'secondary':
@@ -130,63 +123,41 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
       }
     }, [variant]);
 
-    // Enhanced size styles with modern proportions
     const sizeStyles = useMemo(() => {
       switch (size) {
         case 'sm': return 'text-xs h-8 rounded-lg px-3 py-1';
         case 'lg': return 'text-base h-12 rounded-xl px-6 py-2.5 font-medium';
         case 'icon': return 'h-10 w-10 rounded-full p-2.5';
+        case 'icon-sm': return 'h-6 w-6 rounded-full p-1'; // Added icon-sm styles
         case 'pill': return 'text-sm h-10 rounded-full px-5 py-2';
         case 'md': default: return 'text-sm h-10 rounded-lg px-4 py-2';
       }
     }, [size]);
 
-    // Combine styles with better name spacing
     const combinedClassName = `button ${baseStyles} ${elevationStyles} ${variantStyles} ${sizeStyles} ${className || ''}`.trim().replace(/\s+/g, ' ');
 
-    // Enhanced ripple effect
     const createRipple = useCallback((event: h.JSX.TargetedMouseEvent<HTMLButtonElement>) => {
       if (isDisabled) return;
       setIsPressed(true);
-      
-      // Only create ripple for non-link variants
       if (variant !== 'link') {
         const button = event.currentTarget;
         const rect = button.getBoundingClientRect();
-        
-        // Calculate ripple properties
         const size = Math.max(rect.width, rect.height) * 2;
         const x = event.clientX - rect.left - size / 2;
         const y = event.clientY - rect.top - size / 2;
-        
-        // Generate unique key
         const key = Date.now();
-        
-        // Create enhanced ripple with additional properties
         const newRipple: Ripple = {
-          key,
-          x,
-          y,
-          size,
+          key, x, y, size,
           opacity: variant === 'outline' || variant === 'ghost' || variant === 'glass' ? 0.1 : 0.2,
           scale: 2.5
         };
-        
         setRipples(prevRipples => [...prevRipples, newRipple]);
       }
-      
       onClick?.(event);
     }, [onClick, isDisabled, variant]);
 
-    // Handle button release
-    const handleButtonRelease = useCallback(() => {
-      setIsPressed(false);
-    }, []);
-
-    // Handle ripple cleanup
-    const handleAnimationEnd = useCallback((key: number) => {
-      setRipples(prevRipples => prevRipples.filter(ripple => ripple.key !== key));
-    }, []);
+    const handleButtonRelease = useCallback(() => { setIsPressed(false); }, []);
+    const handleAnimationEnd = useCallback((key: number) => { setRipples(prevRipples => prevRipples.filter(ripple => ripple.key !== key)); }, []);
 
     return (
       <button
@@ -197,33 +168,19 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
         onMouseLeave={handleButtonRelease}
         onMouseMove={handleMouseMove}
         disabled={isDisabled}
-        style={{
-          '--hover-x': `${hoverPosition.x}%`,
-          '--hover-y': `${hoverPosition.y}%`
-        } as any}
+        style={{ '--hover-x': `${hoverPosition.x}%`, '--hover-y': `${hoverPosition.y}%` } as any}
         {...props}
       >
-        {/* Enhanced Ripple Container */}
         {ripples.map(ripple => (
           <span
             key={ripple.key}
             className="ripple-element"
-            style={{
-              left: `${ripple.x}px`,
-              top: `${ripple.y}px`,
-              width: `${ripple.size}px`,
-              height: `${ripple.size}px`,
-              opacity: ripple.opacity
-            }}
+            style={{ left: `${ripple.x}px`, top: `${ripple.y}px`, width: `${ripple.size}px`, height: `${ripple.size}px`, opacity: ripple.opacity }}
             onAnimationEnd={() => handleAnimationEnd(ripple.key)}
           />
         ))}
-        
-        {/* Preserve exact layout with a content container that doesn't change size */}
         <span class="content-container inline-flex items-center justify-center relative w-full">
           <span class="content-size-holder opacity-0 invisible absolute whitespace-pre">{children}</span>
-          
-          {/* Button Content with Icons Support - Use opacity for fade but keep position in layout flow */}
           <span
             class={`button-content flex items-center justify-center gap-2 leading-none transition-opacity duration-150 ${loading ? 'opacity-0' : 'opacity-100'}`}
             aria-hidden={loading}
@@ -232,8 +189,6 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
             {children}
             {iconRight && <span class="button-icon-right">{iconRight}</span>}
           </span>
-          
-          {/* Enhanced Loading Indicator - Absolute position on top of content */}
           {loading && (
             <span class="absolute inset-0 flex items-center justify-center pointer-events-none">
               <LoadingSpinner />
@@ -245,184 +200,28 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
   }
 );
 
-// Enhanced component styles with modern aesthetics
 const componentStyles = `
-  /* Button base styling */
-  .button {
-    will-change: transform, opacity;
-    transform: translateZ(0);
-    backface-visibility: hidden;
-  }
-  
-  /* Gradient backgrounds for texture */
-  .button-gradient-primary {
-    background-image: linear-gradient(
-      to bottom right,
-      color-mix(in srgb, var(--primary, #3b82f6) 92%, white) 0%,
-      var(--primary, #3b82f6) 50%,
-      color-mix(in srgb, var(--primary, #3b82f6) 92%, black) 100%
-    );
-    background-position: calc(var(--hover-x, 50%) * 1%) calc(var(--hover-y, 50%) * 1%);
-    background-size: 200% 200%;
-    transition: background-position 0.5s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out;
-  }
-  
-  .button-gradient-secondary {
-    background-image: linear-gradient(
-      to bottom right,
-      color-mix(in srgb, var(--secondary, #475569) 92%, white) 0%,
-      var(--secondary, #475569) 50%,
-      color-mix(in srgb, var(--secondary, #475569) 92%, black) 100%
-    );
-    background-position: calc(var(--hover-x, 50%) * 1%) calc(var(--hover-y, 50%) * 1%);
-    background-size: 200% 200%;
-    transition: background-position 0.5s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out;
-  }
-  
-  .button-gradient-glass {
-    background-image: linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.4) 0%,
-      rgba(255, 255, 255, 0.1) 50%,
-      rgba(255, 255, 255, 0.05) 100%
-    );
-    background-position: calc(var(--hover-x, 50%) * 1%) calc(var(--hover-y, 50%) * 1%);
-    background-size: 200% 200%;
-    transition: background-position 0.5s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out;
-  }
-  
-  /* Modern ripple effect with natural physics */
-  .ripple-element {
-    position: absolute;
-    border-radius: 50%;
-    transform: scale(0);
-    animation: ripple-animation 600ms cubic-bezier(0.4, 0, 0.2, 1);
-    pointer-events: none;
-    z-index: 0;
-    background-image: radial-gradient(
-      circle,
-      currentColor 0%,
-      currentColor 20%,
-      transparent 100%
-    );
-  }
-
-  @keyframes ripple-animation {
-    0% {
-      transform: scale(0);
-      opacity: var(--ripple-opacity, 0.2);
-    }
-    80% {
-      opacity: 0;
-    }
-    100% {
-      transform: scale(2.5);
-      opacity: 0;
-    }
-  }
-
-  /* Enhanced loading spinner with fluid animation */
-  .button-spinner {
-    position: relative;
-    width: 1.25em;
-    height: 1.25em;
-    min-width: 16px;
-    min-height: 16px;
-  }
-
-  /* Content container to maintain size */
-  .content-container {
-    min-height: 1.5em;
-    display: grid;
-    grid-template-areas: "content";
-  }
-  
-  .content-container > * {
-    grid-area: content;
-  }
-  
-  /* Ensure content keeps its space in the layout */
-  .button-content {
-    box-sizing: border-box;
-    max-width: 100%;
-  }
-
-  .spinner-ring {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: 2px solid currentColor;
-    border-top-color: transparent;
-    border-radius: 50%;
-    opacity: 0.4;
-    animation: spinner-rotate 1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-  }
-
-  .spinner-core {
-    position: absolute;
-    top: 25%;
-    left: 25%;
-    width: 50%;
-    height: 50%;
-    background-color: currentColor;
-    border-radius: 50%;
-    opacity: 0.7;
-    animation: spinner-pulse 1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
-  }
-
-  @keyframes spinner-rotate {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes spinner-pulse {
-    0% {
-      transform: scale(0.8);
-      opacity: 0.5;
-    }
-    100% {
-      transform: scale(1.1);
-      opacity: 0.8;
-    }
-  }
-  
-  /* Dark mode optimization */
+  .button { will-change: transform, opacity; transform: translateZ(0); backface-visibility: hidden; }
+  .button-gradient-primary { background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--primary, #3b82f6) 92%, white) 0%, var(--primary, #3b82f6) 50%, color-mix(in srgb, var(--primary, #3b82f6) 92%, black) 100%); background-position: calc(var(--hover-x, 50%) * 1%) calc(var(--hover-y, 50%) * 1%); background-size: 200% 200%; transition: background-position 0.5s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out; }
+  .button-gradient-secondary { background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--secondary, #475569) 92%, white) 0%, var(--secondary, #475569) 50%, color-mix(in srgb, var(--secondary, #475569) 92%, black) 100%); background-position: calc(var(--hover-x, 50%) * 1%) calc(var(--hover-y, 50%) * 1%); background-size: 200% 200%; transition: background-position 0.5s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out; }
+  .button-gradient-glass { background-image: linear-gradient(145deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.05) 100%); background-position: calc(var(--hover-x, 50%) * 1%) calc(var(--hover-y, 50%) * 1%); background-size: 200% 200%; transition: background-position 0.5s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out; }
+  .ripple-element { position: absolute; border-radius: 50%; transform: scale(0); animation: ripple-animation 600ms cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none; z-index: 0; background-image: radial-gradient(circle, currentColor 0%, currentColor 20%, transparent 100%); }
+  @keyframes ripple-animation { 0% { transform: scale(0); opacity: var(--ripple-opacity, 0.2); } 80% { opacity: 0; } 100% { transform: scale(2.5); opacity: 0; } }
+  .button-spinner { position: relative; width: 1.25em; height: 1.25em; min-width: 16px; min-height: 16px; }
+  .content-container { min-height: 1.5em; display: grid; grid-template-areas: "content"; }
+  .content-container > * { grid-area: content; }
+  .button-content { box-sizing: border-box; max-width: 100%; }
+  .spinner-ring { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; opacity: 0.4; animation: spinner-rotate 1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite; }
+  .spinner-core { position: absolute; top: 25%; left: 25%; width: 50%; height: 50%; background-color: currentColor; border-radius: 50%; opacity: 0.7; animation: spinner-pulse 1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate; }
+  @keyframes spinner-rotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  @keyframes spinner-pulse { 0% { transform: scale(0.8); opacity: 0.5; } 100% { transform: scale(1.1); opacity: 0.8; } }
   @media (prefers-color-scheme: dark) {
-    .button-gradient-primary {
-      background-image: linear-gradient(
-        to bottom right,
-        color-mix(in srgb, var(--primary, #3b82f6) 90%, white) 0%,
-        var(--primary, #3b82f6) 50%,
-        color-mix(in srgb, var(--primary, #3b82f6) 90%, black) 100%
-      );
-    }
-    
-    .button-gradient-secondary {
-      background-image: linear-gradient(
-        to bottom right,
-        color-mix(in srgb, var(--secondary, #475569) 90%, white) 0%,
-        var(--secondary, #475569) 50%,
-        color-mix(in srgb, var(--secondary, #475569) 90%, black) 100%
-      );
-    }
+    .button-gradient-primary { background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--primary, #3b82f6) 90%, white) 0%, var(--primary, #3b82f6) 50%, color-mix(in srgb, var(--primary, #3b82f6) 90%, black) 100%); }
+    .button-gradient-secondary { background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--secondary, #475569) 90%, white) 0%, var(--secondary, #475569) 50%, color-mix(in srgb, var(--secondary, #475569) 90%, black) 100%); }
   }
-  
-  /* Reduce motion when needed */
-  @media (prefers-reduced-motion) {
-    .button, .ripple-element, .spinner-ring, .spinner-core {
-      transition: none !important;
-      animation-duration: 0.001ms !important;
-    }
-  }
+  @media (prefers-reduced-motion) { .button, .ripple-element, .spinner-ring, .spinner-core { transition: none !important; animation-duration: 0.001ms !important; } }
 `;
 
-// Inject styles once
 let stylesInjected = false;
 if (typeof document !== 'undefined' && !stylesInjected) {
     try {

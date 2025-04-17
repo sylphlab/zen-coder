@@ -27,7 +27,7 @@ body {
     font-family: var(--vscode-font-family);
     font-size: var(--vscode-font-size);
     color: var(--vscode-foreground);
-    background-color: var(--vscode-background);
+    /* background-color: var(--vscode-background); */ /* Removed for transparency */
     margin: 0;
     padding: 0;
     height: 100vh;
@@ -122,7 +122,7 @@ h1 {
    padding: 10px; /* Increased padding */
    border: 1px solid var(--vscode-widget-border);
    margin-bottom: 10px;
-   background-color: var(--vscode-editor-background); /* Use editor background */
+   /* background-color: var(--vscode-editor-background); */ /* Removed for transparency */
 }
 
 .message {
@@ -135,21 +135,21 @@ h1 {
 }
 
 .message.user {
-   background-color: var(--vscode-list-activeSelectionBackground, #007acc); /* Use active selection */
+   /* background-color: var(--vscode-list-activeSelectionBackground, #007acc); */ /* Removed for transparency */
    color: var(--vscode-list-activeSelectionForeground, #fff);
    text-align: right;
    margin-left: 20%;
 }
 
 .message.assistant {
-   background-color: var(--vscode-list-inactiveSelectionBackground, #e4e6f1); /* Use inactive selection */
+   /* background-color: var(--vscode-list-inactiveSelectionBackground, #e4e6f1); */ /* Removed for transparency */
    color: var(--vscode-foreground); /* Ensure readability */
    margin-right: 20%;
 }
 
 /* Basic code block styling */
 .message-content pre {
-   background-color: var(--vscode-textBlockQuote-background, #f0f0f0); /* Use block quote background */
+   /* background-color: var(--vscode-textBlockQuote-background, #f0f0f0); */ /* Removed for transparency */
    border: 1px solid var(--vscode-textBlockQuote-border, #ddd);
    padding: 10px;
    border-radius: 4px;
@@ -160,7 +160,7 @@ h1 {
 }
 
 .message-content code:not(pre code) { /* Inline code */
-   background-color: var(--vscode-textCodeBlock-background, #e0e0e0); /* Use inline code background */
+   /* background-color: var(--vscode-textCodeBlock-background, #e0e0e0); */ /* Removed for transparency */
    padding: 0.2em 0.4em;
    margin: 0;
    font-size: 85%;
@@ -190,7 +190,7 @@ h1 {
    padding: 8px;
    border: 1px solid var(--vscode-input-border);
    border-radius: 3px;
-   background-color: var(--vscode-input-background);
+   background-color: transparent; /* Changed for transparency */
    color: var(--vscode-input-foreground);
    font-family: var(--vscode-font-family);
    font-size: var(--vscode-font-size);
@@ -202,7 +202,9 @@ h1 {
 .input-area button {
    padding: 8px 15px;
    border: 1px solid var(--vscode-button-border, transparent); /* Add default */
-   background-color: var(--vscode-button-background);
+   background-color: transparent; /* Changed for transparency */
+   border: 1px solid var(--vscode-button-background); /* Use border for visibility */
+   color: var(--vscode-button-background); /* Use button color for text */
    color: var(--vscode-button-foreground);
    border-radius: 3px;
    cursor: pointer;
@@ -210,13 +212,16 @@ h1 {
 }
 
 .input-area button:hover {
-   background-color: var(--vscode-button-hoverBackground);
+   /* background-color: var(--vscode-button-hoverBackground); */ /* Removed for transparency */
+   border-color: var(--vscode-button-hoverBackground); /* Change border on hover */
+   color: var(--vscode-button-hoverBackground); /* Change text color on hover */
 }
 
 .input-area button:disabled {
-   background-color: var(--vscode-button-secondaryBackground, #888);
-   color: var(--vscode-button-secondaryForeground, #ccc);
-   cursor: not-allowed;
+   /* background-color: var(--vscode-button-secondaryBackground, #888); */ /* Removed for transparency */
+    border-color: var(--vscode-button-secondaryBackground, #888); /* Use border for disabled state */
+    color: var(--vscode-button-secondaryForeground, #ccc);
+    cursor: not-allowed;
 }
 
 /* Tool Call Summary Styles (within message content) */
@@ -227,7 +232,7 @@ h1 {
    color: var(--vscode-descriptionForeground, #777); /* Use description color */
    margin-top: 5px;
    padding: 5px;
-   background-color: var(--vscode-textBlockQuote-background, #f0f0f0); /* Subtle background */
+   /* background-color: var(--vscode-textBlockQuote-background, #f0f0f0); */ /* Removed for transparency */
    border-left: 3px solid var(--vscode-editorInfo-foreground); /* Indicator color */
    border-radius: 2px;
 }
@@ -239,7 +244,7 @@ h1 {
    left: 0;
    right: 0;
    bottom: 0;
-   background-color: rgba(0, 0, 0, 0.6); /* Semi-transparent background */
+   background-color: transparent; /* Changed for transparency */
    display: flex;
    justify-content: center;
    align-items: center;
@@ -247,7 +252,9 @@ h1 {
 }
 
 .modal-content {
-   background-color: var(--vscode-editor-background);
+   background-color: transparent; /* Changed for transparency */
+   /* Ensure modal content is visible against transparent background */
+   border: 1px solid var(--vscode-widget-border); /* Keep border for definition */
    color: var(--vscode-foreground);
    padding: 20px;
    border-radius: 5px;
