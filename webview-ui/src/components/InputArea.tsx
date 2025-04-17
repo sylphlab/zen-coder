@@ -1,6 +1,7 @@
 import { FunctionalComponent } from 'preact';
 import { useState, useRef, useEffect } from 'preact/hooks';
 import { Button } from './ui/Button';
+import { JSX } from 'preact';
 
 // --- SVG Icons ---
 const SendIcon: FunctionalComponent<{ className?: string }> = ({ className = "h-4 w-4" }) => (
@@ -18,12 +19,6 @@ const StopIcon: FunctionalComponent<{ className?: string }> = ({ className = "h-
 const ImageIcon: FunctionalComponent<{ className?: string }> = ({ className = "h-4 w-4" }) => (
     <svg class={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-    </svg>
-);
-
-const CloseIcon: FunctionalComponent<{ className?: string }> = ({ className = "h-4 w-4" }) => (
-    <svg class={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
 );
 
@@ -59,7 +54,7 @@ interface InputAreaProps {
     textareaRef?: preact.RefObject<HTMLTextAreaElement>;
     handleKeyDown: (e: KeyboardEvent) => void;
     handleSend: () => void;
-    handleImageFileChange?: (e: Event | JSX.TargetedEvent<HTMLInputElement>) => void;
+    handleImageFileChange?: (e: JSX.TargetedEvent<HTMLInputElement>) => void;
     triggerImageUpload?: () => void;
     removeSelectedImage?: (id: string) => void;
     setSelectedImages?: (images: SelectedImage[]) => void;
@@ -122,7 +117,7 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
         const target = e.target as HTMLTextAreaElement;
         setInputValue(target.value);
         target.style.height = 'auto';
-        target.style.height = `${target.scrollHeight}px`;
+        target.style.height = `${Math.min(target.scrollHeight, 200)}px`; // Limit max height
     };
 
     // Handle click outside to close model dropdown
@@ -145,25 +140,26 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
     const displayName = currentModel?.name || selectedModelId || (currentProvider?.name || selectedProviderId);
 
     return (
-        <div class={`input-area ${className}`}>
-            {/* Selected Images Preview */}
+        <div class={`input-area w-full ${className}`}>
+            {/* Selected Images */}
             {selectedImages.length > 0 && (
-                <div class="selected-images flex flex-wrap gap-2 mb-3">
+                <div class="flex flex-wrap gap-2 mb-2 px-1">
                     {selectedImages.map(img => (
                         <div key={img.id} class="relative group">
                             <img 
                                 src={img.data}
                                 alt="Selected" 
-                                class="h-14 w-14 object-cover rounded-lg border border-black/10 dark:border-white/10"
+                                class="h-10 w-10 object-cover rounded-md"
                             />
                             {removeSelectedImage && (
                                 <button
                                     onClick={() => removeSelectedImage(img.id)}
-                                    class="absolute top-0.5 right-0.5 bg-black/50 hover:bg-black/70 text-white rounded-full p-0.5 
-                                           opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                    class="absolute -top-1 -right-1 rounded-full p-0.5"
                                     title="Remove image"
                                 >
-                                    <CloseIcon className="h-3 w-3" />
+                                    <svg class="h-2.5 w-2.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
                                 </button>
                             )}
                         </div>
@@ -171,61 +167,10 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
                 </div>
             )}
 
-            {/* Main Input Container */}
-            <div class="relative flex w-full items-start">
-                {/* Model Selector Button */}
-                <div class="relative" ref={modelDropdownRef}>
-                    <Button
-                        onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                        variant="ghost"
-                        size="sm"
-                        className="mr-1 px-2 text-xs flex items-center text-black/60 dark:text-white/60 hover:bg-black/5 dark:hover:bg-white/5 self-end mb-1"
-                        aria-label="Select model"
-                        title="Select model"
-                    >
-                        <ModelIcon className="h-3.5 w-3.5 mr-1.5" />
-                        <span class="truncate max-w-[80px]">{displayName}</span>
-                    </Button>
-                    
-                    {/* Models Dropdown */}
-                    {isModelDropdownOpen && (
-                        <div class="absolute bottom-full mb-1 left-0 w-64 max-h-64 overflow-y-auto bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-black/10 dark:border-white/10 z-20"
-                             style={{ animation: 'fadeIn 0.15s ease-out forwards' }}>
-                            <div class="p-2 max-h-64 overflow-y-auto">
-                                {providers.map((provider) => (
-                                    <div key={provider.id} class="mb-2">
-                                        <div class="text-xs font-medium px-2 py-1 text-black/60 dark:text-white/60">
-                                            {provider.name}
-                                        </div>
-                                        {provider.models?.map((model) => (
-                                            <button
-                                                key={model.id}
-                                                class={`w-full text-left px-3 py-1.5 text-xs rounded-md flex items-center justify-between
-                                                      ${selectedProviderId === provider.id && selectedModelId === model.id
-                                                        ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300'
-                                                        : 'hover:bg-black/5 dark:hover:bg-white/5'}`}
-                                                onClick={() => {
-                                                    if (onModelChange) onModelChange(provider.id, model.id);
-                                                    setIsModelDropdownOpen(false);
-                                                }}
-                                            >
-                                                <span class="truncate">{model.name}</span>
-                                                {selectedProviderId === provider.id && selectedModelId === model.id && (
-                                                    <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                                        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
-                                                    </svg>
-                                                )}
-                                            </button>
-                                        ))}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-                
-                {/* Main Textarea */}
-                <div class="relative flex-1">
+            {/* Main Input Container - Simplified */}
+            <div class="relative flex">
+                {/* Full-width Textarea */}
+                <div class="flex-1 relative">
                     <textarea
                         ref={textareaRef}
                         value={inputValue}
@@ -233,25 +178,61 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
                         onKeyDown={handleKeyDown}
                         disabled={isStreaming}
                         placeholder={isStreaming ? "AI is responding..." : "Type your message..."}
-                        class="w-full p-3 pr-16 rounded-xl resize-none border border-black/10 dark:border-white/10 bg-white dark:bg-gray-800 
-                               placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-400 
-                               dark:focus:ring-indigo-600 min-h-[44px] max-h-36 text-sm transition-colors duration-200 ease-out"
-                        style={{
-                            opacity: isStreaming ? 0.7 : 1,
-                            paddingRight: '3.5rem',
-                        }}
+                        class="w-full pl-2.5 pr-16 py-2.5 resize-none border-0 focus:outline-none min-h-[42px] max-h-[200px] text-sm"
+                        style={{ opacity: isStreaming ? 0.7 : 1 }}
                     />
 
-                    {/* Action Buttons */}
-                    <div class="absolute right-2 bottom-1.5 flex items-center space-x-1">
+                    {/* Model Selector - Inside Textarea */}
+                    <div class="absolute bottom-1 left-2.5 z-10" ref={modelDropdownRef}>
+                        <button
+                            onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                            class="inline-flex items-center text-[10px] opacity-70 hover:opacity-100"
+                        >
+                            <ModelIcon className="h-2.5 w-2.5 mr-1" />
+                            <span class="truncate max-w-[80px]">{displayName}</span>
+                        </button>
+                        
+                        {isModelDropdownOpen && (
+                            <div class="absolute bottom-full mb-1 left-0 w-48 rounded-md border border-current border-opacity-5 shadow-sm z-20">
+                                <div class="p-1 max-h-48 overflow-y-auto">
+                                    {providers.map((provider) => (
+                                        <div key={provider.id} class="mb-1">
+                                            <div class="text-xs font-medium px-1.5 py-0.5 opacity-70">
+                                                {provider.name}
+                                            </div>
+                                            {provider.models?.map((model) => (
+                                                <button
+                                                    key={model.id}
+                                                    onClick={() => {
+                                                        if (onModelChange) {
+                                                            onModelChange(provider.id, model.id);
+                                                        }
+                                                        setIsModelDropdownOpen(false);
+                                                    }}
+                                                    class={`w-full text-left px-2 py-1 text-xs rounded ${
+                                                        selectedProviderId === provider.id && selectedModelId === model.id
+                                                            ? 'opacity-100 font-medium'
+                                                            : 'opacity-80 hover:opacity-100'
+                                                    }`}
+                                                >
+                                                    {model.name}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* Action Buttons - Right Side */}
+                    <div class="absolute right-2 bottom-1.5 flex items-center">
                         {/* Image Upload Button */}
                         {!isStreaming && handleImageFileChange && triggerImageUpload && fileInputRef && (
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
+                            <button
                                 onClick={triggerImageUpload}
                                 title="Add image"
-                                className="text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-black/5 dark:hover:bg-white/5 h-8 w-8 rounded-lg"
+                                class="flex items-center justify-center h-7 w-7 mr-1 rounded-md opacity-70 hover:opacity-100"
                                 disabled={isStreaming}
                             >
                                 <ImageIcon className="h-4 w-4" />
@@ -263,33 +244,25 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
                                     onChange={handleImageFileChange}
                                     class="hidden"
                                 />
-                            </Button>
+                            </button>
                         )}
 
                         {/* Send/Stop Button */}
-                        <Button
-                            variant="ghost"
-                            size="icon-sm"
+                        <button
                             onClick={isStreaming ? handleStopGeneration : handleSend}
                             title={isStreaming ? "Stop generation" : "Send message"}
-                            className={`${isStreaming 
-                                ? 'text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30' 
-                                : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30'
-                            } h-8 w-8 rounded-lg`}
+                            disabled={!isStreaming && inputValue.trim() === '' && selectedImages.length === 0}
+                            class={`flex items-center justify-center h-7 w-7 rounded-md ${
+                                isStreaming 
+                                    ? 'opacity-90' 
+                                    : ''
+                            } ${(!isStreaming && inputValue.trim() === '' && selectedImages.length === 0) ? 'opacity-40 cursor-not-allowed' : 'opacity-70 hover:opacity-100'}`}
                         >
                             {isStreaming ? <StopIcon className="h-4 w-4" /> : <SendIcon className="h-4 w-4" />}
-                        </Button>
+                        </button>
                     </div>
                 </div>
             </div>
-            
-            {/* Animation styles */}
-            <style jsx>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(5px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-            `}</style>
         </div>
     );
 };

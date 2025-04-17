@@ -37,6 +37,24 @@ const ErrorIcon: FunctionalComponent<{ className?: string }> = ({ className = "h
     </svg>
 );
 
+const ChevronDownIcon: FunctionalComponent<{ className?: string }> = ({ className = "h-3.5 w-3.5" }) => (
+    <svg class={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+    </svg>
+);
+
+const ArrowRightIcon: FunctionalComponent<{ className?: string }> = ({ className = "h-3 w-3" }) => (
+    <svg class={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path d="M13.5 16.5L21 12L13.5 7.5M21 12H3" />
+    </svg>
+);
+
+const InfoIcon: FunctionalComponent<{ className?: string }> = ({ className = "h-4 w-4" }) => (
+    <svg class={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
 // Helper to format timestamp
 const formatTime = (timestamp: number): string => {
     const date = new Date(timestamp);
@@ -86,165 +104,104 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
         <div class={`messages-area px-2 py-4 space-y-5 flex flex-col ${className ?? ''}`}>
             {/* Show Welcome Message if messages array is empty */}
             {messages.length === 0 ? (
-                <div class="flex-1 flex flex-col items-center justify-center px-6 select-none">
-                    {/* VS Code-themed welcome screen */}
-                    <div class="w-full max-w-2xl">
-                        {/* Header with VS Code-themed styling */}
-                        <div class="relative mb-8 flex flex-col items-center">
-                            {/* VS Code extension badge */}
-                            <div class="absolute -top-4 right-0 px-2 py-0.5 text-xs font-semibold rounded flex items-center gap-1 bg-[var(--vscode-activityBarBadge-background,#007acc)] text-[var(--vscode-activityBarBadge-foreground,#ffffff)]">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M13.5 16.5L21 12L13.5 7.5M21 12H3" />
-                                </svg>
-                                <span>VS Code Extension</span>
-                            </div>
-                            
-                            {/* ZenCoder Logo */}
-                            <div class="mb-4 relative flex items-center justify-center">
-                                <svg viewBox="0 0 100 100" class="w-24 h-24">
-                                    <circle cx="50" cy="50" r="46" fill="none" stroke="var(--vscode-button-background,#0078d4)" stroke-width="3" opacity="0.2" />
-                                    <circle cx="50" cy="50" r="38" fill="none" stroke="var(--vscode-button-background,#0078d4)" stroke-width="3" opacity="0.4" />
-                                    <circle cx="50" cy="50" r="30" fill="var(--vscode-button-background,#0078d4)" />
-                                    
-                                    {/* Code-like symbol in the center */}
-                                    <path d="M37 50L45 58L63 40" stroke="var(--vscode-button-foreground,#ffffff)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-                                    
-                                    {/* Outer pulsing ring animation */}
-                                    <circle cx="50" cy="50" r="46" fill="none" stroke="var(--vscode-button-background,#0078d4)" stroke-width="3" opacity="0.2">
-                                        <animate attributeName="r" values="46;50;46" dur="3s" repeatCount="indefinite" />
-                                        <animate attributeName="opacity" values="0.2;0.4;0.2" dur="3s" repeatCount="indefinite" />
-                                    </circle>
-                                </svg>
-                            </div>
-                            
-                            {/* Title in VS Code style */}
-                            <h1 class="text-4xl font-bold mb-2 text-[var(--vscode-editor-foreground)]">ZenCoder</h1>
-                            
-                            {/* Subtitle */}
-                            <p class="text-xl text-[var(--vscode-descriptionForeground)] mb-2">Open-Source AI Coding Partner</p>
-                            
-                            {/* Tagline */}
-                            <div class="text-center mb-3">
-                                <span class="bg-[var(--vscode-badge-background)] text-[var(--vscode-badge-foreground)] px-2 py-0.5 rounded text-xs inline-block">
-                                    Performance • Stability • Efficiency
-                                </span>
+                <div class="flex-1 flex flex-col items-center justify-center">
+                    {/* Enhanced welcome screen with more dynamic styling */}
+                    <div class="text-center max-w-lg mx-auto px-6">
+                        {/* ZenCoder Logo Animation */}
+                        <div class="mb-6 relative mx-auto w-24 h-24">
+                            <div class="absolute inset-0 rounded-full bg-[var(--vscode-button-background)] bg-opacity-5 animate-ping"></div>
+                            <div class="relative w-24 h-24 rounded-full bg-[var(--vscode-button-background)] bg-opacity-10 flex items-center justify-center">
+                                <span class="i-carbon-code h-12 w-12 text-[var(--vscode-button-background)]"></span>
                             </div>
                         </div>
                         
-                        {/* Main content area with VS Code-like panels */}
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                            {/* Core strengths panel */}
-                                <div class="bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border,rgba(128,128,128,0.35))] rounded overflow-hidden shadow-sm col-span-2">
-                                    <div class="bg-[var(--vscode-titleBar-activeBackground)] px-3 py-1.5 text-xs font-medium text-[var(--vscode-titleBar-activeForeground)] flex items-center justify-between">
-                                        <span>WHY ZENCODER</span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div class="p-4 text-[var(--vscode-editor-foreground)]">
-                                        <div class="space-y-3">
-                                            <div class="flex items-start">
-                                                <div class="flex-shrink-0 w-5 h-5 rounded-full bg-[var(--vscode-button-background,#0078d4)] flex items-center justify-center text-[var(--vscode-button-foreground,#ffffff)] text-xs mt-0.5 mr-2">⚡</div>
-                                                <div>
-                                                    <h3 class="font-semibold">High-Performance & Lightweight</h3>
-                                                    <p class="text-sm text-[var(--vscode-descriptionForeground)]">Built for speed and efficiency with minimal resource usage, keeping your development environment responsive</p>
-                                                </div>
-                                            </div>
-                                            <div class="flex items-start">
-                                                <div class="flex-shrink-0 w-5 h-5 rounded-full bg-[var(--vscode-button-background,#0078d4)] flex items-center justify-center text-[var(--vscode-button-foreground,#ffffff)] text-xs mt-0.5 mr-2">🛠️</div>
-                                                <div>
-                                                    <h3 class="font-semibold">Development-First Design</h3>
-                                                    <p class="text-sm text-[var(--vscode-descriptionForeground)]">Focused on real coding workflows with practical file operations, terminal access, and context-aware assistance</p>
-                                                </div>
-                                            </div>
-                                            <div class="flex items-start">
-                                                <div class="flex-shrink-0 w-5 h-5 rounded-full bg-[var(--vscode-button-background,#0078d4)] flex items-center justify-center text-[var(--vscode-button-foreground,#ffffff)] text-xs mt-0.5 mr-2">🔓</div>
-                                                <div>
-                                                    <h3 class="font-semibold">Open Source & Transparent</h3>
-                                                    <p class="text-sm text-[var(--vscode-descriptionForeground)]">Full visibility into how your data is processed, with the freedom to modify and extend functionality</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                        {/* Exciting Welcome Title */}
+                        <h1 class="text-3xl font-bold mb-3 text-[var(--vscode-foreground)]">
+                            <span class="text-[var(--vscode-button-background)]">Zen</span>Coder
+                        </h1>
+                        
+                        {/* Engaging Subtitle */}
+                        <h2 class="text-lg font-medium mb-4 text-[var(--vscode-foreground)] opacity-90">
+                            Your AI-Powered Coding Partner
+                        </h2>
+                        
+                        {/* More attractive introduction */}
+                        <p class="text-sm text-[var(--vscode-foreground)] opacity-80 mb-6 leading-relaxed">
+                            👋 Hello! I'm your intelligent coding assistant who understands your code,
+                            solves complex problems, and helps turn your ideas into reality.
+                            I can help with debugging, refactoring, testing, and explaining code concepts.
+                        </p>
+                        
+                        {/* Feature highlights */}
+                        <div class="grid grid-cols-2 gap-3 mb-8">
+                            <div class="bg-[var(--vscode-editorWidget-background)] rounded-lg p-3 text-left">
+                                <div class="flex items-center mb-1.5">
+                                    <span class="i-carbon-code-reference h-5 w-5 text-[var(--vscode-button-background)] mr-2"></span>
+                                    <span class="font-medium text-[var(--vscode-foreground)]">Code Understanding</span>
                                 </div>
-                                
-                                {/* AI Providers panel */}
-                                <div class="bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border,rgba(128,128,128,0.35))] rounded overflow-hidden shadow-sm">
-                                    <div class="bg-[var(--vscode-titleBar-activeBackground)] px-3 py-1.5 text-xs font-medium text-[var(--vscode-titleBar-activeForeground)] flex items-center justify-between">
-                                        <span>AI PROVIDERS</span>
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                                        </svg>
-                                    </div>
-                                    <div class="p-4 text-[var(--vscode-editor-foreground)] space-y-2">
-                                        {/* This would typically be populated from a store, using placeholder data for now */}
-                                        {[
-                                            { name: 'Anthropic', color: 'green' },
-                                            { name: 'Google', color: 'blue' },
-                                            { name: 'OpenRouter', color: 'purple' },
-                                            { name: 'DeepSeek', color: 'yellow' },
-                                            { name: 'OpenAI', color: 'red' },
-                                            { name: 'Vertex AI', color: 'teal' },
-                                            { name: 'Ollama', color: 'orange' }
-                                        ].map((provider, index) => (
-                                            <div key={index} class="flex items-center">
-                                                <div class={`w-3 h-3 bg-${provider.color}-500 rounded-full mr-2`}></div>
-                                                <span>{provider.name}</span>
-                                            </div>
-                                        ))}
-                                    </div>
+                                <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
+                                    I can analyze your code and provide intelligent suggestions.
+                                </p>
+                            </div>
+                            <div class="bg-[var(--vscode-editorWidget-background)] rounded-lg p-3 text-left">
+                                <div class="flex items-center mb-1.5">
+                                    <span class="i-carbon-debug h-5 w-5 text-[var(--vscode-button-background)] mr-2"></span>
+                                    <span class="font-medium text-[var(--vscode-foreground)]">Smart Debugging</span>
                                 </div>
+                                <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
+                                    I help identify and fix bugs with practical solutions.
+                                </p>
+                            </div>
+                            <div class="bg-[var(--vscode-editorWidget-background)] rounded-lg p-3 text-left">
+                                <div class="flex items-center mb-1.5">
+                                    <span class="i-carbon-development h-5 w-5 text-[var(--vscode-button-background)] mr-2"></span>
+                                    <span class="font-medium text-[var(--vscode-foreground)]">Code Generation</span>
+                                </div>
+                                <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
+                                    I can write efficient, maintainable code based on your requirements.
+                                </p>
+                            </div>
+                            <div class="bg-[var(--vscode-editorWidget-background)] rounded-lg p-3 text-left">
+                                <div class="flex items-center mb-1.5">
+                                    <span class="i-carbon-chart-multitype h-5 w-5 text-[var(--vscode-button-background)] mr-2"></span>
+                                    <span class="font-medium text-[var(--vscode-foreground)]">Learning Resources</span>
+                                </div>
+                                <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
+                                    I can explain concepts and provide learning materials.
+                                </p>
+                            </div>
                         </div>
                         
-                        {/* Clickable sample prompts in VS Code terminal style */}
-                        <div class="w-full bg-[var(--vscode-terminal-background,#1e1e1e)] rounded-md overflow-hidden border border-[var(--vscode-widget-border,rgba(128,128,128,0.35))] mb-6">
-                            <div class="bg-[var(--vscode-titleBar-activeBackground)] px-3 py-1.5 text-xs font-medium text-[var(--vscode-titleBar-activeForeground)] flex items-center justify-between">
-                                <span>SAMPLE PROMPTS</span>
-                                <div class="flex gap-1">
-                                    <div class="w-3 h-3 rounded-full bg-[var(--vscode-terminal-ansiRed,#ff0000)] opacity-80"></div>
-                                    <div class="w-3 h-3 rounded-full bg-[var(--vscode-terminal-ansiYellow,#ffff00)] opacity-80"></div>
-                                    <div class="w-3 h-3 rounded-full bg-[var(--vscode-terminal-ansiGreen,#00ff00)] opacity-80"></div>
-                                </div>
-                            </div>
-                            <div class="p-3 font-mono text-sm space-y-2 text-[var(--vscode-terminal-foreground,#cccccc)]">
+                        {/* Sample prompts with better styling */}
+                        <div class="mb-6">
+                            <p class="text-sm font-medium text-[var(--vscode-foreground)] mb-3">Try asking me about:</p>
+                            <div class="grid gap-2">
                                 {samplePrompts.map((prompt, index) => (
                                     <div
                                         key={index}
-                                        class="flex cursor-pointer hover:bg-[var(--vscode-list-hoverBackground,rgba(255,255,255,0.1))] p-1 rounded transition-colors group"
+                                        class="bg-[var(--vscode-editorWidget-background)] rounded-lg p-3 text-left cursor-pointer hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 hover:shadow-md transition-all duration-200 text-sm"
                                         onClick={() => handlePromptSelect(prompt)}
                                     >
-                                        <span class="text-[var(--vscode-terminal-ansiBlue,#3794ff)] mr-2">{'>'}</span>
-                                        <span>{prompt}</span>
-                                        <span class="ml-auto text-[var(--vscode-terminal-ansiGreen,#00ff00)] opacity-0 group-hover:opacity-100 transition-opacity">
-                                            Click to use
-                                        </span>
+                                        <div class="flex items-center">
+                                            <div class="w-8 h-8 rounded-full bg-[var(--vscode-button-background)] bg-opacity-10 flex items-center justify-center flex-shrink-0 mr-3">
+                                                <span class="i-carbon-code h-4 w-4 text-[var(--vscode-button-background)]"></span>
+                                            </div>
+                                            <span class="text-[var(--vscode-foreground)]">{prompt}</span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
                         
-                        {/* Prompt tip */}
-                        <div class="text-center mb-6">
-                            <span class="inline-flex items-center gap-1.5 text-[var(--vscode-descriptionForeground)] text-sm">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                Click on any sample prompt to use it, or type your own below
-                            </span>
+                        {/* More engaging call to action */}
+                        <div class="bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg p-4 text-center mb-4">
+                            <p class="text-sm font-medium text-[var(--vscode-button-background)] mb-2">Ready to start coding together?</p>
+                            <div class="text-xs text-[var(--vscode-foreground)] opacity-80 flex items-center justify-center gap-2">
+                                <span class="i-carbon-arrow-down animate-bounce h-4 w-4"></span>
+                                <span>Type a message below or select a suggestion above</span>
+                                <span class="i-carbon-arrow-down animate-bounce h-4 w-4"></span>
+                            </div>
                         </div>
-                        
-                        {/* Add typing animation to keyframes */}
-                        <style jsx>{`
-                            @keyframes typing {
-                                from { width: 0 }
-                                to { width: 100% }
-                            }
-                            
-                            @keyframes blink-caret {
-                                from, to { border-color: transparent }
-                                50% { border-color: var(--vscode-terminal-ansiCyan, #00ffff) }
-                            }
-                        `}</style>
                     </div>
                 </div>
             ) : (
@@ -252,23 +209,23 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
                 messages.map((message) => {
                     const isUser = message.role === 'user';
                     const isAssistant = message.role === 'assistant';
-                const messageActions = suggestedActionsMap[message.id] || [];
+                    const messageActions = suggestedActionsMap[message.id] || [];
 
-                if (!isUser && !isAssistant) return null; // Hide other roles
+                    if (!isUser && !isAssistant) return null; // Hide other roles
 
-                // Message container with subtle animation
-                return (
-                    <MessageItem 
-                        key={message.id} 
-                        message={message}
-                        actions={messageActions}
-                        isUser={isUser} 
-                        isAssistant={isAssistant}
-                        handleSuggestedActionClick={handleSuggestedActionClick}
-                        onCopyMessage={onCopyMessage}
-                        onDeleteMessage={onDeleteMessage}
-                    />
-                );
+                    // Message container with subtle animation
+                    return (
+                        <MessageItem 
+                            key={message.id} 
+                            message={message}
+                            actions={messageActions}
+                            isUser={isUser} 
+                            isAssistant={isAssistant}
+                            handleSuggestedActionClick={handleSuggestedActionClick}
+                            onCopyMessage={onCopyMessage}
+                            onDeleteMessage={onDeleteMessage}
+                        />
+                    );
                 })
             )}
 
@@ -328,17 +285,17 @@ const ToolStatusItem: FunctionalComponent<{
     duration?: string;
 }> = ({ status, label, progress, completed, failed, duration }) => {
     return (
-        <div class="flex items-center space-x-2 text-xs my-1 text-gray-600 dark:text-gray-400">
+        <div class="flex items-center space-x-2 text-xs my-1 text-[var(--vscode-foreground)] opacity-70">
             {completed ? (
-                <TickIcon className="h-3.5 w-3.5 text-green-500 dark:text-green-400" />
+                <span class="i-carbon-checkmark h-3.5 w-3.5 text-[var(--vscode-notificationsInfoIcon)]"></span>
             ) : failed ? (
-                <ErrorIcon className="h-3.5 w-3.5 text-red-500 dark:text-red-400" />
+                <span class="i-carbon-close h-3.5 w-3.5 text-[var(--vscode-notificationsErrorIcon)]"></span>
             ) : (
-                <LoadingSpinner className="h-3 w-3 text-indigo-500 dark:text-indigo-400" />
+                <span class="i-carbon-rotate-clockwise animate-spin h-3 w-3 text-[var(--vscode-button-background)]"></span>
             )}
             
             <div class="flex items-center space-x-1">
-                <span class={`${completed ? 'line-through opacity-70' : ''} ${failed ? 'line-through text-red-500 dark:text-red-400' : ''}`}>
+                <span class={`${completed ? 'line-through opacity-70' : ''} ${failed ? 'line-through text-[var(--vscode-notificationsErrorIcon)]' : ''}`}>
                     {label}
                 </span>
                 
@@ -372,163 +329,183 @@ const MessageItem: FunctionalComponent<MessageItemProps> = ({
 
     return (
         <div
-            class={`message-container w-full transition-all duration-200 ease-out 
-                   ${isUser ? 'pl-3 pr-1' : 'pl-1 pr-3'}`}
+            class="message-container w-full mb-6"
             style={{ 
                 animation: `fadeIn 250ms ease-out forwards`, 
                 opacity: 0 
             }}
             ref={messageRef}
         >
-            <div
-                class={`relative group rounded-lg p-3.5 
-                      ${isUser 
-                        ? 'bg-black/3 dark:bg-white/5 ml-auto' 
-                        : 'bg-indigo-50/20 dark:bg-indigo-950/10'
-                      } 
-                      ${isUser ? 'max-w-[98%]' : 'max-w-[98%]'} hover:shadow-sm transition-shadow duration-150`}
-                onMouseEnter={() => setShowActions(true)}
-                onMouseLeave={() => setShowActions(false)}
-            >
-                {/* Role indicator and name - Compact design */}
-                <div class="flex items-center justify-between mb-1.5">
-                    <div class={`text-[10px] font-medium ${isUser ? 'text-gray-500 dark:text-gray-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
-                        {isAssistant 
-                            ? (message.modelName || message.providerName || 'Assistant')
-                            : 'You'
-                        }
-                    </div>
-                    <div class="text-[9px] text-gray-400 dark:text-gray-500 opacity-75">
-                        {formatTime(message.timestamp)}
-                    </div>
-                </div>
-
-                {/* Content */}
-                <div 
-                    ref={messageContentRef}
-                    class="message-content text-sm text-gray-800 dark:text-gray-200"
-                >
-                    {message.content.map((part, index) => {
-                        if (part.type === 'text') {
-                            const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
-                            const textWithCodeBlocks = part.text.replace(codeBlockRegex, (match, lang, code) => {
-                                return `<pre class="bg-black/5 dark:bg-white/5 p-3 rounded my-3 overflow-x-auto text-xs font-mono"><code>${code.trim()}</code></pre>`;
-                            });
-                            const inlineCodeRegex = /`([^`]+)`/g;
-                            const textWithInlineCode = textWithCodeBlocks.replace(inlineCodeRegex, '<code class="bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded text-xs font-mono">$1</code>');
-                            const boldRegex = /\*\*([^\*]+)\*\*/g;
-                            const textWithBold = textWithInlineCode.replace(boldRegex, '<strong class="font-semibold">$1</strong>');
-                            const listItemRegex = /^- (.+)$/gm;
-                            const textWithListItems = textWithBold.replace(listItemRegex, '<div class="flex"><span class="mr-2">•</span><span>$1</span></div>');
-                            return <div key={index} class="whitespace-pre-wrap leading-relaxed" dangerouslySetInnerHTML={{ __html: textWithListItems }} />;
-                        } else if (part.type === 'image') {
-                            return (
-                                <div key={index} class="my-2 relative group/image">
-                                    <img 
-                                        src={`data:${part.mediaType};base64,${part.data}`} 
-                                        alt="Uploaded content" 
-                                        class="max-w-xs max-h-xs rounded-lg shadow-sm hover:shadow transition-shadow duration-200" 
-                                    />
-                                    <div class="absolute inset-0 bg-black/0 group-hover/image:bg-black/10 dark:group-hover/image:bg-white/5 transition-colors duration-200 rounded-lg"></div>
-                                </div>
-                            );
-                        }
-                        return null;
-                    })}
-
-                    {/* Enhanced Tool Status Display with subtle animations */}
-                    {isAssistant && message.status === 'pending' && (
-                        <div class="tool-status-container mt-2 mb-1 text-xs border-t border-black/5 dark:border-white/5 pt-2 opacity-80">
-                            <div class="flex items-center text-indigo-500 dark:text-indigo-400">
-                                <LoadingSpinner className="h-3 w-3 mr-2" />
-                                <span class="opacity-80" style={{ animation: 'pulse 1.5s infinite ease-in-out' }}>
-                                    Working...
-                                </span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Custom minimalist tool status display */}
-                    {isAssistant && toolCallParts.length > 0 && (
-                        <div class="tool-status-container mt-2 mb-1 text-xs border-t border-black/5 dark:border-white/5 pt-2">
-                            {toolCallParts.map((tool, index) => {
-                                const isCompleted = tool.status === 'complete';
-                                const isFailed = tool.status === 'error';
-                                
-                                let displayName = tool.toolName || 'Processing';
-                                let durationText = '';
-                                
-                                // Helper to extract relevant information from tool
-                                if (tool.toolName?.startsWith('read_file') && tool.args?.target_file) {
-                                    displayName = `Reading ${tool.args.target_file}`;
-                                } else if (tool.toolName?.startsWith('edit_file') && tool.args?.target_file) {
-                                    displayName = `Editing ${tool.args.target_file}`;
-                                } else if (tool.toolName?.startsWith('codebase_search') && tool.args?.query) {
-                                    displayName = `Searching for "${tool.args.query}"`;
-                                } else if (tool.toolName?.includes('terminal') && tool.args?.command) {
-                                    displayName = `Running command`;
-                                }
-                                
-                                return (
-                                    <ToolStatusItem
-                                        key={index}
-                                        status={tool.status || 'pending'}
-                                        label={displayName}
-                                        progress={tool.progress}
-                                        completed={isCompleted}
-                                        failed={isFailed}
-                                        duration={durationText}
-                                    />
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Suggested Actions */}
-                {actions.length > 0 && (
-                    <div class="suggested-actions mt-2 flex flex-wrap gap-1.5">
-                        {actions.map((action, i) => (
-                            <Button
-                                key={i}
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleSuggestedActionClick(action)}
-                                className="text-xs py-0.5 h-auto bg-white/50 dark:bg-black/20 hover:bg-white/80 dark:hover:bg-black/30 transition-colors duration-150"
-                            >
-                                {action.label}
-                            </Button>
-                        ))}
+            {/* Conversation style with avatars */}
+            <div class={`flex ${isUser ? 'justify-end' : ''}`}>
+                {/* Assistant avatar at left */}
+                {!isUser && (
+                    <div class="w-10 h-10 rounded-full bg-[var(--vscode-button-background)] bg-opacity-20 flex items-center justify-center flex-shrink-0 mt-1">
+                        <span class="i-carbon-chat-bot h-5 w-5 text-[var(--vscode-button-background)]"></span>
                     </div>
                 )}
-
-                {/* Action Buttons - Positioned at the edge of message bubble */}
-                <div 
-                    class="message-actions flex space-x-1 z-10 transition-all duration-150 ease-out absolute -bottom-3 right-2"
-                    style={{
-                        opacity: showActions ? 1 : 0,
-                        transform: showActions ? 'scale(1)' : 'scale(0.95)',
-                        pointerEvents: showActions ? 'auto' : 'none',
-                    }}
+                
+                {/* Message bubble */}
+                <div
+                    class={`relative group max-w-[80%] ${isUser ? 'ml-auto mr-12' : 'ml-3'}`}
+                    onMouseEnter={() => setShowActions(true)}
+                    onMouseLeave={() => setShowActions(false)}
                 >
-                    <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onCopyMessage(message.id)}
-                        title="Copy"
-                        className="bg-white/95 dark:bg-gray-800/95 shadow-sm h-7 w-7 rounded-full text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 backdrop-blur-sm border border-black/5 dark:border-white/10"
+                    <div 
+                        class={`rounded-xl p-4 shadow-sm ${isUser 
+                            ? 'bg-[var(--vscode-editor-background)] rounded-tr-none'
+                            : 'bg-[var(--vscode-editorWidget-background)] rounded-tl-none'
+                        } hover:shadow transition-shadow duration-150`}
                     >
-                        <CopyIcon className="w-3.5 h-3.5"/>
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => onDeleteMessage(message.id)}
-                        title="Delete"
-                        className="bg-white/95 dark:bg-gray-800/95 shadow-sm h-7 w-7 rounded-full text-gray-600 dark:text-gray-300 hover:text-rose-500 dark:hover:text-rose-400 backdrop-blur-sm border border-black/5 dark:border-white/10"
+                        {/* Model name badge for assistant / timestamps for both */}
+                        <div class="flex items-center justify-between mb-2 text-xs">
+                            {isAssistant ? (
+                                <span class="bg-[var(--vscode-button-background)] bg-opacity-10 px-2 py-0.5 rounded-full text-[var(--vscode-button-background)]">
+                                    {message.modelName || message.providerName || 'ZenCoder'}
+                                </span>
+                            ) : (
+                                <span class="opacity-0">You</span>
+                            )}
+                            <div class="text-[10px] text-[var(--vscode-descriptionForeground)]">
+                                {formatTime(message.timestamp)}
+                            </div>
+                        </div>
+
+                        {/* Message content */}
+                        <div 
+                            ref={messageContentRef}
+                            class="message-content text-sm text-[var(--vscode-foreground)]"
+                        >
+                            {message.content.map((part, index) => {
+                                if (part.type === 'text') {
+                                    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+                                    const textWithCodeBlocks = part.text.replace(codeBlockRegex, (match, lang, code) => {
+                                        return `<pre class="bg-[var(--vscode-editor-lineHighlightBackground)] p-3 rounded my-3 overflow-x-auto text-xs font-mono"><code>${code.trim()}</code></pre>`;
+                                    });
+                                    const inlineCodeRegex = /`([^`]+)`/g;
+                                    const textWithInlineCode = textWithCodeBlocks.replace(inlineCodeRegex, '<code class="bg-[var(--vscode-editor-lineHighlightBackground)] px-1.5 py-0.5 rounded text-xs font-mono">$1</code>');
+                                    const boldRegex = /\*\*([^\*]+)\*\*/g;
+                                    const textWithBold = textWithInlineCode.replace(boldRegex, '<strong class="font-semibold">$1</strong>');
+                                    const listItemRegex = /^- (.+)$/gm;
+                                    const textWithListItems = textWithBold.replace(listItemRegex, '<div class="flex"><span class="mr-2">•</span><span>$1</span></div>');
+                                    return <div key={index} class="whitespace-pre-wrap leading-relaxed" dangerouslySetInnerHTML={{ __html: textWithListItems }} />;
+                                } else if (part.type === 'image') {
+                                    return (
+                                        <div key={index} class="my-2 relative group/image">
+                                            <img 
+                                                src={`data:${part.mediaType};base64,${part.data}`} 
+                                                alt="Uploaded content" 
+                                                class="max-w-xs max-h-xs rounded-lg shadow-sm hover:shadow transition-shadow duration-200" 
+                                            />
+                                            <div class="absolute inset-0 bg-black/0 group-hover/image:bg-black/10 dark:group-hover/image:bg-white/5 transition-colors duration-200 rounded-lg"></div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })}
+
+                            {/* Enhanced Tool Status Display with subtle animations */}
+                            {isAssistant && message.status === 'pending' && (
+                                <div class="mt-3 pt-3 border-t border-[var(--vscode-foreground)] border-opacity-10">
+                                    <div class="flex items-center text-[var(--vscode-button-background)]">
+                                        <span class="i-carbon-rotate-clockwise animate-spin h-3 w-3 mr-2"></span>
+                                        <span class="opacity-80 text-xs" style={{ animation: 'pulse 1.5s infinite ease-in-out' }}>
+                                            Working...
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Custom tool status display */}
+                            {isAssistant && toolCallParts.length > 0 && (
+                                <div class="mt-3 pt-3 border-t border-[var(--vscode-foreground)] border-opacity-10 space-y-1">
+                                    {toolCallParts.map((tool, index) => {
+                                        const isCompleted = tool.status === 'complete';
+                                        const isFailed = tool.status === 'error';
+                                        
+                                        let displayName = tool.toolName || 'Processing';
+                                        let durationText = '';
+                                        
+                                        // Helper to extract relevant information from tool
+                                        if (tool.toolName?.startsWith('read_file') && tool.args?.target_file) {
+                                            displayName = `Reading ${tool.args.target_file}`;
+                                        } else if (tool.toolName?.startsWith('edit_file') && tool.args?.target_file) {
+                                            displayName = `Editing ${tool.args.target_file}`;
+                                        } else if (tool.toolName?.startsWith('codebase_search') && tool.args?.query) {
+                                            displayName = `Searching for "${tool.args.query}"`;
+                                        } else if (tool.toolName?.includes('terminal') && tool.args?.command) {
+                                            displayName = `Running command`;
+                                        }
+                                        
+                                        return (
+                                            <ToolStatusItem
+                                                key={index}
+                                                status={tool.status || 'pending'}
+                                                label={displayName}
+                                                progress={tool.progress}
+                                                completed={isCompleted}
+                                                failed={isFailed}
+                                                duration={durationText}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Suggested Actions */}
+                        {actions.length > 0 && (
+                            <div class="suggested-actions mt-3 flex flex-wrap gap-1.5">
+                                {actions.map((action, i) => (
+                                    <Button
+                                        key={i}
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleSuggestedActionClick(action)}
+                                        className="text-xs py-0.5 h-auto bg-[var(--vscode-editor-background)] hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 transition-colors duration-150"
+                                    >
+                                        {action.label}
+                                    </Button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* User avatar for user messages */}
+                    {isUser && (
+                        <div class="w-10 h-10 rounded-full bg-[var(--vscode-editor-background)] flex items-center justify-center absolute right-[-38px] top-0">
+                            <span class="i-carbon-user h-5 w-5 text-[var(--vscode-foreground)] opacity-70"></span>
+                        </div>
+                    )}
+
+                    {/* Action Buttons - Positioned at the edge of message bubble */}
+                    <div 
+                        class="message-actions flex space-x-1 z-10 transition-all duration-150 ease-out absolute top-2 right-2"
+                        style={{
+                            opacity: showActions ? 1 : 0,
+                            transform: showActions ? 'scale(1)' : 'scale(0.95)',
+                            pointerEvents: showActions ? 'auto' : 'none',
+                        }}
                     >
-                        <DeleteIcon className="w-3.5 h-3.5"/>
-                    </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => onCopyMessage(message.id)}
+                            title="Copy"
+                            className="bg-[var(--vscode-editor-background)] opacity-90 shadow-sm h-6 w-6 rounded-full text-[var(--vscode-foreground)] hover:text-[var(--vscode-button-background)]"
+                        >
+                            <span class="i-carbon-copy w-3 h-3"></span>
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => onDeleteMessage(message.id)}
+                            title="Delete"
+                            className="bg-[var(--vscode-editor-background)] opacity-90 shadow-sm h-6 w-6 rounded-full text-[var(--vscode-foreground)] hover:text-[var(--vscode-notificationsErrorIcon)]"
+                        >
+                            <span class="i-carbon-trash-can w-3 h-3"></span>
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>

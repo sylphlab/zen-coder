@@ -46,18 +46,32 @@ const renderToolItem = (
     const isEffectivelyEnabled = resolvedStatus !== CategoryStatus.Disabled;
     const requiresAuth = resolvedStatus === CategoryStatus.RequiresAuthorization;
 
+    // Determine button text and styling based on configured status
     let buttonText = '';
-    let buttonClass = 'px-2 py-1 text-xs rounded focus:outline-none focus:ring-2 focus:ring-offset-1 ';
-    // Determine button style based on configured status
+    let buttonIcon = '';
+    let buttonClass = '';
+    
     switch (configuredStatus) {
         case ToolStatus.Inherited:
-            buttonText = 'Inherit'; buttonClass += 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-500 focus:ring-gray-400'; break;
+            buttonText = 'Inherit';
+            buttonIcon = 'i-carbon-arrow-up';
+            buttonClass = 'bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)]';
+            break;
         case ToolStatus.AlwaysAvailable:
-            buttonText = 'Always Allow'; buttonClass += 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-400'; break;
+            buttonText = 'Always Allow';
+            buttonIcon = 'i-carbon-checkmark-filled';
+            buttonClass = 'bg-[var(--vscode-testing-iconPassed)] text-white';
+            break;
         case ToolStatus.RequiresAuthorization:
-            buttonText = 'Requires Auth'; buttonClass += 'bg-yellow-500 text-black hover:bg-yellow-600 focus:ring-yellow-400'; break;
+            buttonText = 'Requires Auth';
+            buttonIcon = 'i-carbon-warning-filled';
+            buttonClass = 'bg-[var(--vscode-editorWarning-foreground)] text-white';
+            break;
         case ToolStatus.Disabled:
-            buttonText = 'Disabled'; buttonClass += 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-400'; break;
+            buttonText = 'Disabled';
+            buttonIcon = 'i-carbon-close-filled';
+            buttonClass = 'bg-[var(--vscode-editorError-foreground)] text-white';
+            break;
     }
 
     let resolvedTooltip = `Resolved: ${resolvedStatus}`;
@@ -66,30 +80,27 @@ const renderToolItem = (
     }
 
     return (
-        <li key={toolId} class={`p-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between ${isEffectivelyEnabled ? 'bg-gray-50 dark:bg-gray-800/50' : 'bg-gray-100 dark:bg-gray-700/50 opacity-70'}`}>
+        <li key={toolId} class={`p-3 border-t border-[var(--vscode-panel-border)] border-opacity-30 flex items-center justify-between ${isEffectivelyEnabled ? 'bg-[var(--vscode-editorWidget-background)]' : 'bg-[var(--vscode-input-background)] opacity-70'}`}>
             {/* Text content area */}
             <div class="flex-grow mr-4 overflow-hidden min-w-0"> {/* min-w-0 prevents flex item from overflowing */}
-                <p class={`font-semibold text-sm truncate ${isEffectivelyEnabled ? 'text-gray-800 dark:text-gray-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                <p class={`font-semibold text-sm truncate ${isEffectivelyEnabled ? 'text-[var(--vscode-foreground)]' : 'text-[var(--vscode-foreground)] opacity-60'}`}>
                     {displayName}
-                    {requiresAuth && <span class="text-xs text-yellow-600 dark:text-yellow-400 ml-2 whitespace-nowrap">(Requires Auth)</span>}
+                    {requiresAuth && <span class="text-xs text-[var(--vscode-notificationsWarningIcon)] ml-2 whitespace-nowrap">(Requires Auth)</span>}
                 </p>
                 {description && (
                     // Use whitespace-normal for wrapping
-                    <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 whitespace-normal">{description}</p>
+                    <p class="text-xs text-[var(--vscode-foreground)] opacity-70 mt-1 whitespace-normal">{description}</p>
                 )}
             </div>
-            {/* Action Button - Use Button component */}
-            <Button
-                // Determine variant based on status? Or keep it simple? Let's use secondary for now.
-                variant="secondary"
-                size="sm" // Use smaller size
-                className={`flex-shrink-0 ${buttonClass.replace(/px-\d+|py-\d+|text-xs|rounded|focus:outline-none|focus:ring-\d+|focus:ring-offset-\d+|focus:ring-\w+-\d+/g, '').trim()} ${isSavingAuth ? 'opacity-50 cursor-not-allowed' : ''}`} // Apply base color/hover from original class, remove sizing/focus
-                onClick={() => handleToolToggle(toolId, configuredStatus)}
-                disabled={isSavingAuth}
+            {/* Custom styled button for better visibility */}
+            <div
+                className={`flex-shrink-0 px-3 py-1 rounded-md text-xs flex items-center space-x-1 transition-colors ${buttonClass} hover:opacity-90 cursor-pointer ${isSavingAuth ? 'opacity-50 cursor-not-allowed' : ''}`}
+                onClick={() => !isSavingAuth && handleToolToggle(toolId, configuredStatus)}
                 title={resolvedTooltip}
             >
-                {buttonText}
-            </Button>
+                <span class={`${buttonIcon} h-3 w-3`}></span>
+                <span>{buttonText}</span>
+            </div>
         </li>
     );
 };
@@ -175,32 +186,32 @@ export function ToolSettings(): JSX.Element {
         const isCollapsed = collapsedCategories[category.id] ?? true;
 
         // Determine MCP status text and color (use safely accessed serverStatus)
-        let mcpStatusText = ''; let mcpStatusColor = 'text-gray-500 dark:text-gray-400'; let mcpShowRetryButton = false;
+        let mcpStatusText = ''; let mcpStatusColor = 'text-[var(--vscode-foreground)] opacity-60'; let mcpShowRetryButton = false;
         const isThisServerRetrying = retryingServerName === serverIdentifier || serverStatus?.lastError === 'Retrying...';
 
         if (isMcpCategory) {
             if (!serverStatus) { mcpStatusText = 'Status Unknown'; }
             else {
                 const { enabled, isConnected, lastError } = serverStatus;
-                if (!enabled) { mcpStatusText = 'Disabled (config)'; mcpStatusColor = 'text-gray-500 dark:text-gray-400'; }
+                if (!enabled) { mcpStatusText = 'Disabled (config)'; mcpStatusColor = 'text-[var(--vscode-foreground)] opacity-60'; }
                 else if (isConnected) {
-                    mcpStatusText = `Connected`; mcpStatusColor = 'text-green-600 dark:text-green-400';
-                    if (lastError && lastError !== 'Retrying...') { mcpStatusText += ' - Tools Failed'; mcpStatusColor = 'text-yellow-600 dark:text-yellow-400'; mcpShowRetryButton = true; }
-                } else { mcpStatusText = 'Connection Failed'; mcpStatusColor = 'text-red-600 dark:text-red-400'; mcpShowRetryButton = true; }
+                    mcpStatusText = `Connected`; mcpStatusColor = 'text-[var(--vscode-testing-iconPassed)]';
+                    if (lastError && lastError !== 'Retrying...') { mcpStatusText += ' - Tools Failed'; mcpStatusColor = 'text-[var(--vscode-notificationsWarningIcon)]'; mcpShowRetryButton = true; }
+                } else { mcpStatusText = 'Connection Failed'; mcpStatusColor = 'text-[var(--vscode-notificationsErrorIcon)]'; mcpShowRetryButton = true; }
 
-                if (isThisServerRetrying) { mcpStatusText = 'Retrying...'; mcpStatusColor = 'text-yellow-600 dark:text-yellow-400'; mcpShowRetryButton = false; }
+                if (isThisServerRetrying) { mcpStatusText = 'Retrying...'; mcpStatusColor = 'text-[var(--vscode-notificationsWarningIcon)]'; mcpShowRetryButton = false; }
                 else if (lastError && lastError !== 'Retrying...') { mcpShowRetryButton = true; } // Show retry on any persistent error when not retrying
             }
         }
 
         return (
-            <div key={category.id} class="border border-gray-300 dark:border-gray-700 rounded-lg overflow-hidden shadow-sm">
+            <div key={category.id} class="border border-[var(--vscode-panel-border)] rounded-lg overflow-hidden shadow-sm">
                 {/* Clickable Category Header */}
-                <div class="flex items-center justify-between p-3 bg-gray-100 dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onClick={() => toggleCategoryCollapse(category.id)}>
+                <div class="flex items-center justify-between p-3 bg-[var(--vscode-sideBar-background)] cursor-pointer hover:bg-[var(--vscode-list-hoverBackground)]" onClick={() => toggleCategoryCollapse(category.id)}>
                     {/* Left: Icon, Name, Status */}
                     <div class="flex items-center flex-grow overflow-hidden mr-2 min-w-0">
-                        <span class="mr-2 text-gray-500 dark:text-gray-400 flex-shrink-0">{isCollapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}</span>
-                        <h5 class="text-md font-medium text-gray-700 dark:text-gray-300 inline truncate">{category.name}</h5>
+                        <span class="mr-2 text-[var(--vscode-foreground)] opacity-60 flex-shrink-0">{isCollapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}</span>
+                        <h5 class="text-md font-medium text-[var(--vscode-foreground)] inline truncate">{category.name}</h5>
                         {isMcpCategory && ( <span class={`text-xs ml-2 ${mcpStatusColor} whitespace-nowrap`} title={serverStatus?.lastError && serverStatus.lastError !== 'Retrying...' ? serverStatus.lastError : mcpStatusText}>({mcpStatusText})</span> )}
                     </div>
                     {/* Right: Buttons */}
@@ -218,31 +229,46 @@ export function ToolSettings(): JSX.Element {
                                 Retry
                             </Button>
                         )}
-                        {/* Use Button component for Category Status Toggle */}
-                        <Button
-                            variant="secondary" // Or determine based on status
-                            size="sm"
+                        {/* Status toggle with better visual indicators */}
+                        <div
                             onClick={(e) => { e.stopPropagation(); handleCategoryStatusToggle(category.id, category.status); }}
-                            className={`!py-1 !px-2 text-xs ${isSavingAuth ? 'opacity-50 cursor-not-allowed' : ''} ${ category.status === CategoryStatus.AlwaysAvailable ? 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-400' : category.status === CategoryStatus.RequiresAuthorization ? 'bg-yellow-500 text-black hover:bg-yellow-600 focus:ring-yellow-400' : 'bg-red-500 text-white hover:bg-red-600 focus:ring-red-400' }`.replace(/focus:ring-\d+|focus:ring-offset-\d+|focus:ring-\w+-\d+/g, '').trim()} // Apply colors, remove focus rings handled by Button
-                            title={`Click to change ${isMcpCategory ? 'server' : 'category'} status (Current: ${category.status})`}
-                            disabled={isSavingAuth}
+                            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors flex items-center space-x-1.5 cursor-pointer ${
+                                isSavingAuth ? 'opacity-50 cursor-wait' : ''
+                            } ${
+                                category.status === CategoryStatus.AlwaysAvailable
+                                    ? 'bg-[var(--vscode-testing-passedBackground)] text-[var(--vscode-testing-iconPassed)]'
+                                    : category.status === CategoryStatus.RequiresAuthorization
+                                        ? 'bg-[var(--vscode-editorWarning-foreground)] bg-opacity-10 text-[var(--vscode-editorWarning-foreground)]'
+                                        : 'bg-[var(--vscode-editorError-foreground)] bg-opacity-10 text-[var(--vscode-editorError-foreground)]'
+                            }`}
+                            title={`${isMcpCategory ? 'MCP Server' : 'Tool Category'} Status: ${category.status}`}
                         >
-                            {isMcpCategory ? 'Server' : 'Category'}: {category.status}
-                        </Button>
+                            {category.status === CategoryStatus.AlwaysAvailable && (
+                                <span class="i-carbon-checkmark-filled h-3 w-3"></span>
+                            )}
+                            {category.status === CategoryStatus.RequiresAuthorization && (
+                                <span class="i-carbon-warning-filled h-3 w-3"></span>
+                            )}
+                            {category.status === CategoryStatus.Disabled && (
+                                <span class="i-carbon-close-filled h-3 w-3"></span>
+                            )}
+                            <span>{category.status}</span>
+                        </div>
                     </div>
                 </div>
                 {/* Collapsible Tool List */}
                 {!isCollapsed && (
-                    // Use list for tools, remove extra padding/borders from items
-                    <ul class="bg-white dark:bg-gray-800/30">
+                    <div class="bg-[var(--vscode-editorWidget-background)]">
                         {category.tools.length > 0 ? (
-                             category.tools.map((tool: ToolInfo) => renderToolItem(tool, category.status, isSavingAuth, handleToolToggle))
+                            <ul>
+                                {category.tools.map((tool: ToolInfo) => renderToolItem(tool, category.status, isSavingAuth, handleToolToggle))}
+                            </ul>
                         ) : (
-                            <li class="p-3 text-sm text-gray-500 dark:text-gray-400 italic">
+                            <div class="p-3 text-sm text-[var(--vscode-foreground)] opacity-60 italic">
                                 {isMcpCategory && serverStatus && !serverStatus.isConnected && serverStatus.lastError !== 'Retrying...' ? 'Connection failed or tools unavailable.' : 'No tools available.'}
-                            </li>
+                            </div>
                         )}
-                    </ul>
+                    </div>
                 )}
             </div>
         );
@@ -251,37 +277,59 @@ export function ToolSettings(): JSX.Element {
     // --- Main Render ---
     return (
         <section class="mb-8 w-full"> {/* Ensure section takes full width */}
-            <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-300">Available Tools & MCP Servers</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Toggle individual tools or entire categories/servers on/off for the AI to use. Configure MCP server connections via JSON files (Project settings override Global).
+            <h3 class="text-xl font-semibold mb-4 text-[var(--vscode-foreground)]">Available Tools & MCP Servers</h3>
+            <p class="text-sm text-[var(--vscode-foreground)] opacity-70 mb-4">
+                Control which tools and MCP servers your AI assistant can access. Configure permissions and integration settings below.
             </p>
-            {/* MCP Config Buttons - Use Button component */}
-            <div class="flex space-x-4 mb-4">
+            
+            {/* Legend for status indicators */}
+            <div class="mb-6 bg-[var(--vscode-editorWidget-background)] p-4 rounded-lg border border-[var(--vscode-panel-border)] border-opacity-30">
+                <h4 class="text-sm font-medium text-[var(--vscode-foreground)] mb-2">Status Legend:</h4>
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-3 h-3 rounded-full bg-[var(--vscode-testing-iconPassed)]"></div>
+                        <span class="text-xs text-[var(--vscode-foreground)]">Always Available</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-3 h-3 rounded-full bg-[var(--vscode-editorWarning-foreground)]"></div>
+                        <span class="text-xs text-[var(--vscode-foreground)]">Requires Authorization</span>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <div class="w-3 h-3 rounded-full bg-[var(--vscode-editorError-foreground)]"></div>
+                        <span class="text-xs text-[var(--vscode-foreground)]">Disabled</span>
+                    </div>
+                </div>
+            </div>
+            
+            {/* MCP Config Buttons - Better styling */}
+            <div class="flex flex-wrap gap-3 mb-6">
                 <Button
-                    variant="primary" // Or a specific color variant if defined
+                    variant="primary"
                     size="md"
                     onClick={handleOpenGlobalMcpConfig}
-                    className={`bg-indigo-600 hover:bg-indigo-700`} // Override color
                     disabled={isOpeningGlobal}
-                    loading={isOpeningGlobal} // Use loading prop
+                    loading={isOpeningGlobal}
+                    className="flex items-center space-x-2"
                 >
-                    Configure Global Servers
+                    <span class="i-carbon-server h-4 w-4"></span>
+                    <span>Configure Global Servers</span>
                 </Button>
                 <Button
-                    variant="primary" // Or a specific color variant if defined
+                    variant="primary"
                     size="md"
                     onClick={handleOpenProjectMcpConfig}
-                    className={`bg-teal-600 hover:bg-teal-700`} // Override color
                     disabled={isOpeningProject}
-                    loading={isOpeningProject} // Use loading prop
+                    loading={isOpeningProject}
+                    className="flex items-center space-x-2"
                 >
-                    Configure Project Servers
+                    <span class="i-carbon-folder h-4 w-4"></span>
+                    <span>Configure Project Servers</span>
                 </Button>
             </div>
 
             {/* Loading Status */}
-            {(isLoading || isMcpLoading) && <p class="text-gray-500 dark:text-gray-400 italic">Loading tools and server status...</p>}
-            {(isToolsError || isMcpError) && <p class="text-red-500 dark:text-red-400 italic">Error loading tools or server status.</p>}
+            {(isLoading || isMcpLoading) && <p class="text-[var(--vscode-foreground)] opacity-60 italic">Loading tools and server status...</p>}
+            {(isToolsError || isMcpError) && <p class="text-[var(--vscode-notificationsErrorIcon)] italic">Error loading tools or server status.</p>}
 
 
             {/* Tool/Category List - Render only when BOTH tools and MCP data are loaded successfully */}
@@ -291,7 +339,7 @@ export function ToolSettings(): JSX.Element {
                         {/* Standard Tools Section */}
                         {allToolsStatus.some(cat => !cat.id.startsWith('mcp_')) && (
                             <div>
-                                <h4 class="text-lg font-semibold mb-3 text-gray-600 dark:text-gray-400">Standard Tools</h4>
+                                <h4 class="text-lg font-semibold mb-3 text-[var(--vscode-foreground)] opacity-80">Standard Tools</h4>
                                 <div class="space-y-4">
                                     {/* Ensure filtering and mapping only on array */}
                                     {allToolsStatus.filter(cat => !cat.id.startsWith('mcp_')).map(renderCategory)}
@@ -302,7 +350,7 @@ export function ToolSettings(): JSX.Element {
                         {/* MCP Servers & Tools Section */}
                          {allToolsStatus.some(cat => cat.id.startsWith('mcp_')) && (
                             <div>
-                                <h4 class="text-lg font-semibold mt-6 mb-3 text-gray-600 dark:text-gray-400">MCP Servers & Tools</h4>
+                                <h4 class="text-lg font-semibold mt-6 mb-3 text-[var(--vscode-foreground)] opacity-80">MCP Servers & Tools</h4>
                                 <div class="space-y-4">
                                     {/* Ensure filtering and mapping only on array */}
                                     {allToolsStatus.filter(cat => cat.id.startsWith('mcp_')).map(renderCategory)}
@@ -311,7 +359,7 @@ export function ToolSettings(): JSX.Element {
                         )}
                     </div>
                 ) : (
-                    <p class="text-gray-500 dark:text-gray-400 italic">No tools found.</p>
+                    <p class="text-[var(--vscode-foreground)] opacity-60 italic">No tools found.</p>
                 )
             )}
         </section>

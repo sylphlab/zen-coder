@@ -332,37 +332,31 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
     const currentSuggestedActionsMap = suggestedActionsMap;
 
     return (
-        <div class="flex flex-col h-full text-gray-900 dark:text-gray-100">
-            {/* Restore Minimalist Header */}
-            <div class="flex justify-between items-center px-3 py-2 flex-shrink-0 border-b border-black/5 dark:border-white/5">
-                {/* Left: Chats Button */}
-                <Button
-                    variant="ghost"
-                    size="sm"
+        <div class="flex flex-col h-full">
+            {/* Simple minimalist header - just back button and chat name */}
+            <div class="flex justify-between items-center px-4 py-2 flex-shrink-0 bg-[var(--vscode-editor-background)]">
+                <button
                     onClick={handleChatsClick}
-                    className="text-gray-600 dark:text-gray-300 hover:bg-transparent" // Keep hover transparent
+                    class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[var(--vscode-button-hoverBackground)] transition-colors"
+                    aria-label="Back to chats"
                 >
-                    <ChatsIcon className="h-4 w-4 mr-1.5" />
-                    <span class="text-xs">Chats</span>
-                </Button>
-
-                {/* Center: Chat Title - Optional */}
-                <div class="text-xs font-medium truncate max-w-[50%] opacity-70">
-                    {session?.name || 'Chat'}
+                    <span class="i-carbon-chevron-left h-5 w-5 text-[var(--vscode-foreground)]"></span>
+                </button>
+                
+                <div class="absolute left-1/2 transform -translate-x-1/2 text-sm text-[var(--vscode-foreground)] opacity-60">
+                    {session?.name || 'New Chat'}
                 </div>
-
-                {/* Right: Settings Button */}
-                <Button
-                    variant="ghost"
-                    size="icon-sm"
+                
+                <button
                     onClick={handleSettingsClick}
-                    className="text-gray-600 dark:text-gray-300 hover:bg-transparent h-8 w-8" // Keep hover transparent
+                    class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[var(--vscode-button-hoverBackground)] transition-colors"
+                    title="Settings"
                 >
-                    <SettingsIcon className="h-4 w-4" />
-                </Button>
+                    <span class="i-carbon-settings-adjust h-4.5 w-4.5 text-[var(--vscode-foreground)] opacity-70"></span>
+                </button>
             </div>
 
-            {/* Messages Area */}
+            {/* Messages Area - Pure conversation without system elements */}
             <MessagesArea
                 messages={messages}
                 suggestedActionsMap={currentSuggestedActionsMap}
@@ -371,29 +365,71 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
                 messagesEndRef={messagesEndRef}
                 onCopyMessage={handleCopyMessage}
                 onDeleteMessage={handleDeleteMessage}
-                className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700 scrollbar-thumb-rounded-full scrollbar-track-transparent"
+                className="flex-1 overflow-y-auto px-3 py-4"
             />
 
-            {/* Input Area */}
-            <InputArea
-                className="p-3 border-t border-black/5 dark:border-white/5"
-                handleKeyDown={handleKeyDown}
-                handleSend={handleSend}
-                selectedImages={selectedImages}
-                handleImageFileChange={handleImageFileChange}
-                triggerImageUpload={triggerImageUpload}
-                fileInputRef={fileInputRef}
-                removeSelectedImage={removeSelectedImage}
-                setSelectedImages={setSelectedImages}
-                handleStopGeneration={handleStopGeneration}
-                selectedProviderId={providerId ?? null}
-                selectedModelId={modelId ?? null}
-                onModelChange={handleChatModelChange}
-                inputValue={inputValue}
-                setInputValue={setInputValue}
-                isStreaming={isStreaming}
-                textareaRef={textareaRef}
-            />
+            {/* Input area with suggestion chips that appear when empty */}
+            <div class="p-3 bg-[var(--vscode-editor-background)]">
+                {inputValue.trim() === '' && !isStreaming && (
+                    <div class="mb-3 flex flex-wrap gap-2">
+                        <button
+                            onClick={() => setInputValue("Explain this code to me")}
+                            class="px-3 py-1.5 rounded-full text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
+                        >
+                            Explain code
+                        </button>
+                        <button
+                            onClick={() => setInputValue("Fix bugs in this code")}
+                            class="px-3 py-1.5 rounded-full text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
+                        >
+                            Debug this
+                        </button>
+                        <button
+                            onClick={() => setInputValue("Add tests for this function")}
+                            class="px-3 py-1.5 rounded-full text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
+                        >
+                            Write tests
+                        </button>
+                        <button
+                            onClick={() => setInputValue("Optimize this code")}
+                            class="px-3 py-1.5 rounded-full text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
+                        >
+                            Optimize
+                        </button>
+                    </div>
+                )}
+                
+                <InputArea
+                    className="border border-[var(--vscode-input-border)] rounded-lg shadow-sm"
+                    handleKeyDown={handleKeyDown}
+                    handleSend={handleSend}
+                    selectedImages={selectedImages}
+                    handleImageFileChange={handleImageFileChange}
+                    triggerImageUpload={triggerImageUpload}
+                    fileInputRef={fileInputRef}
+                    removeSelectedImage={removeSelectedImage}
+                    setSelectedImages={setSelectedImages}
+                    handleStopGeneration={handleStopGeneration}
+                    selectedProviderId={providerId ?? null}
+                    selectedModelId={modelId ?? null}
+                    onModelChange={handleChatModelChange}
+                    inputValue={inputValue}
+                    setInputValue={setInputValue}
+                    isStreaming={isStreaming}
+                    textareaRef={textareaRef}
+                    /* No useAtMention prop since it's not defined in InputArea */
+                />
+                
+                {/* Clear conversation button - subtle but accessible */}
+                <div class="mt-3 text-center">
+                    <button
+                        onClick={() => setShowClearConfirm(true)}
+                        class="text-xs text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
+                    >
+                        Clear conversation
+                    </button>
+                </div>
+            </div>
             
             {/* Confirmation Dialog */}
             <ConfirmationDialog

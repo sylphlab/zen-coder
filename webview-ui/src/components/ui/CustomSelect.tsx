@@ -215,7 +215,7 @@ export function CustomSelect({
      // Dynamic classes for dropdown list - Handles shadow, rounding, width, positioning
     const dropdownClasses = useMemo(() => {
         // Apply shadow and rounding here, width is adaptive
-        let base = `absolute z-10 min-w-full min-w-max bg-white dark:bg-gray-700 max-h-60 overflow-y-auto shadow-lg rounded-md`; // Shadow and rounding on dropdown
+        let base = `absolute z-10 min-w-full min-w-max bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] max-h-60 overflow-y-auto shadow-lg rounded-md`; // Shadow and rounding on dropdown
         if (openDirection === 'up') {
             base += " bottom-full"; // Position above
         } else {
@@ -234,13 +234,13 @@ export function CustomSelect({
 
     // Dynamic classes for the input wrapper div (handles hover when closed, bg and NO rounding when open)
      const inputWrapperClasses = useMemo(() => {
-        let base = `relative`;
+        let base = `relative flex items-center border border-[var(--vscode-input-border)]`;
         if (!isOpen) {
             // Apply rounding and hover only when closed
-            base += ' rounded-md hover:bg-gray-100 dark:hover:bg-gray-800';
+            base += ' rounded-md hover:bg-[var(--vscode-list-hoverBackground)]';
         } else {
              // When open, match dropdown background, NO rounding
-             base += ` bg-white dark:bg-gray-700`;
+             base += ` bg-[var(--vscode-dropdown-background)]`;
         }
         return base;
      }, [isOpen]);
@@ -253,7 +253,7 @@ export function CustomSelect({
                 <input
                     ref={inputRef}
                     type="text"
-                    class={inputClasses} // Simplified classes
+                    class={`w-full p-1.5 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:outline-none focus:border-[var(--vscode-focusBorder)] pr-6`}
                     value={inputValue}
                     placeholder={placeholder}
                     disabled={disabled}
@@ -268,7 +268,7 @@ export function CustomSelect({
                 />
                 {/* Arrow inside input */}
                 <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                     <svg class={`w-3 h-3 fill-current text-gray-400 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                     <svg class={`w-3 h-3 fill-current text-[var(--vscode-foreground)] opacity-60 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                 </div>
             </div>
 
@@ -280,7 +280,7 @@ export function CustomSelect({
                             let flatIndex = -1;
                             return sortedGroupLabels.map(groupLabel => (
                                 <li key={groupLabel}>
-                                    <div class="px-3 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 sticky top-0">{groupLabel}</div>
+                                    <div class="px-3 py-1 text-xs font-semibold text-[var(--vscode-foreground)] opacity-60 sticky top-0 bg-[var(--vscode-dropdown-background)]">{groupLabel}</div>
                                     <ul>
                                         {filteredAndGroupedOptions[groupLabel]
                                             .sort((a, b) => a.id.localeCompare(b.id))
@@ -291,16 +291,18 @@ export function CustomSelect({
                                                     <li
                                                         key={option.id}
                                                         id={`option-${option.id}`}
-                                                        class={`px-3 py-1.5 text-xs cursor-pointer ${isHighlighted ? 'bg-blue-100 dark:bg-blue-800' : 'hover:bg-blue-100 dark:hover:bg-blue-800'} ${value === option.id ? 'bg-blue-200 dark:bg-blue-700 font-semibold' : ''}`}
+                                                        class={`px-3 py-1.5 text-xs cursor-pointer
+                                                            ${isHighlighted ? 'bg-[var(--vscode-list-activeSelectionBackground)] text-[var(--vscode-list-activeSelectionForeground)]' : 'hover:bg-[var(--vscode-list-hoverBackground)]'}
+                                                            ${value === option.id ? 'bg-[var(--vscode-list-focusBackground)] font-semibold' : ''}`}
                                                         onClick={() => handleSelect(option.id)}
                                                         onMouseEnter={() => setHighlightedIndex(flatIndex)}
                                                         role="option"
                                                         aria-selected={value === option.id || isHighlighted}
                                                     >
                                                         <div class="flex justify-between items-center gap-2">
-                                                            <span class={`flex-grow ${value === option.id ? 'text-gray-900 dark:text-white' : 'text-gray-900 dark:text-white'}`}>{option.name}</span>
+                                                            <span class="flex-grow text-[var(--vscode-dropdown-foreground)]">{option.name}</span>
                                                             {showId && (
-                                                                <span class={`flex-shrink-0 text-xxs text-gray-300 dark:text-gray-600`}>{option.id}</span>
+                                                                <span class="flex-shrink-0 text-xxs text-[var(--vscode-foreground)] opacity-40">{option.id}</span>
                                                             )}
                                                         </div>
                                                     </li>
@@ -311,7 +313,7 @@ export function CustomSelect({
                             ));
                         })()}
                          {!hasFilteredOptions && (
-                            <li class="px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400 italic">
+                            <li class="px-3 py-1.5 text-xs text-[var(--vscode-foreground)] opacity-60 italic">
                                 {filter ? 'No matching options' : 'No options available'}
                             </li>
                         )}

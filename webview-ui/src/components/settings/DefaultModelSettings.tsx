@@ -30,26 +30,33 @@ export function DefaultModelSettings(): JSX.Element {
 
     return (
         <section class="mb-8">
-            <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-300">Default Models</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <h3 class="text-xl font-semibold mb-4 text-[var(--vscode-foreground)] flex items-center gap-2">
+                <span class="i-carbon-model h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                Default Models
+            </h3>
+            <p class="text-sm text-[var(--vscode-foreground)] opacity-70 mb-4">
                 Select the default AI models to be used for new chat sessions or when a chat is set to use defaults.
             </p>
             <div class="space-y-4">
-                <div class="p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
-                    {isLoadingConfig && <p class="text-sm text-gray-500">Loading default config...</p>}
+                <div class="p-4 border border-[var(--vscode-panel-border)] rounded-lg bg-[var(--vscode-editorWidget-background)] shadow-sm">
+                    {isLoadingConfig && (
+                        <div class="flex items-center gap-2 text-sm text-[var(--vscode-foreground)] opacity-60">
+                            <span class="i-carbon-rotate-clockwise animate-spin h-4 w-4"></span>
+                            <p>Loading default config...</p>
+                        </div>
+                    )}
                     {/* Render only when not loading and config is a valid object */}
                     {!isLoadingConfig && defaultConfig && typeof defaultConfig === 'object' && (
                         <ModelSelector
-                            // Removed key prop as it didn't solve the issue
                             labelPrefix="Default Chat"
-                            selectedProviderId={defaultConfig.defaultProviderId ?? null} // Access safely now
-                            selectedModelId={defaultConfig.defaultModelId ?? null}   // Access safely now
+                            selectedProviderId={defaultConfig.defaultProviderId ?? null}
+                            selectedModelId={defaultConfig.defaultModelId ?? null}
                             onModelChange={handleDefaultChatModelChange}
                         />
                     )}
-                    {/* Handle case where config is loaded but null/empty (optional) - check type too */}
+                    {/* Handle case where config is loaded but null/empty */}
                     {!isLoadingConfig && (!defaultConfig || typeof defaultConfig !== 'object') && (
-                        <p class="text-sm text-gray-500">No default configuration set or invalid data.</p> // Updated message
+                        <p class="text-sm text-[var(--vscode-foreground)] opacity-60">No default configuration set or invalid data.</p>
                     )}
                 </div>
                 {/* TODO: Add selectors for defaultImageModelId and defaultOptimizeModelId later */}

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'preact/hooks';
+import { useCallback, useRef, useState } from 'preact/hooks';
 // Removed: import { useLocation } from "wouter";
 // Removed: import { useSetAtom } from 'jotai';
 import { JSX } from 'preact/jsx-runtime';
@@ -25,29 +25,326 @@ export function SettingPage(): JSX.Element {
        router.open('/'); // Use Nanostores router
    }, []); // No dependencies needed
 
+   // State for active tab
+   const [activeTab, setActiveTab] = useState('general');
+   // Removed animation-related state and refs
+   
+   // Handle tab change - simplified
+   const handleTabChange = (tab: string) => {
+       setActiveTab(tab);
+   };
+   
    return (
-       <div class="p-6 relative h-full overflow-y-auto scrollbar-thin scrollbar-thumb-gray-400 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent">
-           {/* Back Button */}
-           <button
-               onClick={handleBackClick}
-               class="absolute top-4 left-4 p-2 rounded-full hover:bg-transparent text-gray-600 dark:text-gray-300 z-10"
-               title="Back to Chat"
-           >
-               <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                   <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-               </svg>
-           </button>
+       <div class="h-full flex flex-col bg-[var(--vscode-editor-background)]">
+           {/* Header with back button and title */}
+           <header class="sticky top-0 z-10 bg-[var(--vscode-editor-background)] bg-opacity-90 backdrop-blur-md border-b border-[var(--vscode-panel-border)] border-opacity-50 px-4 py-3 flex items-center justify-between">
+               <div class="flex items-center">
+                   <button
+                       onClick={handleBackClick}
+                       class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 active:bg-opacity-20 transition-all duration-150 transform active:scale-95"
+                       aria-label="Back to chats"
+                   >
+                       <span class="i-carbon-arrow-left h-5 w-5 text-[var(--vscode-foreground)]"></span>
+                   </button>
+                   <h1 class="ml-3 text-lg font-medium text-[var(--vscode-foreground)]">Settings</h1>
+               </div>
+               <div class="text-xs bg-[var(--vscode-activityBarBadge-background)] bg-opacity-10 text-[var(--vscode-foreground)] opacity-70 rounded-full px-3 py-1 flex items-center">
+                   <span class="i-carbon-checkmark h-3 w-3 mr-1 text-[var(--vscode-activityBarBadge-background)]"></span>
+                   Auto-saved
+               </div>
+           </header>
 
-           <h1 class="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-200 text-center">Zen Coder 設定</h1>
+           {/* Segmented Control Navigation */}
+           <div class="px-4 py-3 border-b border-[var(--vscode-panel-border)] border-opacity-50">
+               <div class="flex space-x-1 bg-[var(--vscode-input-background)] p-1 rounded-lg">
+                   <button
+                       onClick={() => handleTabChange('general')}
+                       class={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
+                           activeTab === 'general'
+                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] shadow-sm'
+                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 hover:opacity-100'
+                       }`}
+                   >
+                       <span class="i-carbon-settings h-4 w-4"></span>
+                       <span>General</span>
+                   </button>
+                   <button
+                       onClick={() => handleTabChange('providers')}
+                       class={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
+                           activeTab === 'providers'
+                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] shadow-sm'
+                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 hover:opacity-100'
+                       }`}
+                   >
+                       <span class="i-carbon-api h-4 w-4"></span>
+                       <span>Providers</span>
+                   </button>
+                   <button
+                       onClick={() => handleTabChange('tools')}
+                       class={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
+                           activeTab === 'tools'
+                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] shadow-sm'
+                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 hover:opacity-100'
+                       }`}
+                   >
+                       <span class="i-carbon-tools-alt h-4 w-4"></span>
+                       <span>Tools</span>
+                   </button>
+                   <button
+                       onClick={() => handleTabChange('about')}
+                       class={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
+                           activeTab === 'about'
+                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] shadow-sm'
+                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 hover:opacity-100'
+                       }`}
+                   >
+                       <span class="i-carbon-information h-4 w-4"></span>
+                       <span>About</span>
+                   </button>
+               </div>
+           </div>
 
-           {/* Render the separated components */}
-           <DefaultModelSettings />
-           <CustomInstructionsSettings />
-           <ProviderSettings />
-           <ToolSettings />
-           {/* Removed: <McpServerSettings /> */}
-
+           {/* Main Content Area - Full Width */}
+           <main class="flex-1 overflow-y-auto p-6"> {/* Removed relative positioning */}
+               {/* General Settings Tab - Conditionally render */}
+               {activeTab === 'general' && (
+                   <div> {/* Simple div wrapper */}
+                   <div class="flex items-start gap-3 mb-5">
+                       <div class="bg-[var(--vscode-button-background)] bg-opacity-10 p-2 rounded-lg">
+                           <span class="i-carbon-settings h-6 w-6 text-[var(--vscode-button-background)]"></span>
+                       </div>
+                       <div>
+                           <h2 class="text-xl font-semibold text-[var(--vscode-foreground)]">General Settings</h2>
+                           <p class="text-sm text-[var(--vscode-foreground)] opacity-70">
+                               Configure your ZenCoder experience
+                           </p>
+                       </div>
+                   </div>
+                   
+                   {/* Setting Cards - Full Width */}
+                   <div class="space-y-6">
+                       {/* Default Model Card */}
+                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300">
+                           <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
+                               <div class="flex items-center gap-3">
+                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
+                                       <span class="i-carbon-model h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                                   </div>
+                                   <div>
+                                       <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Default AI Model</h3>
+                                       <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
+                                           Select which AI to chat with by default
+                                       </p>
+                                   </div>
+                               </div>
+                           </div>
+                           <div class="p-4">
+                               <DefaultModelSettings />
+                           </div>
+                       </div>
+                       
+                       {/* Custom Instructions Card */}
+                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300">
+                           <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
+                               <div class="flex items-center gap-3">
+                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
+                                       <span class="i-carbon-user-profile h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                                   </div>
+                                   <div>
+                                       <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Custom Instructions</h3>
+                                       <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
+                                           Tell ZenCoder about your preferences
+                                       </p>
+                                   </div>
+                               </div>
+                           </div>
+                           <div class="p-4">
+                               <CustomInstructionsSettings />
+                           </div>
+                       </div>
+                       
+                       {/* Context Settings Card (placeholder) */}
+                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300 opacity-60">
+                           <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
+                               <div class="flex items-center gap-3">
+                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
+                                       <span class="i-carbon-folder h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                                   </div>
+                                   <div>
+                                       <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Context Settings</h3>
+                                       <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
+                                           Configure how ZenCoder accesses your workspace
+                                       </p>
+                                   </div>
+                                   <div class="ml-auto">
+                                       <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--vscode-button-background)] bg-opacity-20 text-[var(--vscode-button-background)]">Coming Soon</span>
+                                   </div>
+                               </div>
+                           </div>
+                           <div class="p-4 opacity-60">
+                               <div class="flex items-center justify-between py-2">
+                                   <span class="text-sm text-[var(--vscode-foreground)]">Include workspace files</span>
+                                   <span class="i-carbon-checkmark h-4 w-4 text-[var(--vscode-button-background)]"></span>
+                               </div>
+                               <div class="flex items-center justify-between py-2 border-t border-[var(--vscode-panel-border)] border-opacity-20">
+                                   <span class="text-sm text-[var(--vscode-foreground)]">Include git history</span>
+                                   <span class="i-carbon-close h-4 w-4 text-[var(--vscode-foreground)] opacity-40"></span>
+                               </div>
+                           </div>
+                       </div>
+                       
+                       {/* Theme Settings Card (placeholder) */}
+                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300 opacity-60">
+                           <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
+                               <div class="flex items-center gap-3">
+                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
+                                       <span class="i-carbon-color-palette h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                                   </div>
+                                   <div>
+                                       <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Theme Overrides</h3>
+                                       <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
+                                           Customize ZenCoder interface
+                                       </p>
+                                   </div>
+                                   <div class="ml-auto">
+                                       <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-[var(--vscode-button-background)] bg-opacity-20 text-[var(--vscode-button-background)]">Coming Soon</span>
+                                   </div>
+                               </div>
+                           </div>
+                           <div class="p-4 opacity-60 flex gap-2">
+                               <div class="h-8 w-8 rounded-full bg-blue-500 border-2 border-white shadow-sm"></div>
+                               <div class="h-8 w-8 rounded-full bg-violet-500 border-2 border-transparent"></div>
+                               <div class="h-8 w-8 rounded-full bg-green-500 border-2 border-transparent"></div>
+                               <div class="h-8 w-8 rounded-full bg-amber-500 border-2 border-transparent"></div>
+                               <div class="h-8 w-8 rounded-full bg-rose-500 border-2 border-transparent"></div>
+                               <div class="h-8 w-8 rounded-full bg-gray-500 border-2 border-transparent flex items-center justify-center">
+                                   <span class="i-carbon-add h-4 w-4 text-white"></span>
+                               </div>
+                           </div>
+                       </div>
+                   </div>
+                   </div>
+               )}
+               
+               {/* Providers Tab - Conditionally render */}
+               {activeTab === 'providers' && (
+                   <div> {/* Simple div wrapper */}
+                   <div class="flex items-start gap-3 mb-5">
+                       <div class="bg-[var(--vscode-button-background)] bg-opacity-10 p-2 rounded-lg">
+                           <span class="i-carbon-api h-6 w-6 text-[var(--vscode-button-background)]"></span>
+                       </div>
+                       <div>
+                           <h2 class="text-xl font-semibold text-[var(--vscode-foreground)]">AI Providers</h2>
+                           <p class="text-sm text-[var(--vscode-foreground)] opacity-70">
+                               Configure AI services and models
+                           </p>
+                       </div>
+                   </div>
+                   
+                   <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300">
+                       <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
+                           <div class="flex items-center gap-3">
+                               <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
+                                   <span class="i-carbon-api h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                               </div>
+                               <div>
+                                   <h3 class="text-base font-medium text-[var(--vscode-foreground)]">AI Service Providers</h3>
+                                   <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
+                                       Configure your API keys and models
+                                   </p>
+                               </div>
+                           </div>
+                       </div>
+                       <div class="p-4">
+                           <ProviderSettings />
+                       </div>
+                   </div>
+                   </div>
+               )}
+               
+               {/* Tools Tab - Conditionally render */}
+               {activeTab === 'tools' && (
+                   <div> {/* Simple div wrapper */}
+                   <div class="flex items-start gap-3 mb-5">
+                       <div class="bg-[var(--vscode-button-background)] bg-opacity-10 p-2 rounded-lg">
+                           <span class="i-carbon-tools-alt h-6 w-6 text-[var(--vscode-button-background)]"></span>
+                       </div>
+                       <div>
+                           <h2 class="text-xl font-semibold text-[var(--vscode-foreground)]">Tools & Capabilities</h2>
+                           <p class="text-sm text-[var(--vscode-foreground)] opacity-70">
+                               Control what ZenCoder can access
+                           </p>
+                       </div>
+                   </div>
+                   
+                   <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300">
+                       <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
+                           <div class="flex items-center gap-3">
+                               <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
+                                   <span class="i-carbon-tools-alt h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                               </div>
+                               <div>
+                                   <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Tool Permissions</h3>
+                                   <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
+                                       Control which tools ZenCoder can use
+                                   </p>
+                               </div>
+                           </div>
+                       </div>
+                       <div class="p-4 bg-[var(--vscode-editorWidget-background)]">
+                           <ToolSettings />
+                       </div>
+                   </div>
+                   </div>
+               )}
+               
+               {/* About Tab - Conditionally render */}
+               {activeTab === 'about' && (
+                   <div> {/* Simple div wrapper */}
+                   <div class="h-full flex flex-col items-center justify-center">
+                       <div class="relative mb-6">
+                           <div class="absolute -inset-4 rounded-full bg-[var(--vscode-button-background)] bg-opacity-5 animate-pulse"></div>
+                           <div class="relative w-32 h-32 rounded-full bg-[var(--vscode-button-background)] bg-opacity-10 flex items-center justify-center">
+                               <span class="i-carbon-code h-16 w-16 text-[var(--vscode-button-background)]"></span>
+                           </div>
+                       </div>
+                       <h1 class="text-2xl font-bold text-[var(--vscode-foreground)] mb-2">ZenCoder</h1>
+                       <p class="text-lg text-[var(--vscode-foreground)] opacity-70 mb-1">Your AI Coding Partner</p>
+                       <p class="text-sm text-[var(--vscode-foreground)] opacity-60 mb-8">Version 1.0.0</p>
+                       
+                       <div class="flex gap-4 mb-10">
+                           <button class="px-4 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-lg flex items-center gap-2 hover:bg-opacity-90 active:bg-opacity-80 transition-all duration-150 transform active:scale-95">
+                               <span class="i-carbon-document h-4 w-4"></span>
+                               <span>Documentation</span>
+                           </button>
+                           <button class="px-4 py-2 bg-[var(--vscode-editorWidget-background)] border border-[var(--vscode-panel-border)] text-[var(--vscode-foreground)] rounded-lg flex items-center gap-2 hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 transition-all duration-150 transform active:scale-95">
+                               <span class="i-carbon-logo-github h-4 w-4"></span>
+                               <span>GitHub</span>
+                           </button>
+                       </div>
+                       
+                       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl w-full">
+                           <div class="bg-[var(--vscode-editorWidget-background)] p-4 rounded-xl border border-[var(--vscode-panel-border)] border-opacity-30 flex flex-col items-center text-center hover:shadow-md transition-shadow duration-300 cursor-pointer">
+                               <span class="i-carbon-feedback h-10 w-10 text-[var(--vscode-button-background)] mb-2"></span>
+                               <h3 class="text-sm font-medium text-[var(--vscode-foreground)] mb-1">Feedback</h3>
+                               <p class="text-xs text-[var(--vscode-foreground)] opacity-70">Share your thoughts</p>
+                           </div>
+                           <div class="bg-[var(--vscode-editorWidget-background)] p-4 rounded-xl border border-[var(--vscode-panel-border)] border-opacity-30 flex flex-col items-center text-center hover:shadow-md transition-shadow duration-300 cursor-pointer">
+                               <span class="i-carbon-collaborate h-10 w-10 text-[var(--vscode-button-background)] mb-2"></span>
+                               <h3 class="text-sm font-medium text-[var(--vscode-foreground)] mb-1">Community</h3>
+                               <p class="text-xs text-[var(--vscode-foreground)] opacity-70">Join the discussion</p>
+                           </div>
+                           <div class="bg-[var(--vscode-editorWidget-background)] p-4 rounded-xl border border-[var(--vscode-panel-border)] border-opacity-30 flex flex-col items-center text-center hover:shadow-md transition-shadow duration-300 cursor-pointer">
+                               <span class="i-carbon-help h-10 w-10 text-[var(--vscode-button-background)] mb-2"></span>
+                               <h3 class="text-sm font-medium text-[var(--vscode-foreground)] mb-1">Support</h3>
+                               <p class="text-xs text-[var(--vscode-foreground)] opacity-70">Get help with issues</p>
+                           </div>
+                       </div>
+                   </div>
+                   </div>
+               )}
+           </main>
+           {/* Removed animation styles block */}
        </div>
-       // Removed duplicate closing div tag - This comment is now incorrect, removing it.
-  ); // Closing parenthesis for the main return
+   );
 } // Closing brace for SettingPage function

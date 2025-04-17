@@ -223,19 +223,29 @@ export function ProviderSettings(): JSX.Element {
         const isSetButtonDisabled = !credentialsJsonInput[id]?.trim() || isSettingKey || isDeletingKey;
 
         return (
-            <li key={id} class="provider-setting-item mb-4 p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 shadow-sm">
+            <li key={id} class="provider-setting-item mb-4 p-4 border border-[var(--vscode-panel-border)] rounded-lg bg-[var(--vscode-editorWidget-background)] shadow-sm">
                 <div class="flex items-center justify-between mb-3">
-                    <label class="flex items-center font-semibold text-lg">
-                        <input
-                            type="checkbox"
-                            class="mr-3 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                            checked={enabled}
-                            onChange={(e) => onProviderToggle(id, (e.target as HTMLInputElement).checked)}
-                            disabled={isTogglingEnabled} // Disable toggle during action
-                        />
+                    <label class="flex items-center font-semibold text-[var(--vscode-foreground)]">
+                        <div class="relative inline-flex mr-3">
+                            <input
+                                type="checkbox"
+                                class="peer sr-only"
+                                checked={enabled}
+                                onChange={(e) => onProviderToggle(id, (e.target as HTMLInputElement).checked)}
+                                disabled={isTogglingEnabled}
+                            />
+                            <div
+                                class={`w-10 h-5 rounded-full transition ${enabled ? 'bg-[var(--vscode-button-background)]' : 'bg-[var(--vscode-input-background)]'}
+                                       peer-focus:outline peer-focus:outline-2 peer-focus:outline-[var(--vscode-focusBorder)]`}>
+                            </div>
+                            <div
+                                class={`absolute top-[2px] left-[2px] w-4 h-4 rounded-full transition-all bg-[var(--vscode-foreground)]
+                                       ${enabled ? 'translate-x-5' : 'translate-x-0'} ${isTogglingEnabled ? 'opacity-60' : ''}`}>
+                            </div>
+                        </div>
                         {name}
                     </label>
-                    <span class={`text-sm font-medium ${keyStatusColor === 'green' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{keyStatusText}</span>
+                    <span class={`text-sm font-medium ${keyStatusColor === 'green' ? 'text-[var(--vscode-testing-iconPassed)]' : 'text-[var(--vscode-notificationsErrorIcon)]'}`}>{keyStatusText}</span>
                 </div>
                 {requiresApiKey && (
                     <div class="mt-3 space-y-2">
@@ -244,7 +254,7 @@ export function ProviderSettings(): JSX.Element {
                             <div class="flex items-start space-x-2">
                                 {usesComplexCredentials ? (
                                     <textarea
-                                        class="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none font-mono text-xs"
+                                        class="flex-grow p-2 border border-[var(--vscode-input-border)] rounded text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none font-mono text-xs"
                                         placeholder={`貼上 ${name} JSON 憑證...`}
                                         value={credentialsJsonInput[id] || ''}
                                         onInput={(e) => handleCredentialsJsonChange(id, (e.target as HTMLTextAreaElement).value)}
@@ -255,9 +265,9 @@ export function ProviderSettings(): JSX.Element {
                                 ) : (
                                     <input
                                         type="password"
-                                        class="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                        class="flex-grow p-2 border border-[var(--vscode-input-border)] rounded text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none"
                                         placeholder={`輸入 ${name} API Key...`}
-                                        value={credentialsJsonInput[id] || ''} // Still use credentialsJsonInput for simple keys
+                                        value={credentialsJsonInput[id] || ''}
                                         onInput={(e) => handleCredentialsJsonChange(id, (e.target as HTMLInputElement).value)}
                                         aria-label={`${name} API Key Input`}
                                         disabled={isSettingKey || isDeletingKey}
@@ -297,11 +307,11 @@ export function ProviderSettings(): JSX.Element {
                             {usesComplexCredentials && (
                                 <div class="grid grid-cols-2 gap-2 mt-2">
                                     <div>
-                                        <label htmlFor={`project-id-${id}`} class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Project ID (選填)</label>
+                                        <label htmlFor={`project-id-${id}`} class="block text-xs font-medium text-[var(--vscode-foreground)] mb-1">Project ID (選填)</label>
                                         {vertexProjects.length > 0 ? (
                                             <select
                                                 id={`project-id-${id}`}
-                                                class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                                class="w-full p-1.5 border border-[var(--vscode-input-border)] rounded text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none"
                                                 value={projectIdInput[id] || currentProjectId || ''} // Use currentProjectId from status as initial value
                                                 onChange={(e) => handleProjectIdChange(id, (e.target as HTMLSelectElement).value)}
                                                 aria-label={`${name} Project ID Select`}
@@ -315,17 +325,17 @@ export function ProviderSettings(): JSX.Element {
                                             <input
                                                 type="text"
                                                 id={`project-id-${id}`}
-                                                class="w-full p-1.5 border border-gray-300 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                                                placeholder={currentProjectId || "你的 GCP Project ID"} // Removed loading text
+                                                class="w-full p-1.5 border border-[var(--vscode-input-border)] rounded text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none"
+                                                placeholder={currentProjectId || "你的 GCP Project ID"}
                                                 value={projectIdInput[id] || ''}
                                                 onInput={(e) => handleProjectIdChange(id, (e.target as HTMLInputElement).value)}
                                                 aria-label={`${name} Project ID Input`}
-                                                disabled={isSettingKey || isDeletingKey} // Only disable based on key actions
+                                                disabled={isSettingKey || isDeletingKey}
                                             />
                                         )}
                                     </div>
                                     <div>
-                                        <label htmlFor={`location-${id}`} class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Location (選填)</label>
+                                        <label htmlFor={`location-${id}`} class="block text-xs font-medium text-[var(--vscode-foreground)] mb-1">Location (選填)</label>
                                         {/* Replace standard select with CustomSelect */}
                                         <CustomSelect
                                             groupedOptions={groupedVertexLocations}
@@ -342,9 +352,9 @@ export function ProviderSettings(): JSX.Element {
 
                             {/* Description and Link */}
                             {(apiKeyUrl || apiKeyDescription) && (
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                <p class="text-xs text-[var(--vscode-foreground)] opacity-60 mt-2">
                                     {apiKeyDescription || `喺呢度攞 ${keyLabel}:`}
-                                    {apiKeyUrl && <a href={apiKeyUrl} target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline ml-1">{apiKeyUrl}</a>}
+                                    {apiKeyUrl && <a href={apiKeyUrl} target="_blank" rel="noopener noreferrer" class="text-[var(--vscode-textLink-foreground)] hover:underline ml-1">{apiKeyUrl}</a>}
                                 </p>
                             )}
                         </div> {/* Close space-y-2 div */}
@@ -356,35 +366,40 @@ export function ProviderSettings(): JSX.Element {
 
     return (
         <section class="mb-8">
-            <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-300">AI Providers</h3>
+            <h3 class="text-xl font-semibold mb-4 text-[var(--vscode-foreground)]">AI Providers</h3>
             <div class="mb-4">
-                <input
-                    type="text"
-                    placeholder="搜索 Provider..."
-                    value={searchQuery}
-                    onInput={handleSearchChange}
-                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    aria-label="Search Providers"
-                />
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--vscode-foreground)] opacity-60">
+                        <span class="i-carbon-search h-4 w-4"></span>
+                    </span>
+                    <input
+                        type="text"
+                        placeholder="搜索 Provider..."
+                        value={searchQuery}
+                        onInput={handleSearchChange}
+                        class="w-full p-2 pl-10 border border-[var(--vscode-input-border)] rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none"
+                        aria-label="Search Providers"
+                    />
+                </div>
             </div>
 
-            {isLoadingProviders && <p class="text-gray-500 dark:text-gray-400">正在載入 Provider 狀態...</p>}
+            {isLoadingProviders && <p class="text-[var(--vscode-foreground)] opacity-60">正在載入 Provider 狀態...</p>}
             {/* Handle error state - If not loading and not an array, assume error */}
-            {!isLoadingProviders && !Array.isArray(providerStatus) && <p class="text-red-500 dark:text-red-400">載入 Provider 狀態時發生錯誤。</p>}
+            {!isLoadingProviders && !Array.isArray(providerStatus) && <p class="text-[var(--vscode-notificationsErrorIcon)]">載入 Provider 狀態時發生錯誤。</p>}
             {!isLoadingProviders && Array.isArray(providerStatus) && ( // Removed providerStatus !== 'error' check
                 providerStatus.length > 0 ? (
                     <ul class="space-y-4">
                         {filteredProviders.length > 0 ? (
                             filteredProviders.map((providerInfo: ProviderInfoAndStatus) => renderProviderSetting(providerInfo))
                         ) : (
-                            <li class="text-gray-500 dark:text-gray-400 italic">未找到匹配嘅 Provider。</li>
+                            <li class="text-[var(--vscode-foreground)] opacity-60 italic">未找到匹配嘅 Provider。</li>
                         )}
                     </ul>
                 ) : (
-                     <p class="text-gray-500 dark:text-gray-400 italic">未找到任何 Provider。</p>
+                     <p class="text-[var(--vscode-foreground)] opacity-60 italic">未找到任何 Provider。</p>
                 )
             )}
-            <p class="text-xs text-gray-600 dark:text-gray-400 mt-6">啟用 Provider 並且設定對應嘅憑證先可以使用。</p>
+            <p class="text-xs text-[var(--vscode-foreground)] opacity-70 mt-6">啟用 Provider 並且設定對應嘅憑證先可以使用。</p>
         </section>
     ); // Close return for ProviderSettings
 } // Close ProviderSettings function

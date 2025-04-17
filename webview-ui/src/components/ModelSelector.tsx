@@ -152,46 +152,45 @@ export const ModelSelector: FunctionalComponent<ModelSelectorProps> = ({
 
     return (
         // Use gap for consistent spacing, align items center
-        <div class="model-selector flex items-center gap-2">
-            <label htmlFor={providerSelectId} class="text-sm font-medium flex-shrink-0">{providerLabel}:</label>
-            {/* Replace select with CustomSelect for Provider */}
-            <div class="min-w-40"> {/* Wrapper for consistent width */}
-                <CustomSelect
-                    // Use providerSelectId for association if needed
-                    ariaLabel={providerLabel}
-                    groupedOptions={groupedProviderOptions}
-                    value={selectedProviderId}
-                    onChange={handleProviderSelectChange} // Use the correct handler
-                    placeholder={
-                        providersLoading ? "Loading..."
-                        : providersError ? "Error"
-                        : "-- Select Provider --"
-                    }
-                    disabled={providersLoading || providersError || uniqueProviders.length === 0}
-                    allowCustomValue={false} // Providers are not custom
-                    showId={false} // Do not show ID for providers
-                />
+        <div class="model-selector flex flex-col md:flex-row md:items-center gap-3">
+            <div className="flex items-center gap-2">
+                <label htmlFor={providerSelectId} class="text-sm font-medium text-[var(--vscode-foreground)] min-w-[70px]">{providerLabel}:</label>
+                <div class="flex-grow min-w-[200px]">
+                    <CustomSelect
+                        ariaLabel={providerLabel}
+                        groupedOptions={groupedProviderOptions}
+                        value={selectedProviderId}
+                        onChange={handleProviderSelectChange}
+                        placeholder={
+                            providersLoading ? "Loading..."
+                            : providersError ? "Error"
+                            : "-- Select Provider --"
+                        }
+                        disabled={providersLoading || providersError || uniqueProviders.length === 0}
+                        allowCustomValue={false}
+                        showId={false}
+                    />
+                </div>
             </div>
 
-            {/* Adjusted margin */}
-            <label htmlFor={modelInputId} class="text-sm font-medium flex-shrink-0 ml-2">{modelLabel}:</label>
-            {/* Replace input+datalist with CustomSelect */}
-            <div class="flex-grow min-w-40"> {/* Wrapper to allow CustomSelect to grow */}
-                <CustomSelect
-                    // Use modelInputId for association if needed, though CustomSelect handles internal IDs
-                    ariaLabel={modelLabel}
-                    groupedOptions={groupedModelOptions}
-                    value={selectedModelId} // Use the prop directly as value
-                    onChange={handleModelSelectChange} // Use the new handler
-                    placeholder={
-                        !selectedProviderId ? "Select Provider First"
-                        : modelsLoading ? "Loading Models..."
-                        : modelsError ? "Error loading models"
-                        : "Select or Type Model"
-                    }
-                    disabled={!selectedProviderId || !!modelsError || modelsLoading} // Disable while loading models too
-                    allowCustomValue={true} // Enable custom input
-                />
+            <div className="flex items-center gap-2">
+                <label htmlFor={modelInputId} class="text-sm font-medium text-[var(--vscode-foreground)] min-w-[70px]">{modelLabel}:</label>
+                <div class="flex-grow min-w-[200px]">
+                    <CustomSelect
+                        ariaLabel={modelLabel}
+                        groupedOptions={groupedModelOptions}
+                        value={selectedModelId}
+                        onChange={handleModelSelectChange}
+                        placeholder={
+                            !selectedProviderId ? "Select Provider First"
+                            : modelsLoading ? "Loading Models..."
+                            : modelsError ? "Error loading models"
+                            : "Select or Type Model"
+                        }
+                        disabled={!selectedProviderId || !!modelsError || modelsLoading}
+                        allowCustomValue={true}
+                    />
+                </div>
             </div>
 
             {/* Error Indicator - Adjusted margin */}

@@ -88,20 +88,28 @@ export function CustomInstructionsSettings(): JSX.Element {
 
     return (
         <section class="mb-8">
-            <h3 class="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-300">Custom Instructions</h3>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            <h3 class="text-xl font-semibold mb-4 text-[var(--vscode-foreground)] flex items-center gap-2">
+                <span class="i-carbon-document h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                Custom Instructions
+            </h3>
+            <p class="text-sm text-[var(--vscode-foreground)] opacity-70 mb-4">
                 Provide instructions to guide the AI's behavior and responses. Global instructions apply to all projects, while project instructions are specific to the current workspace and are appended after global ones. Use Markdown format.
             </p>
 
             {/* Global Instructions */}
             <div class="mb-6">
-                <label for="global-instructions" class="block text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">Global Instructions (VS Code Setting)</label>
+                <label for="global-instructions" class="block text-lg font-medium text-[var(--vscode-foreground)] mb-2">Global Instructions (VS Code Setting)</label>
                 {/* Remove explicit loading message, rely only on disabled state */}
-                {loadError && <p class="text-sm text-red-500 italic">Error loading instructions.</p>}
+                {loadError && (
+                    <div class="flex items-center gap-2 text-sm text-[var(--vscode-errorForeground)] italic mb-2">
+                        <span class="i-carbon-warning-alt h-4 w-4"></span>
+                        <p>Error loading instructions.</p>
+                    </div>
+                )}
                 <textarea
                     id="global-instructions"
                     rows={8}
-                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-mono"
+                    class="w-full p-2 border border-[var(--vscode-input-border)] rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none text-sm font-mono"
                     value={globalInstructions}
                     onInput={handleGlobalInstructionsChange}
                     placeholder="Enter global instructions here..."
@@ -113,59 +121,57 @@ export function CustomInstructionsSettings(): JSX.Element {
                     variant="primary"
                     size="md"
                     onClick={handleSaveGlobalInstructions}
-                    className={`mt-2 bg-green-600 hover:bg-green-700`} // Override color
+                    className="mt-2"
                     disabled={isLoading || isSavingGlobal}
-                    loading={isSavingGlobal} // Use loading prop
+                    loading={isSavingGlobal}
                 >
+                    <span class="i-carbon-save h-4 w-4 mr-1.5"></span>
                     Save Global Instructions
                 </Button>
             </div>
 
             {/* Project Instructions */}
             <div>
-                <label for="project-instructions" class="block text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">Project Instructions</label>
+                <label for="project-instructions" class="block text-lg font-medium text-[var(--vscode-foreground)] mb-2">Project Instructions</label>
                 {/* Only show path/message when data is loaded and not error */}
                 {!isLoading && !loadError && customInstructionsData && typeof customInstructionsData === 'object' && (
                     customInstructionsData.projectPath ? (
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">Editing: <code>{customInstructionsData.projectPath}</code></p>
+                        <p class="text-xs text-[var(--vscode-foreground)] opacity-60 mb-2">Editing: <code>{customInstructionsData.projectPath}</code></p>
                     ) : (
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">No project file found. Saving will create <code>.zen/custom_instructions.md</code>.</p>
+                        <p class="text-xs text-[var(--vscode-foreground)] opacity-60 mb-2">No project file found. Saving will create <code>.zen/custom_instructions.md</code>.</p>
                     )
                 )}
-                 {/* Remove explicit loading/error for project path */}
                 <textarea
                     id="project-instructions"
                     rows={12}
-                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-mono"
+                    class="w-full p-2 border border-[var(--vscode-input-border)] rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none text-sm font-mono"
                     value={projectInstructions}
                     onInput={handleProjectInstructionsChange}
                     placeholder="Enter project-specific instructions here..."
                     aria-label="Project Custom Instructions"
                     disabled={isLoading || isSavingProject}
                 />
-                 <div class="mt-2 flex space-x-2">
-                     {/* Use Button component for Save Project */}
-                     <Button
-                         variant="primary"
-                         size="md"
-                         onClick={handleSaveProjectInstructions}
-                         className={`bg-green-600 hover:bg-green-700`} // Override color
-                         disabled={isLoading || isSavingProject}
-                         loading={isSavingProject} // Use loading prop
-                     >
-                         Save Project Instructions
-                     </Button>
-                     {/* Use Button component for Open/Create File */}
-                     <Button
-                         variant="secondary"
-                         size="md"
-                         onClick={handleOpenProjectInstructionsFile}
-                         disabled={isOpeningFile}
-                         loading={isOpeningFile} // Use loading prop
-                     >
-                         Open/Create Project File
-                     </Button>
-                 </div>
+                <div class="mt-2 flex space-x-2">
+                    <Button
+                        variant="primary"
+                        size="md"
+                        onClick={handleSaveProjectInstructions}
+                        disabled={isLoading || isSavingProject}
+                        loading={isSavingProject}
+                    >
+                        <span class="i-carbon-save h-4 w-4 mr-1.5"></span>
+                        Save Project Instructions
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        size="md"
+                        onClick={handleOpenProjectInstructionsFile}
+                        disabled={isOpeningFile}
+                        loading={isOpeningFile}
+                    >
+                        Open/Create Project File
+                    </Button>
+                </div>
             </div>
         </section>
     );
