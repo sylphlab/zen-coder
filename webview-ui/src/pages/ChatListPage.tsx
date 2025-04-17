@@ -2,7 +2,7 @@ import { FunctionalComponent, JSX } from 'preact';
 import { useState, useCallback, useMemo } from 'preact/hooks'; // Add useMemo back
 import { useStore } from '@nanostores/react'; // Keep useStore
 import { ChatSession } from '../../../src/common/types';
-import { router } from '../stores/router';
+import { router } from '../stores/router'; // Restore router import
 // Import mutation stores ONLY
 import {
     $chatSessions,
@@ -43,7 +43,7 @@ export const ChatListPage: FunctionalComponent = () => {
     const handleSelectChat = useCallback((chatId: string) => {
         const newPath = `/chat/${chatId}`;
         console.log(`[ChatListPage] Navigating to chat ${chatId}.`);
-        router.open(newPath);
+        router.open(newPath); // Restore router navigation
     }, []); // router dependency not needed
 
     const handleCreateChat = useCallback(async () => {
@@ -52,7 +52,7 @@ export const ChatListPage: FunctionalComponent = () => {
             const newSession = await createMutate();
             console.log("[ChatListPage] createMutate returned:", newSession); // <-- Add log here
             if (newSession && newSession.id) { // Add check for newSession.id
-                router.open(`/chat/${newSession.id}`);
+                router.open(`/chat/${newSession.id}`); // Restore router navigation
             }
         } catch (error) {
             console.error("Failed to create chat:", error);

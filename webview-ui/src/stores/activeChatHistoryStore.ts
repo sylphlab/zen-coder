@@ -24,6 +24,7 @@ export const $activeChatSession = atom<ChatSession | null | 'loading'>('loading'
 
 let currentChatIdForSession: string | null = null;
 
+// Restore router subscription logic
 onMount($activeChatSession, () => {
     console.log('[ActiveChatSession] Mount: Subscribing to router changes.');
     const unbindRouter = router.subscribe(route => {
@@ -80,6 +81,7 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
     // Fetch configuration depends on the router
     fetch: {
         requestType: 'getChatHistory',
+        // Restore dependency on router
         payload: (): GetChatHistoryPayload | null => {
             const route = router.get();
             const chatId = (route && 'params' in route && route.params && 'chatId' in route.params) ? route.params.chatId : undefined;
@@ -93,6 +95,7 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
     },
     // Subscribe configuration also depends on the router
     subscribe: {
+        // Restore dependency on router
         topic: (): string | null => {
             const route = router.get();
             const chatId = (route && 'params' in route && route.params && 'chatId' in route.params) ? route.params.chatId : undefined;
@@ -101,6 +104,7 @@ export const $activeChatHistory: StandardStore<UiMessage[]> = createStore<
         },
         // Removed handleUpdate to let createStore handle the patch internally.
     },
+    // Restore dependency on router
     dependsOn: [router],
     initialData: null
 });

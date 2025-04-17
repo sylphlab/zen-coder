@@ -1,10 +1,10 @@
 import { useStore } from '@nanostores/preact';
 import { ComponentChild } from 'preact';
 import './app.css';
-// Removed MainLayout import
+// Restore original imports
 import { SettingPage } from './pages/SettingPage';
 import { ChatListPage } from './pages/ChatListPage';
-import { ChatView } from './components/ChatView';
+import { ChatPage } from './pages/ChatPage'; // Updated import path and name
 import { router, $location } from './stores/router'; // Import router and $location
 
 // Removed useLocationSync import
@@ -27,12 +27,13 @@ export function App() {
     }
 
     // Determine which component to render based on the route name
+    // Restore original routing logic
     if (page.route === 'home') {
         CurrentPage = <ChatListPage />;
     } else if (page.route === 'chat' && page.params && page.params.chatId) {
         // ChatView gets chatId from the router store, no need to pass as prop
         // Use key to force re-render when chatId changes in the route
-        CurrentPage = <ChatView key={page.params.chatId} />;
+        CurrentPage = <ChatPage key={page.params.chatId} />; // Use the renamed ChatPage component
     } else if (page.route === 'settings') {
         CurrentPage = <SettingPage />;
     } else {
@@ -41,7 +42,8 @@ export function App() {
     }
 
     return (
-        <div class="flex w-screen h-screen text-gray-900 dark:text-gray-100 overflow-hidden bg-transparent">
+        // Restore original container class, removing bg-transparent
+        <div class="flex w-screen h-screen text-gray-900 dark:text-gray-100 overflow-hidden">
             {/* Main Content */}
             <div class="flex-grow flex flex-col overflow-y-auto">
                 {CurrentPage}
