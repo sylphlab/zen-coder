@@ -66,7 +66,7 @@ export const MessagesArea: FunctionalComponent<MessagesAreaProps> = ({
     className
 }) => {
     return (
-        <div class={`messages-area px-4 py-4 space-y-6 ${className ?? ''}`}>
+        <div class={`messages-area px-2 py-4 space-y-5 ${className ?? ''}`}>
             {messages.map((message) => {
                 const isUser = message.role === 'user';
                 const isAssistant = message.role === 'assistant';
@@ -190,7 +190,7 @@ const MessageItem: FunctionalComponent<MessageItemProps> = ({
     return (
         <div
             class={`message-container w-full transition-all duration-200 ease-out 
-                   ${isUser ? 'pl-10 md:pl-16' : 'pr-10 md:pr-16'}`}
+                   ${isUser ? 'pl-3 pr-1' : 'pl-1 pr-3'}`}
             style={{ 
                 animation: `fadeIn 250ms ease-out forwards`, 
                 opacity: 0 
@@ -203,16 +203,22 @@ const MessageItem: FunctionalComponent<MessageItemProps> = ({
                         ? 'bg-black/3 dark:bg-white/5 ml-auto' 
                         : 'bg-indigo-50/20 dark:bg-indigo-950/10'
                       } 
-                      max-w-[90%] hover:shadow-sm transition-shadow duration-150`}
+                      ${isUser ? 'max-w-[98%]' : 'max-w-[98%]'} hover:shadow-sm transition-shadow duration-150`}
                 onMouseEnter={() => setShowActions(true)}
                 onMouseLeave={() => setShowActions(false)}
             >
-                {/* Assistant Name */}
-                {isAssistant && (
-                    <div class="text-xs font-bold mb-2 text-indigo-600 dark:text-indigo-400">
-                        {message.modelName || message.providerName || 'Assistant'}
+                {/* Role indicator and name - Compact design */}
+                <div class="flex items-center justify-between mb-1.5">
+                    <div class={`text-[10px] font-medium ${isUser ? 'text-gray-500 dark:text-gray-400' : 'text-indigo-600 dark:text-indigo-400'}`}>
+                        {isAssistant 
+                            ? (message.modelName || message.providerName || 'Assistant')
+                            : 'You'
+                        }
                     </div>
-                )}
+                    <div class="text-[9px] text-gray-400 dark:text-gray-500 opacity-75">
+                        {formatTime(message.timestamp)}
+                    </div>
+                </div>
 
                 {/* Content */}
                 <div 
@@ -249,7 +255,7 @@ const MessageItem: FunctionalComponent<MessageItemProps> = ({
 
                     {/* Enhanced Tool Status Display with subtle animations */}
                     {isAssistant && message.status === 'pending' && (
-                        <div class="tool-status-container mt-3 mb-1 text-xs border-t border-black/5 dark:border-white/5 pt-2 opacity-80">
+                        <div class="tool-status-container mt-2 mb-1 text-xs border-t border-black/5 dark:border-white/5 pt-2 opacity-80">
                             <div class="flex items-center text-indigo-500 dark:text-indigo-400">
                                 <LoadingSpinner className="h-3 w-3 mr-2" />
                                 <span class="opacity-80" style={{ animation: 'pulse 1.5s infinite ease-in-out' }}>
@@ -261,7 +267,7 @@ const MessageItem: FunctionalComponent<MessageItemProps> = ({
 
                     {/* Custom minimalist tool status display */}
                     {isAssistant && toolCallParts.length > 0 && (
-                        <div class="tool-status-container mt-3 mb-1 text-xs border-t border-black/5 dark:border-white/5 pt-2">
+                        <div class="tool-status-container mt-2 mb-1 text-xs border-t border-black/5 dark:border-white/5 pt-2">
                             {toolCallParts.map((tool, index) => {
                                 const isCompleted = tool.status === 'complete';
                                 const isFailed = tool.status === 'error';
@@ -296,14 +302,9 @@ const MessageItem: FunctionalComponent<MessageItemProps> = ({
                     )}
                 </div>
 
-                {/* Timestamp */}
-                <div class="text-[10px] text-gray-400 dark:text-gray-500 mt-2 opacity-75">
-                    {formatTime(message.timestamp)}
-                </div>
-
                 {/* Suggested Actions */}
                 {actions.length > 0 && (
-                    <div class="suggested-actions mt-3 flex flex-wrap gap-1.5">
+                    <div class="suggested-actions mt-2 flex flex-wrap gap-1.5">
                         {actions.map((action, i) => (
                             <Button
                                 key={i}
@@ -318,9 +319,9 @@ const MessageItem: FunctionalComponent<MessageItemProps> = ({
                     </div>
                 )}
 
-                {/* Action Buttons - Original absolute positioning */}
+                {/* Action Buttons - Positioned at the edge of message bubble */}
                 <div 
-                    class="message-actions flex space-x-1 z-10 transition-all duration-150 ease-out absolute bottom-1 right-1"
+                    class="message-actions flex space-x-1 z-10 transition-all duration-150 ease-out absolute -bottom-3 right-2"
                     style={{
                         opacity: showActions ? 1 : 0,
                         transform: showActions ? 'scale(1)' : 'scale(0.95)',
@@ -332,18 +333,18 @@ const MessageItem: FunctionalComponent<MessageItemProps> = ({
                         size="icon-sm"
                         onClick={() => onCopyMessage(message.id)}
                         title="Copy"
-                        className="bg-white/90 dark:bg-gray-800/90 shadow-sm h-6 w-6 rounded-full text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 backdrop-blur-sm"
+                        className="bg-white/95 dark:bg-gray-800/95 shadow-sm h-7 w-7 rounded-full text-gray-600 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 backdrop-blur-sm border border-black/5 dark:border-white/10"
                     >
-                        <CopyIcon className="w-3 h-3"/>
+                        <CopyIcon className="w-3.5 h-3.5"/>
                     </Button>
                     <Button
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => onDeleteMessage(message.id)}
                         title="Delete"
-                        className="bg-white/90 dark:bg-gray-800/90 shadow-sm h-6 w-6 rounded-full text-gray-600 dark:text-gray-300 hover:text-rose-500 dark:hover:text-rose-400 backdrop-blur-sm"
+                        className="bg-white/95 dark:bg-gray-800/95 shadow-sm h-7 w-7 rounded-full text-gray-600 dark:text-gray-300 hover:text-rose-500 dark:hover:text-rose-400 backdrop-blur-sm border border-black/5 dark:border-white/10"
                     >
-                        <DeleteIcon className="w-3 h-3"/>
+                        <DeleteIcon className="w-3.5 h-3.5"/>
                     </Button>
                 </div>
             </div>
