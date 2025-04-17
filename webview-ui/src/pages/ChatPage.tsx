@@ -74,18 +74,36 @@ const SettingsIcon: FunctionalComponent<{ className?: string }> = ({ className =
 // Restore chatIdFromRoute prop and router logic
 // Renamed component from ChatView to ChatPage
 export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ chatIdFromRoute }) => {
-    const route = useStore(router);
-    const chatId = useMemo(() => {
-        // Prioritize chatIdFromRoute from props if available
+    // Initialize chatId: use prop or generate a new UUID if prop is missing
+    const [chatId, setChatId] = useState<string | null>(() => {
         if (chatIdFromRoute) {
             return chatIdFromRoute;
+        } else {
+            const newId = crypto.randomUUID();
+            console.log(`[ChatPage] Initializing with generated ID: ${newId}`);
+            // We need to update the URL, but useEffect is better for side effects
+            return newId;
         }
-        // Otherwise fall back to route params
-        if (!route || !('params' in route) || !route.params || !('chatId' in route.params)) {
-            return null;
+    });
+    const isInitiallyNew = useRef(!chatIdFromRoute); // Track if we started with a generated ID
+
+    // Effect to update URL only once if a new ID was generated on mount
+    useEffect(() => {
+        if (isInitiallyNew.current && chatId) {
+            console.log(`[ChatPage] Updating URL for newly generated ID: ${chatId}`);
+            router.open(`/chat/${chatId}`, true); // true for replace
+            isInitiallyNew.current = false; // Ensure this runs only once
         }
-        return route.params.chatId;
-    }, [route, chatIdFromRoute]);
+    }, [chatId]); // Run when chatId is set/updated
+
+    // Effect to update internal chatId if the route prop changes (e.g., navigating between chats)
+     useEffect(() => {
+        if (chatIdFromRoute && chatIdFromRoute !== chatId) {
+             console.log(`[ChatPage] Route prop changed to: ${chatIdFromRoute}. Updating internal state.`);
+            setChatId(chatIdFromRoute);
+            isInitiallyNew.current = false; // Navigating to existing, not new
+        }
+     }, [chatIdFromRoute, chatId]);
 
     // --- State Management ---
     const [inputValue, _setInputValue] = useState('');
@@ -93,7 +111,12 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
     const setInputValue = useCallback((value: string) => { _setInputValue(value); }, []);
 
     // Nanostores state
+    // Use internalChatId to drive $activeChatSession and $activeChatHistory
+    // Need to manually trigger session/history loading based on internalChatId change
+    // This replaces the automatic loading driven by router in the stores
     const currentChatSession = useStore($activeChatSession);
+    const messagesState = useStore($activeChatHistory);
+    // Removed useEffect for manual store triggering - relying on stores reacting to router change
     const defaultConfigStoreValue = useStore($defaultConfig);
     const { mutate: sendMessageMutate, loading: isSending } = useStore($sendMessage);
     const { mutate: clearChatHistoryMutate } = useStore($clearChatHistory);
@@ -101,7 +124,7 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
     const { mutate: stopGenerationMutate } = useStore($stopGeneration);
     const { mutate: updateChatConfigMutate } = useStore($updateChatConfig);
     const { mutate: deleteMessageMutate } = useStore($deleteMessage);
-    const messagesState = useStore($activeChatHistory);
+    // messagesState already defined above
     const isHistoryLoading = messagesState === 'loading';
     const isStreamingStoreValue = useStore($isStreamingResponse);
     const isStreaming = typeof isStreamingStoreValue === 'boolean' && isStreamingStoreValue === true;
@@ -112,9 +135,12 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
 
     // Derived state
     const isLoadingSessionData = currentChatSession === 'loading';
-    const sessionLoadError = currentChatSession === null && !isLoadingSessionData;
+    // Removed duplicate isHistoryLoading declaration below
     const historyLoadError = messagesState === 'error';
-    const messages = (messagesState === 'loading' || messagesState === 'error' || messagesState === null) ? [] : messagesState;
+    // Treat session === null after loading as "not found / new chat", not necessarily an error
+    const isNewChatScenario = !isLoadingSessionData && currentChatSession === null && !historyLoadError;
+    // Messages are empty if loading, error, null, or explicitly empty array
+    const messages = (isHistoryLoading || historyLoadError || messagesState === null || !Array.isArray(messagesState)) ? [] : messagesState;
     const defaultConfig = (defaultConfigStoreValue !== 'loading' && defaultConfigStoreValue !== 'error' && defaultConfigStoreValue !== null) ? defaultConfigStoreValue : null;
     const session = (currentChatSession !== 'loading' && currentChatSession !== null) ? currentChatSession : null;
     const effectiveConfig = useMemo(() => calculateEffectiveConfig(session, defaultConfig), [session, defaultConfig]);
@@ -268,9 +294,10 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
             </div>
         );
     }
-    
+
+    // Combined loading state
     const isLoading = isLoadingSessionData || isHistoryLoading;
-    if (isLoading) { 
+    if (isLoading) {
         return (
             <div class="flex flex-col h-full items-center justify-center">
                 <div class="text-gray-500 dark:text-gray-400 flex items-center space-x-2">
@@ -283,19 +310,24 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
             </div>
         );
     }
-    
-    if (sessionLoadError || historyLoadError) { 
-        return (
-            <div class="flex flex-col h-full items-center justify-center text-rose-500">
-                <div class="flex items-center space-x-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <span>Error loading chat data</span>
-                </div>
-            </div>
-        );
-    }
+
+    // Show specific error only if history fetch failed
+    if (historyLoadError) {
+         return (
+             <div class="flex flex-col h-full items-center justify-center text-rose-500">
+                 <div class="flex items-center space-x-2">
+                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                     </svg>
+                     <span>Error loading chat history</span>
+                 </div>
+             </div>
+         );
+     }
+
+    // If not loading and not error, proceed to render.
+    // The `messages` array will be empty for a new chat (isNewChatScenario is true).
+    // The `session` object will be null for a new chat. `effectiveConfig` handles this.
 
     const currentSuggestedActionsMap = suggestedActionsMap;
 

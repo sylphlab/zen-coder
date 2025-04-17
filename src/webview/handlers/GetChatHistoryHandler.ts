@@ -31,6 +31,7 @@ export class GetChatHistoryHandler implements RequestHandler<GetChatHistoryPaylo
         const history = this.historyManager.getHistory(payload.chatId);
         console.log(`GetChatHistoryHandler: Found history length: ${history?.length ?? 'null'}`);
         // Return a *copy* of the history to prevent mutation issues if backend modifies it later
-        return { history: history ? [...history] : null };
+        // Return empty array [] if history is null/undefined (new chat)
+        return { history: history ? [...history] : [] };
     }
 }

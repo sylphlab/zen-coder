@@ -59,10 +59,21 @@ export class SendMessageHandler implements RequestHandler {
                   return; // Stop processing if tempId is missing
              }
 
-            // 1. Add user message (pass userMessageTempId)
-            await context.historyManager.addUserMessage(chatId, userMessageContent, userMessageTempId); // Pass chatId and userMessageTempId
+             // *** ADDED: Ensure session exists before adding message ***
+             const existingSession = context.chatSessionManager.getChatSession(chatId);
+             if (!existingSession) {
+                 console.log(`[SendMessageHandler|${chatId}] Session does not exist. Creating it now.`);
+                 // Create session with default config (or potentially derive from message payload if needed later)
+                 // Assuming createChatSession takes the ID and returns the new session or throws error
+                 await context.chatSessionManager.createChatSession(chatId);
+                 console.log(`[SendMessageHandler|${chatId}] Session created.`);
+             }
+             // *** END ADDED ***
 
-            // --- Get Provider and Model Names (EARLIER) ---
+             // 1. Add user message (pass userMessageTempId)
+             await context.historyManager.addUserMessage(chatId, userMessageContent, userMessageTempId); // Pass chatId and userMessageTempId
+
+             // --- Get Provider and Model Names (EARLIER) ---
             // Use providerMap to get provider instance name
             const providerInstance = context.aiService.providerManager.providerMap.get(providerId);
             providerName = providerInstance?.name ?? providerId; // Assign to higher-scoped variable

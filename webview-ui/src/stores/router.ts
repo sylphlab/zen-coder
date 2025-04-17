@@ -42,6 +42,7 @@ export const $updateLastLocation = createMutationStore<
 // --- Router Definition ---
 export const router = createRouter({
   home: '/',
+  // Removed newChat route
   chat: '/chat/:chatId',
   settings: '/settings'
 });
