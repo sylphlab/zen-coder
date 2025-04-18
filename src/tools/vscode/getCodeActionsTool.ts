@@ -13,12 +13,11 @@ const rangeSchema = z.object({
 
 // Define the structure for a single code action in the output
 const codeActionItemSchema = z.object({
+    index: z.number().int().describe('The 0-based index of this action in the returned list, used to apply the action later.'),
     title: z.string().describe('The user-facing title of the code action.'),
     kind: z.string().optional().describe('The kind of code action (e.g., "quickfix", "refactor.extract").'),
     isPreferred: z.boolean().optional().describe('Whether this action is preferred by the provider.'),
-    // We might need a way to reference this action later for an 'apply' tool.
-    // For now, just return descriptive info. Storing the full edit/command is complex.
-    // actionId: z.string().describe('A temporary ID to reference this action for applying.') // Placeholder idea
+    // We use the index to reference the action for applying.
 });
 
 export const getCodeActionsTool = tool({
@@ -84,11 +83,11 @@ export const getCodeActionsTool = tool({
             // Filter out Commands and map CodeActions to the simplified output schema
             const resultActions = actionsOrCommands
                 .filter((actionOrCommand): actionOrCommand is vscode.CodeAction => 'title' in actionOrCommand) // Filter for CodeAction (has title)
-                .map((action: vscode.CodeAction) => ({ // Explicitly type action
+                .map((action: vscode.CodeAction, index: number) => ({ // Add index here
+                    index: index, // Include the index in the output
                     title: action.title,
                     kind: action.kind?.value,
                     isPreferred: action.isPreferred,
-                    // Storing action.edit or action.command is complex for serialization/later use by AI
                 }));
 
             // Validate the output

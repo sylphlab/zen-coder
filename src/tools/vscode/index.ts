@@ -14,5 +14,6 @@ export * from './getDiagnosticsTool';
 export * from './getCodeActionsTool';
 export * from './findWorkspaceSymbolsTool';
 export * from './findDocumentSymbolsTool';
+export * from './applyCodeActionTool';
 // Add future VSCode specific tools here
 // Removed getOpenTabs, runCommand
