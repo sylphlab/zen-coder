@@ -87,30 +87,25 @@ export function CustomSelect({
         }
     };
 
+    // Simplified Blur Handler - Primarily closes dropdown and resets input if no valid selection made via click/enter
     const handleInputBlur = () => {
+        // Use a short timeout to allow click events on dropdown items to process first
         setTimeout(() => {
+            // Check if focus is still within the select component (e.g., user clicked an option)
             if (selectRef.current?.contains(document.activeElement)) {
-                 return;
+                return; // Don't close if focus moved to an option
             }
-            const trimmedValue = inputValue.trim();
-            if (allowCustomValue) {
-                if (trimmedValue !== (selectedOption?.name ?? (value || ''))) {
-                    onChange(trimmedValue || null);
-                }
-                setIsOpen(false);
-            } else {
-                const flatFilteredOptions = Object.values(filteredAndGroupedOptions).flat();
-                const exactMatchByName = Object.values(groupedOptions).flat().find(opt => opt.name.toLowerCase() === trimmedValue.toLowerCase());
-                if (exactMatchByName) {
-                    handleSelect(exactMatchByName.id);
-                } else if (flatFilteredOptions.length === 1 && trimmedValue !== '') {
-                    handleSelect(flatFilteredOptions[0].id);
-                } else {
-                    setInputValue(selectedOption ? selectedOption.name : '');
-                    setIsOpen(false);
-                }
+
+            // If dropdown is open after the timeout, close it and reset input to selected value
+            if (isOpen) {
+                 setIsOpen(false);
+                 // Reset input value to the currently selected option's name or empty if none/invalid
+                 const currentSelectedOption = Object.values(groupedOptions).flat().find(opt => opt.id === value);
+                 setInputValue(currentSelectedOption ? currentSelectedOption.name : '');
+                 setFilter(''); // Clear filter on close
             }
-        }, 150);
+            // Do not automatically select or change value on blur unless allowCustomValue is handled separately if needed
+        }, 150); // Keep a short delay
     };
 
      const handleInputKeyDown = (e: KeyboardEvent) => {
@@ -214,8 +209,8 @@ export function CustomSelect({
 
      // Dynamic classes for dropdown list - Handles shadow, rounding, width, positioning
     const dropdownClasses = useMemo(() => {
-        // Apply shadow and rounding here, width is adaptive
-        let base = `absolute z-10 min-w-full min-w-max bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] max-h-60 overflow-y-auto shadow-lg rounded-md`; // Shadow and rounding on dropdown
+        // Removed shadow-lg rounded-md, added border for structure
+        let base = `absolute z-10 min-w-full min-w-max bg-[var(--vscode-dropdown-background)] text-[var(--vscode-dropdown-foreground)] max-h-60 overflow-y-auto border border-[var(--vscode-dropdown-border)]`; // Use dropdown border
         if (openDirection === 'up') {
             base += " bottom-full"; // Position above
         } else {
@@ -232,9 +227,9 @@ export function CustomSelect({
         return base;
     }, [disabled]);
 
-    // Dynamic classes for the input wrapper div (handles hover when closed, bg and NO rounding when open)
+    // Dynamic classes for the input wrapper div (handles hover when closed, bg and NO rounding/border when open)
      const inputWrapperClasses = useMemo(() => {
-        let base = `relative flex items-center border border-[var(--vscode-input-border)]`;
+        let base = `relative flex items-center`; // Removed border
         if (!isOpen) {
             // Apply rounding and hover only when closed
             base += ' rounded-md hover:bg-[var(--vscode-list-hoverBackground)]';
@@ -253,7 +248,7 @@ export function CustomSelect({
                 <input
                     ref={inputRef}
                     type="text"
-                    class={`w-full p-1.5 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:outline-none focus:border-[var(--vscode-focusBorder)] pr-6`}
+                    class={`w-full p-1.5 text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--vscode-focusBorder)] pr-6`} // Changed focus:border to focus:ring
                     value={inputValue}
                     placeholder={placeholder}
                     disabled={disabled}
@@ -266,9 +261,9 @@ export function CustomSelect({
                     aria-autocomplete="list"
                     aria-activedescendant={highlightedIndex >= 0 ? `option-${Object.values(filteredAndGroupedOptions).flat()[highlightedIndex]?.id}` : undefined}
                 />
-                {/* Arrow inside input */}
+                {/* Arrow inside input - Replaced SVG with UnoCSS icon */}
                 <div class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                     <svg class={`w-3 h-3 fill-current text-[var(--vscode-foreground)] opacity-60 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                     <span class={`i-carbon-chevron-down w-3 h-3 text-[var(--vscode-foreground)] opacity-60 transform transition-transform ${isOpen ? 'rotate-180' : ''}`}></span>
                 </div>
             </div>
 
@@ -294,8 +289,8 @@ export function CustomSelect({
                                                         class={`px-3 py-1.5 text-xs cursor-pointer
                                                             ${isHighlighted ? 'bg-[var(--vscode-list-activeSelectionBackground)] text-[var(--vscode-list-activeSelectionForeground)]' : 'hover:bg-[var(--vscode-list-hoverBackground)]'}
                                                             ${value === option.id ? 'bg-[var(--vscode-list-focusBackground)] font-semibold' : ''}`}
-                                                        onClick={() => handleSelect(option.id)}
-                                                        onMouseEnter={() => setHighlightedIndex(flatIndex)}
+                                                            onMouseDown={() => handleSelect(option.id)} // Use onMouseDown instead of onClick
+                                                            onMouseEnter={() => setHighlightedIndex(flatIndex)}
                                                         role="option"
                                                         aria-selected={value === option.id || isHighlighted}
                                                     >

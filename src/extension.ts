@@ -18,6 +18,7 @@ import {
 import { getWebviewContent } from './webview/webviewContent';
 import { ChatSessionManager } from './session/chatSessionManager';
 import { HistoryManager } from './historyManager';
+import { AssistantManager } from './session/AssistantManager'; // Import AssistantManager
 import { StreamProcessor } from './streamProcessor';
 import { ProviderStatusManager } from './ai/providerStatusManager';
 import { ConfigResolver } from './ai/configResolver'; // Import ConfigResolver
@@ -62,6 +63,10 @@ import { UnsubscribeHandler } from './webview/handlers/UnsubscribeHandler';
 import { OpenGlobalMcpConfigHandler } from './webview/handlers/OpenGlobalMcpConfigHandler';
 import { OpenProjectMcpConfigHandler } from './webview/handlers/OpenProjectMcpConfigHandler';
 import { GetVertexStaticDataHandler } from './webview/handlers/GetVertexStaticDataHandler'; // Import the new handler
+import { GetAssistantsHandler } from './webview/handlers/GetAssistantsHandler'; // Import GetAssistantsHandler
+import { CreateAssistantHandler } from './webview/handlers/CreateAssistantHandler'; // Import CreateAssistantHandler
+import { UpdateAssistantHandler } from './webview/handlers/UpdateAssistantHandler'; // Import UpdateAssistantHandler
+import { DeleteAssistantHandler } from './webview/handlers/DeleteAssistantHandler'; // Import DeleteAssistantHandler
 // Removed GetVertexProjectsHandler and GetVertexLocationsHandler imports
 
 let aiServiceInstance: AiService | undefined = undefined;
@@ -129,6 +134,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
     private readonly _modelResolver: ModelResolver;
     // No _streamProcessor instance here
     private readonly _mcpManager: McpManager;
+    private readonly _assistantManager: AssistantManager; // Add AssistantManager property
     private readonly _handlers: Map<string, RequestHandler>;
 
     constructor(
@@ -144,11 +150,12 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._chatSessionManager = chatSessionManager;
         this._historyManager = historyManager; // Store the passed instance
         // Pass ProviderManager from AiService to ConfigResolver
-        this._configResolver = new ConfigResolver(this._chatSessionManager, aiService.providerManager);
+        this._configResolver = new ConfigResolver(this._chatSessionManager); // Remove second argument
         this._modelResolver = new ModelResolver(context, aiService.providerStatusManager, aiService);
         this._handlers = new Map();
         // Pass postMessageCallback directly to McpManager constructor
         this._mcpManager = new McpManager(context, this.postMessageToWebview.bind(this));
+        this._assistantManager = new AssistantManager(context); // Instantiate AssistantManager
         console.log("ZenCoderChatViewProvider constructed.");
     }
 
@@ -190,16 +197,27 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
             new OpenGlobalMcpConfigHandler(),
             new OpenProjectMcpConfigHandler(),
             new GetVertexStaticDataHandler(), // Add the new handler instance
+            new GetAssistantsHandler(), // Register GetAssistantsHandler
+            new CreateAssistantHandler(), // Register CreateAssistantHandler
+            new UpdateAssistantHandler(), // Register UpdateAssistantHandler
+            new DeleteAssistantHandler(), // Register DeleteAssistantHandler
             // Removed GetVertexProjectsHandler and GetVertexLocationsHandler instances
         ];
 
+        console.log(`[Extension] Registering ${allHandlers.length} handlers...`); // Add log before loop
         allHandlers.forEach(handler => {
-            if (this._handlers.has(handler.requestType)) {
-                console.warn(`Handler already registered for type: ${handler.requestType}. Overwriting.`);
+            if (!handler || !handler.requestType) {
+                console.error('[Extension] Invalid handler found during registration:', handler);
+                return;
             }
+            if (this._handlers.has(handler.requestType)) {
+                console.warn(`[Extension] Handler already registered for type: ${handler.requestType}. Overwriting.`);
+            }
+            // console.log(`[Extension] Registering handler for type: ${handler.requestType}`); // Optional: Log each registration
             this._handlers.set(handler.requestType, handler);
         });
-        console.log(`Registered ${this._handlers.size} handlers.`);
+        // Log final map size and keys
+        console.log(`[Extension] Finished registering handlers. Total registered: ${this._handlers.size}. Keys: ${Array.from(this._handlers.keys()).join(', ')}`);
     }
 
     public resolveWebviewView(
@@ -269,10 +287,11 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
              responseError = "Invalid message: Missing handler type.";
              console.error(`[Extension] ${responseError}`);
              handlerType = undefined; // Ensure it's undefined if invalid
-        } else {
-            handler = this._handlers.get(handlerType);
-            if (!handler) {
-                responseError = `No handler found for message type: ${handlerType}`;
+         } else {
+             console.log(`[Extension] Looking up handler for type: "${handlerType}"`); // Log the type being looked up
+             handler = this._handlers.get(handlerType);
+             if (!handler) {
+                 responseError = `No handler found for message type: ${handlerType}`;
                 console.warn(`[Extension] ${responseError}`);
             }
         }
@@ -289,6 +308,7 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
                 modelResolver: this._modelResolver,
                 mcpManager: this._mcpManager,
                 subscriptionManager: this._aiService.getSubscriptionManager(), // Add subscriptionManager
+                assistantManager: this._assistantManager, // Provide AssistantManager in context
                 postMessage: this.postMessageToWebview.bind(this),
                 extensionContext: this._context
             };

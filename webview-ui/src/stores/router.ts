@@ -44,7 +44,8 @@ export const router = createRouter({
   home: '/',
   // Removed newChat route
   chat: '/chat/:chatId',
-  settings: '/settings'
+  settings: '/settings',
+  sessions: '/sessions' // Added sessions route
 });
 
 let isLocationInitialized = atom(false);

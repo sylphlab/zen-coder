@@ -4,7 +4,8 @@ html, body {
   margin: 0;
   height: 100%;
   font-family: var(--vscode-font-family, system-ui, Avenir, Helvetica, Arial, sans-serif);
-  font-size: var(--vscode-font-size, 13px);
+  /* Increase base font size slightly */
+  font-size: calc(var(--vscode-font-size, 13px) + 1px);
   line-height: 1.5;
   font-weight: 400;
   color: var(--vscode-editor-foreground);
@@ -44,4 +45,34 @@ h1, h2, h3, h4, h5, h6, p {
   padding: 0;
   font-weight: inherit; /* Let VS Code/components decide */
   font-size: inherit;
+}
+
+/* Custom Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 10px; /* Adjust width as needed */
+  height: 10px; /* Adjust height as needed */
+}
+
+::-webkit-scrollbar-track {
+  background: transparent; /* Make track transparent */
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--vscode-scrollbarSlider-background);
+  border-radius: 5px; /* Rounded corners */
+  border: 2px solid transparent; /* Add padding */
+  background-clip: content-box; /* Clip background to content area */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--vscode-scrollbarSlider-hoverBackground);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--vscode-scrollbarSlider-activeBackground);
+}
+
+/* Optional: Style the corner where vertical and horizontal scrollbars meet */
+::-webkit-scrollbar-corner {
+  background: transparent;
 }

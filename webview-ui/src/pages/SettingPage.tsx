@@ -2,10 +2,12 @@ import { useCallback, useRef, useState } from 'preact/hooks';
 // Removed: import { useLocation } from "wouter";
 // Removed: import { useSetAtom } from 'jotai';
 import { JSX } from 'preact/jsx-runtime';
-import { DefaultModelSettings } from '../components/settings/DefaultModelSettings';
+// Correct import name, file rename pending
+import { DefaultAssistantSettings } from '../components/settings/DefaultModelSettings';
 import { CustomInstructionsSettings } from '../components/settings/CustomInstructionsSettings';
 import { ProviderSettings } from '../components/settings/ProviderSettings';
 import { ToolSettings } from '../components/settings/ToolSettings';
+import { AssistantSettings } from '../components/settings/AssistantSettings'; // Import AssistantSettings
 // Removed: import { McpServerSettings } from '../components/settings/McpServerSettings';
 import { router } from '../stores/router'; // Import Nanostores router
 // Removed: import { updateLocationAtom } from '../store/atoms';
@@ -37,7 +39,8 @@ export function SettingPage(): JSX.Element {
    return (
        <div class="h-full flex flex-col bg-[var(--vscode-editor-background)]">
            {/* Header with back button and title */}
-           <header class="sticky top-0 z-10 bg-[var(--vscode-editor-background)] bg-opacity-90 backdrop-blur-md border-b border-[var(--vscode-panel-border)] border-opacity-50 px-4 py-3 flex items-center justify-between">
+           {/* Removed border, border-opacity, bg-opacity */}
+           <header class="sticky top-0 z-10 bg-[var(--vscode-editor-background)] backdrop-blur-md px-4 py-3 flex items-center justify-between">
                <div class="flex items-center">
                    <button
                        onClick={handleBackClick}
@@ -61,8 +64,8 @@ export function SettingPage(): JSX.Element {
                        onClick={() => handleTabChange('general')}
                        class={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
                            activeTab === 'general'
-                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] shadow-sm'
-                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 hover:opacity-100'
+                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]' /* Removed shadow-sm */
+                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:opacity-100' /* Removed hover:bg-opacity-10 */
                        }`}
                    >
                        <span class="i-carbon-settings h-4 w-4"></span>
@@ -72,8 +75,8 @@ export function SettingPage(): JSX.Element {
                        onClick={() => handleTabChange('providers')}
                        class={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
                            activeTab === 'providers'
-                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] shadow-sm'
-                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 hover:opacity-100'
+                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]' /* Removed shadow-sm */
+                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:opacity-100' /* Removed hover:bg-opacity-10 */
                        }`}
                    >
                        <span class="i-carbon-api h-4 w-4"></span>
@@ -83,8 +86,8 @@ export function SettingPage(): JSX.Element {
                        onClick={() => handleTabChange('tools')}
                        class={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
                            activeTab === 'tools'
-                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] shadow-sm'
-                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 hover:opacity-100'
+                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]' /* Removed shadow-sm */
+                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:opacity-100' /* Removed hover:bg-opacity-10 */
                        }`}
                    >
                        <span class="i-carbon-tools-alt h-4 w-4"></span>
@@ -94,12 +97,24 @@ export function SettingPage(): JSX.Element {
                        onClick={() => handleTabChange('about')}
                        class={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
                            activeTab === 'about'
-                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] shadow-sm'
-                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 hover:opacity-100'
+                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]' /* Removed shadow-sm */
+                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:opacity-100' /* Removed hover:bg-opacity-10 */
                        }`}
                    >
                        <span class="i-carbon-information h-4 w-4"></span>
                        <span>About</span>
+                   </button>
+                   {/* Assistants Tab Button */}
+                   <button
+                       onClick={() => handleTabChange('assistants')}
+                       class={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center justify-center gap-2 ${
+                           activeTab === 'assistants'
+                           ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]'
+                           : 'text-[var(--vscode-foreground)] opacity-70 hover:bg-[var(--vscode-button-background)] hover:opacity-100'
+                       }`}
+                   >
+                       <span class="i-carbon-user-avatar-filled-alt h-4 w-4"></span>
+                       <span>Assistants</span>
                    </button>
                </div>
            </div>
@@ -110,8 +125,9 @@ export function SettingPage(): JSX.Element {
                {activeTab === 'general' && (
                    <div> {/* Simple div wrapper */}
                    <div class="flex items-start gap-3 mb-5">
-                       <div class="bg-[var(--vscode-button-background)] bg-opacity-10 p-2 rounded-lg">
-                           <span class="i-carbon-settings h-6 w-6 text-[var(--vscode-button-background)]"></span>
+                       {/* Removed bg-opacity-10 */}
+                       <div class="bg-[var(--vscode-button-background)] p-2 rounded-lg">
+                           <span class="i-carbon-settings h-6 w-6 text-[var(--vscode-button-foreground)]"></span> {/* Adjusted icon color */}
                        </div>
                        <div>
                            <h2 class="text-xl font-semibold text-[var(--vscode-foreground)]">General Settings</h2>
@@ -124,31 +140,38 @@ export function SettingPage(): JSX.Element {
                    {/* Setting Cards - Full Width */}
                    <div class="space-y-6">
                        {/* Default Model Card */}
-                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300">
+                       {/* Removed shadow-sm, border, hover:shadow-md */}
+                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden transition-shadow duration-300">
                            <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
                                <div class="flex items-center gap-3">
-                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
-                                       <span class="i-carbon-model h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                                   {/* Removed bg-opacity-10 */}
+                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] rounded-lg flex items-center justify-center">
+                                       {/* Updated Icon */}
+                                       <span class="i-carbon-user-avatar h-5 w-5 text-[var(--vscode-button-foreground)]"></span>
                                    </div>
                                    <div>
-                                       <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Default AI Model</h3>
+                                       {/* Updated Title */}
+                                       <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Default Assistant</h3>
                                        <p class="text-xs text-[var(--vscode-foreground)] opacity-70">
-                                           Select which AI to chat with by default
+                                           Select which Assistant to use by default
                                        </p>
                                    </div>
                                </div>
                            </div>
                            <div class="p-4">
-                               <DefaultModelSettings />
+                               {/* Corrected Component Usage */}
+                               <DefaultAssistantSettings />
                            </div>
                        </div>
                        
                        {/* Custom Instructions Card */}
-                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300">
+                       {/* Removed shadow-sm, border, hover:shadow-md */}
+                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden transition-shadow duration-300">
                            <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
                                <div class="flex items-center gap-3">
-                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
-                                       <span class="i-carbon-user-profile h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                                   {/* Removed bg-opacity-10 */}
+                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] rounded-lg flex items-center justify-center">
+                                       <span class="i-carbon-user-profile h-5 w-5 text-[var(--vscode-button-foreground)]"></span> {/* Adjusted icon color */}
                                    </div>
                                    <div>
                                        <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Custom Instructions</h3>
@@ -164,11 +187,13 @@ export function SettingPage(): JSX.Element {
                        </div>
                        
                        {/* Context Settings Card (placeholder) */}
-                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300 opacity-60">
+                       {/* Removed shadow-sm, border, hover:shadow-md */}
+                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden transition-shadow duration-300 opacity-60">
                            <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
                                <div class="flex items-center gap-3">
-                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
-                                       <span class="i-carbon-folder h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                                   {/* Removed bg-opacity-10 */}
+                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] rounded-lg flex items-center justify-center">
+                                       <span class="i-carbon-folder h-5 w-5 text-[var(--vscode-button-foreground)]"></span> {/* Adjusted icon color */}
                                    </div>
                                    <div>
                                        <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Context Settings</h3>
@@ -194,11 +219,13 @@ export function SettingPage(): JSX.Element {
                        </div>
                        
                        {/* Theme Settings Card (placeholder) */}
-                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300 opacity-60">
+                       {/* Removed shadow-sm, border, hover:shadow-md */}
+                       <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden transition-shadow duration-300 opacity-60">
                            <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
                                <div class="flex items-center gap-3">
-                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
-                                       <span class="i-carbon-color-palette h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                                   {/* Removed bg-opacity-10 */}
+                                   <div class="h-10 w-10 bg-[var(--vscode-button-background)] rounded-lg flex items-center justify-center">
+                                       <span class="i-carbon-color-palette h-5 w-5 text-[var(--vscode-button-foreground)]"></span> {/* Adjusted icon color */}
                                    </div>
                                    <div>
                                        <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Theme Overrides</h3>
@@ -218,7 +245,7 @@ export function SettingPage(): JSX.Element {
                                <div class="h-8 w-8 rounded-full bg-amber-500 border-2 border-transparent"></div>
                                <div class="h-8 w-8 rounded-full bg-rose-500 border-2 border-transparent"></div>
                                <div class="h-8 w-8 rounded-full bg-gray-500 border-2 border-transparent flex items-center justify-center">
-                                   <span class="i-carbon-add h-4 w-4 text-white"></span>
+                                   <span class="i-carbon-add h-4 w-4 text-[var(--vscode-button-foreground)]"></span>
                                </div>
                            </div>
                        </div>
@@ -230,8 +257,9 @@ export function SettingPage(): JSX.Element {
                {activeTab === 'providers' && (
                    <div> {/* Simple div wrapper */}
                    <div class="flex items-start gap-3 mb-5">
-                       <div class="bg-[var(--vscode-button-background)] bg-opacity-10 p-2 rounded-lg">
-                           <span class="i-carbon-api h-6 w-6 text-[var(--vscode-button-background)]"></span>
+                       {/* Removed bg-opacity-10 */}
+                       <div class="bg-[var(--vscode-button-background)] p-2 rounded-lg">
+                           <span class="i-carbon-api h-6 w-6 text-[var(--vscode-button-foreground)]"></span> {/* Adjusted icon color */}
                        </div>
                        <div>
                            <h2 class="text-xl font-semibold text-[var(--vscode-foreground)]">AI Providers</h2>
@@ -241,11 +269,13 @@ export function SettingPage(): JSX.Element {
                        </div>
                    </div>
                    
-                   <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300">
+                   {/* Removed shadow-sm, border, hover:shadow-md */}
+                   <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden transition-shadow duration-300">
                        <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
                            <div class="flex items-center gap-3">
-                               <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
-                                   <span class="i-carbon-api h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                               {/* Removed bg-opacity-10 */}
+                               <div class="h-10 w-10 bg-[var(--vscode-button-background)] rounded-lg flex items-center justify-center">
+                                   <span class="i-carbon-api h-5 w-5 text-[var(--vscode-button-foreground)]"></span> {/* Adjusted icon color */}
                                </div>
                                <div>
                                    <h3 class="text-base font-medium text-[var(--vscode-foreground)]">AI Service Providers</h3>
@@ -266,8 +296,9 @@ export function SettingPage(): JSX.Element {
                {activeTab === 'tools' && (
                    <div> {/* Simple div wrapper */}
                    <div class="flex items-start gap-3 mb-5">
-                       <div class="bg-[var(--vscode-button-background)] bg-opacity-10 p-2 rounded-lg">
-                           <span class="i-carbon-tools-alt h-6 w-6 text-[var(--vscode-button-background)]"></span>
+                       {/* Removed bg-opacity-10 */}
+                       <div class="bg-[var(--vscode-button-background)] p-2 rounded-lg">
+                           <span class="i-carbon-tools-alt h-6 w-6 text-[var(--vscode-button-foreground)]"></span> {/* Adjusted icon color */}
                        </div>
                        <div>
                            <h2 class="text-xl font-semibold text-[var(--vscode-foreground)]">Tools & Capabilities</h2>
@@ -277,11 +308,13 @@ export function SettingPage(): JSX.Element {
                        </div>
                    </div>
                    
-                   <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden shadow-sm border border-[var(--vscode-panel-border)] border-opacity-30 hover:shadow-md transition-shadow duration-300">
+                   {/* Removed shadow-sm, border, hover:shadow-md */}
+                   <div class="bg-[var(--vscode-editorWidget-background)] rounded-xl overflow-hidden transition-shadow duration-300">
                        <div class="p-4 border-b border-[var(--vscode-panel-border)] border-opacity-20">
                            <div class="flex items-center gap-3">
-                               <div class="h-10 w-10 bg-[var(--vscode-button-background)] bg-opacity-10 rounded-lg flex items-center justify-center">
-                                   <span class="i-carbon-tools-alt h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                               {/* Removed bg-opacity-10 */}
+                               <div class="h-10 w-10 bg-[var(--vscode-button-background)] rounded-lg flex items-center justify-center">
+                                   <span class="i-carbon-tools-alt h-5 w-5 text-[var(--vscode-button-foreground)]"></span> {/* Adjusted icon color */}
                                </div>
                                <div>
                                    <h3 class="text-base font-medium text-[var(--vscode-foreground)]">Tool Permissions</h3>
@@ -303,9 +336,11 @@ export function SettingPage(): JSX.Element {
                    <div> {/* Simple div wrapper */}
                    <div class="h-full flex flex-col items-center justify-center">
                        <div class="relative mb-6">
-                           <div class="absolute -inset-4 rounded-full bg-[var(--vscode-button-background)] bg-opacity-5 animate-pulse"></div>
-                           <div class="relative w-32 h-32 rounded-full bg-[var(--vscode-button-background)] bg-opacity-10 flex items-center justify-center">
-                               <span class="i-carbon-code h-16 w-16 text-[var(--vscode-button-background)]"></span>
+                           {/* Removed bg-opacity-5 */}
+                           <div class="absolute -inset-4 rounded-full bg-[var(--vscode-button-background)] animate-pulse"></div>
+                           {/* Removed bg-opacity-10 */}
+                           <div class="relative w-32 h-32 rounded-full bg-[var(--vscode-button-background)] flex items-center justify-center">
+                               <span class="i-carbon-code h-16 w-16 text-[var(--vscode-button-foreground)]"></span> {/* Adjusted icon color */}
                            </div>
                        </div>
                        <h1 class="text-2xl font-bold text-[var(--vscode-foreground)] mb-2">ZenCoder</h1>
@@ -313,28 +348,33 @@ export function SettingPage(): JSX.Element {
                        <p class="text-sm text-[var(--vscode-foreground)] opacity-60 mb-8">Version 1.0.0</p>
                        
                        <div class="flex gap-4 mb-10">
-                           <button class="px-4 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-lg flex items-center gap-2 hover:bg-opacity-90 active:bg-opacity-80 transition-all duration-150 transform active:scale-95">
+                           {/* Removed hover/active opacities */}
+                           <button class="px-4 py-2 bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] rounded-lg flex items-center gap-2 transition-all duration-150 transform active:scale-95">
                                <span class="i-carbon-document h-4 w-4"></span>
                                <span>Documentation</span>
                            </button>
-                           <button class="px-4 py-2 bg-[var(--vscode-editorWidget-background)] border border-[var(--vscode-panel-border)] text-[var(--vscode-foreground)] rounded-lg flex items-center gap-2 hover:bg-[var(--vscode-button-background)] hover:bg-opacity-10 transition-all duration-150 transform active:scale-95">
+                           {/* Removed hover opacity */}
+                           <button class="px-4 py-2 bg-[var(--vscode-editorWidget-background)] border border-[var(--vscode-panel-border)] text-[var(--vscode-foreground)] rounded-lg flex items-center gap-2 hover:bg-[var(--vscode-button-background)] transition-all duration-150 transform active:scale-95">
                                <span class="i-carbon-logo-github h-4 w-4"></span>
                                <span>GitHub</span>
                            </button>
                        </div>
                        
                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl w-full">
-                           <div class="bg-[var(--vscode-editorWidget-background)] p-4 rounded-xl border border-[var(--vscode-panel-border)] border-opacity-30 flex flex-col items-center text-center hover:shadow-md transition-shadow duration-300 cursor-pointer">
+                           {/* Removed border, hover:shadow-md */}
+                           <div class="bg-[var(--vscode-editorWidget-background)] p-4 rounded-xl flex flex-col items-center text-center transition-shadow duration-300 cursor-pointer">
                                <span class="i-carbon-chat h-10 w-10 text-[var(--vscode-button-background)] mb-2"></span> {/* Changed feedback to chat */}
                                <h3 class="text-sm font-medium text-[var(--vscode-foreground)] mb-1">Feedback</h3>
                                <p class="text-xs text-[var(--vscode-foreground)] opacity-70">Share your thoughts</p>
                            </div>
-                           <div class="bg-[var(--vscode-editorWidget-background)] p-4 rounded-xl border border-[var(--vscode-panel-border)] border-opacity-30 flex flex-col items-center text-center hover:shadow-md transition-shadow duration-300 cursor-pointer">
+                           {/* Removed border, hover:shadow-md */}
+                           <div class="bg-[var(--vscode-editorWidget-background)] p-4 rounded-xl flex flex-col items-center text-center transition-shadow duration-300 cursor-pointer">
                                <span class="i-carbon-collaborate h-10 w-10 text-[var(--vscode-button-background)] mb-2"></span>
                                <h3 class="text-sm font-medium text-[var(--vscode-foreground)] mb-1">Community</h3>
                                <p class="text-xs text-[var(--vscode-foreground)] opacity-70">Join the discussion</p>
                            </div>
-                           <div class="bg-[var(--vscode-editorWidget-background)] p-4 rounded-xl border border-[var(--vscode-panel-border)] border-opacity-30 flex flex-col items-center text-center hover:shadow-md transition-shadow duration-300 cursor-pointer">
+                           {/* Removed border, hover:shadow-md */}
+                           <div class="bg-[var(--vscode-editorWidget-background)] p-4 rounded-xl flex flex-col items-center text-center transition-shadow duration-300 cursor-pointer">
                                <span class="i-carbon-help h-10 w-10 text-[var(--vscode-button-background)] mb-2"></span>
                                <h3 class="text-sm font-medium text-[var(--vscode-foreground)] mb-1">Support</h3>
                                <p class="text-xs text-[var(--vscode-foreground)] opacity-70">Get help with issues</p>
@@ -342,6 +382,10 @@ export function SettingPage(): JSX.Element {
                        </div>
                    </div>
                    </div>
+               )}
+               {/* Assistants Tab - Conditionally render */}
+               {activeTab === 'assistants' && (
+                   <AssistantSettings />
                )}
            </main>
            {/* Removed animation styles block */}

@@ -109,7 +109,7 @@ export function CustomInstructionsSettings(): JSX.Element {
                 <textarea
                     id="global-instructions"
                     rows={8}
-                    class="w-full p-2 border border-[var(--vscode-input-border)] rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none text-sm font-mono"
+                    class="w-full p-2 rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:ring-1 focus:ring-[var(--vscode-focusBorder)] outline-none text-sm font-mono" // Removed 'border', added focus ring
                     value={globalInstructions}
                     onInput={handleGlobalInstructionsChange}
                     placeholder="Enter global instructions here..."
@@ -144,7 +144,7 @@ export function CustomInstructionsSettings(): JSX.Element {
                 <textarea
                     id="project-instructions"
                     rows={12}
-                    class="w-full p-2 border border-[var(--vscode-input-border)] rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none text-sm font-mono"
+                    class="w-full p-2 rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:ring-1 focus:ring-[var(--vscode-focusBorder)] outline-none text-sm font-mono" // Removed 'border', added focus ring
                     value={projectInstructions}
                     onInput={handleProjectInstructionsChange}
                     placeholder="Enter project-specific instructions here..."

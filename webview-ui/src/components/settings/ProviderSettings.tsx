@@ -223,7 +223,8 @@ export function ProviderSettings(): JSX.Element {
         const isSetButtonDisabled = !credentialsJsonInput[id]?.trim() || isSettingKey || isDeletingKey;
 
         return (
-            <li key={id} class="provider-setting-item mb-4 p-4 border border-[var(--vscode-panel-border)] rounded-lg bg-[var(--vscode-editorWidget-background)] shadow-sm">
+            /* Removed border, shadow-sm */
+            <li key={id} class="provider-setting-item mb-4 p-4 rounded-lg bg-[var(--vscode-editorWidget-background)]">
                 <div class="flex items-center justify-between mb-3">
                     <label class="flex items-center font-semibold text-[var(--vscode-foreground)]">
                         <div class="relative inline-flex mr-3">
@@ -254,7 +255,7 @@ export function ProviderSettings(): JSX.Element {
                             <div class="flex items-start space-x-2">
                                 {usesComplexCredentials ? (
                                     <textarea
-                                        class="flex-grow p-2 border border-[var(--vscode-input-border)] rounded text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none font-mono text-xs"
+                                        class="flex-grow p-2 rounded text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:ring-1 focus:ring-[var(--vscode-focusBorder)] outline-none font-mono text-xs" // Removed border, added focus ring
                                         placeholder={`貼上 ${name} JSON 憑證...`}
                                         value={credentialsJsonInput[id] || ''}
                                         onInput={(e) => handleCredentialsJsonChange(id, (e.target as HTMLTextAreaElement).value)}
@@ -265,7 +266,7 @@ export function ProviderSettings(): JSX.Element {
                                 ) : (
                                     <input
                                         type="password"
-                                        class="flex-grow p-2 border border-[var(--vscode-input-border)] rounded text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none"
+                                        class="flex-grow p-2 rounded text-sm bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:ring-1 focus:ring-[var(--vscode-focusBorder)] outline-none" // Removed border, added focus ring
                                         placeholder={`輸入 ${name} API Key...`}
                                         value={credentialsJsonInput[id] || ''}
                                         onInput={(e) => handleCredentialsJsonChange(id, (e.target as HTMLInputElement).value)}
@@ -294,7 +295,7 @@ export function ProviderSettings(): JSX.Element {
                                             onClick={() => handleDeleteApiKey(id)}
                                             disabled={isSettingKey || isDeletingKey}
                                             loading={isDeletingKey} // Use loading prop
-                                            className={`bg-red-600 hover:bg-red-700 text-white`} // Override for destructive
+                                            className={`bg-[var(--vscode-errorForeground)] hover:opacity-80 text-[var(--vscode-button-foreground)]`} // Use theme variables for destructive
                                             aria-label={`Delete ${name} ${keyLabel}`}
                                         >
                                             刪除
@@ -311,7 +312,7 @@ export function ProviderSettings(): JSX.Element {
                                         {vertexProjects.length > 0 ? (
                                             <select
                                                 id={`project-id-${id}`}
-                                                class="w-full p-1.5 border border-[var(--vscode-input-border)] rounded text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none"
+                                                class="w-full p-1.5 rounded text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:ring-1 focus:ring-[var(--vscode-focusBorder)] outline-none" // Removed border, added focus ring
                                                 value={projectIdInput[id] || currentProjectId || ''} // Use currentProjectId from status as initial value
                                                 onChange={(e) => handleProjectIdChange(id, (e.target as HTMLSelectElement).value)}
                                                 aria-label={`${name} Project ID Select`}
@@ -325,7 +326,7 @@ export function ProviderSettings(): JSX.Element {
                                             <input
                                                 type="text"
                                                 id={`project-id-${id}`}
-                                                class="w-full p-1.5 border border-[var(--vscode-input-border)] rounded text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none"
+                                                class="w-full p-1.5 rounded text-xs bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:ring-1 focus:ring-[var(--vscode-focusBorder)] outline-none" // Removed border, added focus ring
                                                 placeholder={currentProjectId || "你的 GCP Project ID"}
                                                 value={projectIdInput[id] || ''}
                                                 onInput={(e) => handleProjectIdChange(id, (e.target as HTMLInputElement).value)}
@@ -377,7 +378,7 @@ export function ProviderSettings(): JSX.Element {
                         placeholder="搜索 Provider..."
                         value={searchQuery}
                         onInput={handleSearchChange}
-                        class="w-full p-2 pl-10 border border-[var(--vscode-input-border)] rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:border-[var(--vscode-focusBorder)] outline-none"
+                        class="w-full p-2 pl-10 rounded bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)] focus:ring-1 focus:ring-[var(--vscode-focusBorder)] outline-none" // Removed border, added focus ring
                         aria-label="Search Providers"
                     />
                 </div>

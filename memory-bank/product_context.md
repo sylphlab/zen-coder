@@ -9,6 +9,7 @@ Provides a simple, integrated way for a developer to leverage various AI models 
 - **Efficiency:** Streamed responses and quick tool execution enhance workflow.
 - **Reliability:** Core chat and tool functions work consistently.
 - **Security:** API keys are stored securely, and dangerous actions require confirmation.
+- **Personalization:** Assistant abstraction allows users to create and switch between pre-configured AI personalities/setups easily, simplifying model selection.
 
 ## Target User
 Single developers looking for a straightforward AI coding assistant integrated into their primary editor.

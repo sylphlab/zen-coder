@@ -79,7 +79,7 @@ export class AiService {
         this._mcpManager = new McpManager(context, (msg) => this.postMessageCallback?.(msg));
         this._toolManager = new ToolManager(context, this._mcpManager);
         // Inject ProviderManager into ConfigResolver
-        this._configResolver = new ConfigResolver(this.chatSessionManager, this._providerManager);
+        this._configResolver = new ConfigResolver(this.chatSessionManager); // Remove second argument
         // Instantiate StreamProcessor here, passing only historyManager
         this._streamProcessor = new StreamProcessor(historyManager); // Pass only historyManager
         // AiStreamer constructor takes 5 arguments

@@ -7,6 +7,8 @@ import { ModelResolver } from '../../ai/modelResolver';
 import { ProviderStatusManager } from '../../ai/providerStatusManager';
 import { McpManager } from '../../ai/mcpManager';
 import { SubscriptionManager } from '../../ai/subscriptionManager'; // Import SubscriptionManager
+import { AssistantManager } from '../../session/AssistantManager'; // Import AssistantManager
+
 
 /**
  * Context object passed to request handlers.
@@ -21,6 +23,7 @@ export interface HandlerContext {
     providerStatusManager: ProviderStatusManager;
     mcpManager: McpManager;
     subscriptionManager: SubscriptionManager; // Add SubscriptionManager
+    assistantManager?: AssistantManager; // Add AssistantManager (optional for now?) - Make it required later
     postMessage: (message: any) => void; // Function to post messages back to webview
     extensionContext: vscode.ExtensionContext; // Add extension context
 }

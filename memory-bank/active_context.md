@@ -1,23 +1,25 @@
 # Active Context
 
 ## Current Focus
-**UI Refactoring:** Starting a systematic review and refactoring of UI views/components in `webview-ui/src` to clean up layout inconsistencies and messy details following a recent overhaul.
+**Assistant Architecture - Phase 2 (Backend/Stores/UI Implementation):** Verify Assistant CRUD functionality and proceed with full UI implementation and backend integration.
 
 ## Next Steps
-1.  **Review `ChatPage.tsx`:** Read and analyze the main chat page component for layout and code quality issues.
-2.  **Review `MessagesArea.tsx`:** Analyze the component displaying chat messages.
-3.  **Review `InputArea.tsx`:** Analyze the chat input component.
-4.  **Review `ModelSelector.tsx`:** Analyze the model selection component.
-5.  **Review `SettingPage.tsx`:** Analyze the main settings page.
-6.  **Review Settings Components:** Analyze components under `webview-ui/src/components/settings/`.
-7.  **Review Other Components:** Analyze remaining components like `ChatListPage.tsx`, `ConfirmationDialog.tsx`, `ui/CustomSelect.tsx`.
-8.  Apply refactoring changes iteratively based on review findings.
+1.  **Testing:** Verify Assistant CRUD operations (Create, List, Update, Delete) are working correctly via the UI and backend logs.
+2.  **Frontend:** Implement the full UI functionality within `AssistantSettings.tsx` (forms, validation, interaction with stores for CRUD).
+3.  **Frontend:** Replace placeholder Assistant data/logic in `InputArea.tsx` and `DefaultAssistantSettings.tsx` with integration with the new `assistantStores`.
+4.  **Refactor:** Update `ConfigResolver` and `AiStreamer` to use the real `AssistantManager` to fetch Assistant details and apply their configuration (model, instructions).
+5.  **Refactor:** Update `ChatSessionManager` to handle `assistantId` in `ChatConfig`.
 
 ## Recent Changes
-*   Created `planner_log.md`, `executor_log.md`, `monitor_log.md`.
-*   **(Previous changes remain largely valid unless superseded above)**
+*   Completed systematic UI/UX refactoring based on user principles (minimalism, theme, borderless, etc.). [Resolved]
+*   Fixed UI bugs: model selector text, image previews, Assistant settings dropdown cutoff, `CustomSelect` mouse selection. [Resolved]
+*   Enhanced `ChatListPage`: Improved delete visibility, added bulk delete UI, added resource placeholder. [Resolved]
+*   Pivoted to Assistant architecture: Updated types, refactored relevant frontend components (`InputArea`, `ChatPage`, `SettingPage`, `DefaultAssistantSettings`), created placeholder `AssistantSettings` UI, fixed backend type errors (`configResolver`, `SetDefaultConfigHandler`). [Phase 1 Done]
+*   Removed redundant "Default Assistant" card from General Settings. [Done]
+*   Implemented backend handlers (`Get`, `Create`, `Update`, `Delete`) for Assistant management. [Done]
+*   Debugged and resolved "No handler found" errors and `assistants/list` timeout by adding logging and removing debounce from `AssistantManager.saveAssistants`. [Done]
 
 ## Active Decisions
-*   Prioritize review starting with `ChatPage.tsx` and its main child components.
-*   Focus review on layout consistency (UnoCSS), clarity, component structure, and code quality.
-*   **(Previous decisions remain largely valid unless superseded above)**
+*   Proceeding with Assistant-based architecture.
+*   Prioritize backend/store implementation for Assistants next.
+*   File rename `DefaultModelSettings.tsx` -> `DefaultAssistantSettings.tsx` still pending (manual user action).

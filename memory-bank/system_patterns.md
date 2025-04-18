@@ -9,12 +9,13 @@
     - `ToolManager` (`src/ai/toolManager.ts`): Manages tool definitions (standard and MCP), determines tool enablement based on configuration (`zencoder.toolAuthorization`), prepares the final `ToolSet` for the AI (`prepareToolSet`), and provides resolved tool status for the UI (`getResolvedToolStatusInfo`).
     - `SubscriptionManager` (`src/ai/subscriptionManager.ts`): Manages webview subscriptions (`addSubscription`, `removeSubscription`, `hasSubscription`) and pushes updates to the frontend (`notifyProviderStatusChange`, `notifyToolStatusChange`, etc.) using the `postMessageCallback`. Receives notifications from other managers or `AiService`.
     - `AiStreamer` (`src/ai/aiStreamer.ts`): Handles the core AI interaction logic, preparing messages (`_loadCustomInstructions`, uses `historyUtils.translateUiHistoryToCoreMessages`), getting provider instances (`_getProviderInstance`), resolving config (`configResolver.getChatEffectiveConfig`), calling the AI SDK (`streamText`), managing stream lifecycle (`abortCurrentStream`), and handling tool repair logic.
-    - `ConfigResolver` (`src/ai/configResolver.ts`): Reads default chat configuration (`zencoder.ai.*`), merges it with session-specific configuration (`ChatSession.config`), and provides the effective configuration for a given chat (`getChatEffectiveConfig`).
+    - `ConfigResolver` (`src/ai/configResolver.ts`): Reads default chat configuration (`zencoder.defaults.defaultAssistantId`), merges it with session-specific configuration (`ChatSession.config.assistantId`), resolves the target Assistant (using `AssistantManager`), and provides the effective configuration (including resolved provider/model/instructions) for a given chat (`getChatEffectiveConfig`).
     - `ProviderStatusManager` (`src/ai/providerStatusManager.ts`): (Used by `ProviderManager`) Determines provider enablement and API key status based on configuration and secrets.
-    - `ModelResolver` (`src/ai/modelResolver.ts`): Fetches and lists available models from enabled providers.
+    - `ModelResolver` (`src/ai/modelResolver.ts`): Fetches and lists available models from enabled providers (used for Assistant configuration).
+    - `AssistantManager` (`src/ai/assistantManager.ts` - **TODO**): Manages Assistant definitions (CRUD operations, persistence).
     - `HistoryManager` (`src/historyManager.ts`): Manages chat history messages (CRUD operations: `addMessage`, `deleteMessage`, `clearHistory`, `getHistory`, etc.). It utilizes `ChatSessionManager` to get session details (like `nextSeqId`) and `WorkspaceStateManager` for persistence. It also handles message modification logic via `MessageModifier`.
-    - `ChatSessionManager` (`src/session/chatSessionManager.ts`): Manages the lifecycle and metadata (name, config, `nextSeqId`, location) of chat sessions. Uses `WorkspaceStateManager` for persistence.
-    - `WorkspaceStateManager` (`src/state/workspaceStateManager.ts`): Handles the low-level saving and loading of state (sessions, history) to `context.workspaceState`.
+    - `ChatSessionManager` (`src/session/chatSessionManager.ts`): Manages the lifecycle and metadata (name, config (`assistantId`, `useDefaults`), `nextSeqId`, location) of chat sessions. Uses `WorkspaceStateManager` for persistence.
+    - `WorkspaceStateManager` (`src/state/workspaceStateManager.ts`): Handles the low-level saving and loading of state (sessions, history, assistants) to `context.workspaceState`.
     - `StreamProcessor` (`src/streamProcessor.ts`): Handles parsing the AI response stream (`fullStream` via `text-delta`), and performs post-stream parsing of appended JSON blocks (e.g., for `suggested_actions`) before updating history/UI via `HistoryManager`.
     - `McpManager` (`src/ai/mcpManager.ts`): Manages lifecycle, configuration, and tool fetching for MCP servers.
 - **Standard Data Communication Pattern (FE <-> BE):**
@@ -53,7 +54,13 @@
         4. UI component triggers the backend mutation request.
         5. **On mutation success:** Backend sends a patch. `createStore` applies it to `_actualState`, clears `_optimisticState`, store value updates to actual.
         6. **On mutation failure:** UI component calls `store.clearOptimisticState()`. Store value reverts to `_actualState`.
-- **State Management (Persistence):** Session metadata (`ChatSession`) and chat history (`UiMessage[]`) persisted in `context.workspaceState` (per workspace) via `WorkspaceStateManager`, coordinated by `ChatSessionManager` and `HistoryManager`. API keys stored securely in `context.secrets`. Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`). Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`). Default chat config stored in VS Code settings (`zencoder.ai.*`).
+- **State Management (Persistence):**
+    - Session metadata (`ChatSession` including `config.assistantId`) and chat history (`UiMessage[]`) persisted in `context.workspaceState` via `WorkspaceStateManager`, coordinated by `ChatSessionManager` and `HistoryManager`.
+    - Assistant definitions (`Assistant[]`) persisted likely via `WorkspaceStateManager` (or dedicated file), coordinated by `AssistantManager` (**TODO**).
+    - API keys stored securely in `context.secrets`.
+    - Provider enablement stored in VS Code settings (`zencoder.provider.<id>.enabled`).
+    - Global custom instructions stored in VS Code settings (`zencoder.customInstructions.global`).
+    - Default Assistant ID stored in VS Code settings (`zencoder.defaults.defaultAssistantId`).
 - **Tool Authorization:** Managed via VS Code setting `zencoder.toolAuthorization`. (Details remain the same).
 - **Configuration Files:** (Details remain the same).
     - Global MCP Servers: `[VS Code User Data]/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json`

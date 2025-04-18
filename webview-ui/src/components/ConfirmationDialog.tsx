@@ -25,17 +25,22 @@ export const ConfirmationDialog: FunctionalComponent<ConfirmationDialogProps> = 
     }
 
     return (
-        <div class="fixed inset-0 bg-[var(--vscode-editor-background)] bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onCancel}>
+        /* Removed bg-opacity-60 */
+        <div class="fixed inset-0 bg-[var(--vscode-editor-background)] backdrop-blur-sm flex items-center justify-center z-50" onClick={onCancel}>
             {/* Chat-style confirmation dialog */}
             <div class="max-w-md w-full mx-auto px-4" onClick={(e) => e.stopPropagation()}>
                 {/* ZenCoder's confirmation message */}
                 <div class="flex items-start mb-6 transform translate-y-4 animate-[fadeIn_0.25s_ease-out_forwards]" style={{ opacity: 0 }}>
-                    <div class="w-10 h-10 rounded-full bg-[var(--vscode-button-background)] bg-opacity-20 flex items-center justify-center flex-shrink-0 mt-1">
+                    {/* Removed bg-opacity-20 */}
+                    <div class="w-10 h-10 rounded-full bg-[var(--vscode-button-background)] flex items-center justify-center flex-shrink-0 mt-1">
+                        {/* Icon color already uses theme variable, no change needed */}
                         <span class="i-carbon-warning-filled h-5 w-5 text-[var(--vscode-notificationsWarningIcon)]"></span>
                     </div>
-                    <div class="ml-4 bg-[var(--vscode-editorWidget-background)] rounded-lg p-4 shadow-lg max-w-[85%]">
+                    {/* Removed shadow-lg */}
+                    <div class="ml-4 bg-[var(--vscode-editorWidget-background)] rounded-lg p-4 max-w-[85%]">
                         <div class="flex items-center mb-2">
-                            <span class="bg-[var(--vscode-notificationsWarningIcon)] bg-opacity-10 px-2 py-0.5 rounded-full text-xs font-medium text-[var(--vscode-notificationsWarningIcon)]">
+                            {/* Removed bg-opacity-10 */}
+                            <span class="bg-[var(--vscode-notificationsWarningIcon)] px-2 py-0.5 rounded-full text-xs font-medium text-[var(--vscode-button-foreground)]"> {/* Adjusted text color */}
                                 Confirmation Needed
                             </span>
                         </div>
@@ -53,7 +58,8 @@ export const ConfirmationDialog: FunctionalComponent<ConfirmationDialogProps> = 
                             <Button
                                 variant="primary"
                                 onClick={onConfirm}
-                                className="bg-[var(--vscode-notificationsErrorIcon)] text-white hover:bg-opacity-90"
+                                /* Removed hover:bg-opacity-90, changed text-white */
+                                className="bg-[var(--vscode-notificationsErrorIcon)] text-[var(--vscode-button-foreground)] hover:opacity-90"
                             >
                                 <span class="i-carbon-trash-can h-4 w-4 mr-1.5"></span>
                                 {confirmText}

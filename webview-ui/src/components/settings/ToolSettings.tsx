@@ -22,18 +22,7 @@ import {
 import { McpServerStatus } from '../../../../src/ai/mcpManager';
 import { Button } from '../ui/Button'; // Import the Button component
 
-// --- Mock Icons (Ensure these are defined or replaced with actual imports) ---
-const ChevronRightIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-    </svg>
-);
-const ChevronDownIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-    </svg>
-);
-// --- End Mock Icons ---
+// Removed Mock SVG Icons - using UnoCSS directly
 
 // Helper function for rendering individual tool items
 const renderToolItem = (
@@ -60,17 +49,17 @@ const renderToolItem = (
         case ToolStatus.AlwaysAvailable:
             buttonText = 'Always Allow';
             buttonIcon = 'i-carbon-checkmark-filled';
-            buttonClass = 'bg-[var(--vscode-testing-iconPassed)] text-white';
+            buttonClass = 'bg-[var(--vscode-testing-iconPassed)] text-[var(--vscode-button-foreground)]';
             break;
         case ToolStatus.RequiresAuthorization:
             buttonText = 'Requires Auth';
             buttonIcon = 'i-carbon-warning-filled';
-            buttonClass = 'bg-[var(--vscode-editorWarning-foreground)] text-white';
+            buttonClass = 'bg-[var(--vscode-editorWarning-foreground)] text-[var(--vscode-button-foreground)]';
             break;
         case ToolStatus.Disabled:
             buttonText = 'Disabled';
             buttonIcon = 'i-carbon-close-filled';
-            buttonClass = 'bg-[var(--vscode-editorError-foreground)] text-white';
+            buttonClass = 'bg-[var(--vscode-editorError-foreground)] text-[var(--vscode-button-foreground)]';
             break;
     }
 
@@ -80,7 +69,8 @@ const renderToolItem = (
     }
 
     return (
-        <li key={toolId} class={`p-3 border-t border-[var(--vscode-panel-border)] border-opacity-30 flex items-center justify-between ${isEffectivelyEnabled ? 'bg-[var(--vscode-editorWidget-background)]' : 'bg-[var(--vscode-input-background)] opacity-70'}`}>
+        /* Removed border-t */
+        <li key={toolId} class={`p-3 flex items-center justify-between ${isEffectivelyEnabled ? 'bg-[var(--vscode-editorWidget-background)]' : 'bg-[var(--vscode-input-background)] opacity-70'}`}>
             {/* Text content area */}
             <div class="flex-grow mr-4 overflow-hidden min-w-0"> {/* min-w-0 prevents flex item from overflowing */}
                 <p class={`font-semibold text-sm truncate ${isEffectivelyEnabled ? 'text-[var(--vscode-foreground)]' : 'text-[var(--vscode-foreground)] opacity-60'}`}>
@@ -205,12 +195,14 @@ export function ToolSettings(): JSX.Element {
         }
 
         return (
-            <div key={category.id} class="border border-[var(--vscode-panel-border)] rounded-lg overflow-hidden shadow-sm">
+            /* Removed border, shadow-sm */
+            <div key={category.id} class="rounded-lg overflow-hidden">
                 {/* Clickable Category Header */}
                 <div class="flex items-center justify-between p-3 bg-[var(--vscode-sideBar-background)] cursor-pointer hover:bg-[var(--vscode-list-hoverBackground)]" onClick={() => toggleCategoryCollapse(category.id)}>
                     {/* Left: Icon, Name, Status */}
                     <div class="flex items-center flex-grow overflow-hidden mr-2 min-w-0">
-                        <span class="mr-2 text-[var(--vscode-foreground)] opacity-60 flex-shrink-0">{isCollapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}</span>
+                        {/* Replaced SVG components with UnoCSS icons */}
+                        <span class={`mr-2 text-[var(--vscode-foreground)] opacity-60 flex-shrink-0 h-5 w-5 ${isCollapsed ? 'i-carbon-chevron-right' : 'i-carbon-chevron-down'}`}></span>
                         <h5 class="text-md font-medium text-[var(--vscode-foreground)] inline truncate">{category.name}</h5>
                         {isMcpCategory && ( <span class={`text-xs ml-2 ${mcpStatusColor} whitespace-nowrap`} title={serverStatus?.lastError && serverStatus.lastError !== 'Retrying...' ? serverStatus.lastError : mcpStatusText}>({mcpStatusText})</span> )}
                     </div>
@@ -283,7 +275,8 @@ export function ToolSettings(): JSX.Element {
             </p>
             
             {/* Legend for status indicators */}
-            <div class="mb-6 bg-[var(--vscode-editorWidget-background)] p-4 rounded-lg border border-[var(--vscode-panel-border)] border-opacity-30">
+            {/* Removed border */}
+            <div class="mb-6 bg-[var(--vscode-editorWidget-background)] p-4 rounded-lg">
                 <h4 class="text-sm font-medium text-[var(--vscode-foreground)] mb-2">Status Legend:</h4>
                 <div class="grid grid-cols-3 gap-2">
                     <div class="flex items-center space-x-2">

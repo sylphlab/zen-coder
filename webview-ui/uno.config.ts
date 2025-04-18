@@ -16,8 +16,20 @@ export default defineConfig({
   theme: {
     colors: {
       // Define colors using VS Code CSS variables
-      'vscode-foreground': 'var(--vscode-editor-foreground)',
-      'vscode-background': 'var(--vscode-editor-background)', // Define for potential use, though aiming for transparency
+
+      // Core UI
+      foreground: 'var(--vscode-foreground)', // Default text
+      background: 'var(--vscode-editor-background)', // Default background
+
+      // Primary Button (maps to standard button)
+      primary: 'var(--vscode-button-background)',
+      'primary-foreground': 'var(--vscode-button-foreground)',
+
+      // Secondary Button
+      secondary: 'var(--vscode-button-secondaryBackground)',
+      'secondary-foreground': 'var(--vscode-button-secondaryForeground)',
+
+      // Input fields
       'vscode-input-background': 'var(--vscode-input-background)',
       'vscode-input-foreground': 'var(--vscode-input-foreground)',
       'vscode-input-border': 'var(--vscode-input-border)',
@@ -39,9 +51,14 @@ export default defineConfig({
       'vscode-description': 'var(--vscode-descriptionForeground)',
       'vscode-toolbar-hover': 'var(--vscode-toolbar-hoverBackground)',
       'vscode-button-secondary-background': 'var(--vscode-button-secondaryBackground)',
-      'vscode-button-secondary-foreground': 'var(--vscode-button-secondaryForeground)',
+      'vscode-button-secondary-foreground': 'var(--vscode-button-secondaryForeground)', // Keep original mapping for direct use if needed
+
       // Explicitly define transparent if needed, though UnoCSS has bg-transparent
       'transparent': 'transparent',
+
+      // Accent color for hover/active states on outline/ghost buttons
+      accent: 'var(--vscode-list-hoverBackground)', // Using list hover as a subtle accent
+
     },
     fontFamily: {
       // Set default sans font to VS Code font

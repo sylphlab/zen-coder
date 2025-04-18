@@ -10,13 +10,14 @@ function readImageFile(file: File): Promise<SelectedImage> {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
-            const base64String = (reader.result as string)?.split(',')[1];
-            if (base64String) {
+            // Keep the full data URL including the prefix
+            const fullDataUrl = reader.result as string;
+            if (fullDataUrl) {
                 resolve({
                     id: generateUniqueId(),
-                    data: base64String,
+                    data: fullDataUrl, // Store the full data URL
                     mediaType: file.type,
-                    name: file.name,
+                    // name: file.name, // Removed invalid property
                 });
             } else {
                 reject(new Error(`Failed to read file ${file.name} as base64.`));

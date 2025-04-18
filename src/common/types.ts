@@ -30,6 +30,8 @@ export interface UiMessage {
     timestamp: number; // When the message was created/received
     /** Optional status for UI rendering (e.g., pending response, error) */
     status?: 'pending' | 'error'; // Status for the message itself (e.g., waiting for AI response)
+    errorDetails?: string; // Optional detailed error message
+
     // Model/Provider info (optional, primarily for assistant messages)
     providerId?: string;
     providerName?: string;
@@ -218,19 +220,48 @@ export const structuredAiResponseSchema = z.object({
 });
 
 export type StructuredAiResponse = z.infer<typeof structuredAiResponseSchema>;
+
+// --- Assistant Type ---
+
+// Assuming ModelConfig type exists or will be defined
+// Basic configuration for the model used by an Assistant
+export interface ModelConfig {
+  providerId: string; // e.g., 'anthropic', 'openai'
+  modelId: string; // e.g., 'claude-3-5-sonnet-20240620', 'gpt-4o'
+  // Add other parameters like temperature, topP etc. as needed later
+  // parameters?: Record<string, any>;
+}
+
+
+// import { ModelConfig } from './types'; // Placeholder import - Assuming it's already imported or defined elsewhere if needed
+// import { ToolReference } from './types'; // Placeholder import if tools are included later
+
+export interface Assistant {
+  id: string; // Unique identifier (e.g., UUID)
+  name: string;
+  description?: string; // Optional description
+  instructions: string; // The core custom instructions
+  modelConfig: ModelConfig; // References the model configuration to use
+  // tools?: ToolReference[]; // Optional: Add later if tools are part of Assistant definition
+  createdAt: string; // ISO 8601 timestamp
+  updatedAt: string; // ISO 8601 timestamp
+}
+
+// Type for creating a new assistant (ID generated backend)
+export type NewAssistant = Omit<Assistant, 'id' | 'createdAt' | 'updatedAt'>;
+
+// Type for updating an assistant (ID is required)
+// Note: Sending Partial<Omit<...>> allows sending only changed fields + id
+export type UpdateAssistantPayload = Partial<Omit<Assistant, 'id' | 'createdAt'>> & { id: string };
+
+
 // --- Multi-Chat Types ---
 
-// Configuration for a specific chat session
+// Configuration for a specific chat session (References Assistant)
 export interface ChatConfig {
-    providerId?: string;   // e.g., "anthropic" - Overrides default if set
-    providerName?: string; // Optional user-friendly provider name (primarily for display)
-    modelId?: string;      // e.g., "claude-3-5-sonnet-latest" - Overrides default if set
-    modelName?: string;    // Optional user-friendly model name (primarily for display)
-    // Keep image/optimize as combined IDs for now, or refactor later if needed
-    imageModelId?: string; // Overrides default if set
-    optimizeModelId?: string; // Overrides default if set
-    useDefaults: boolean; // If true, uses default settings where overrides are not set
-    // We can add more config options later, e.g., temperature, custom instructions per chat
+    assistantId?: string; // ID of the Assistant assigned to this chat (references Assistant.id)
+    useDefaults: boolean; // If true, uses the default Assistant configuration
+    // Potential future overrides specific to this chat (e.g., temperature) could go here
 }
 
 // Represents a single chat session within a project
@@ -272,6 +303,71 @@ export interface ToolAuthorizationConfig {
 }
 
 // Structure for individual tool status info returned to UI
+
+// --- Assistant Management Messages ---
+
+export interface ListAssistantsRequest {
+  type: 'assistants/list';
+}
+
+export interface ListAssistantsResponse {
+  type: 'assistants/list/response';
+  success: boolean;
+  assistants?: Assistant[];
+  error?: string;
+}
+
+export interface CreateAssistantRequest {
+  type: 'assistants/create';
+  payload: NewAssistant;
+}
+
+export interface CreateAssistantResponse {
+  type: 'assistants/create/response';
+  success: boolean;
+  assistant?: Assistant; // Return the created assistant with its ID
+  error?: string;
+}
+
+export interface UpdateAssistantRequest {
+  type: 'assistants/update';
+  payload: UpdateAssistantPayload; // Send only the fields to update + ID
+}
+
+export interface UpdateAssistantResponse {
+  type: 'assistants/update/response';
+  success: boolean;
+  assistant?: Assistant; // Return the updated assistant
+  error?: string;
+}
+
+export interface DeleteAssistantRequest {
+  type: 'assistants/delete';
+  payload: { id: string };
+}
+
+export interface DeleteAssistantResponse {
+  type: 'assistants/delete/response';
+  success: boolean;
+  error?: string;
+}
+
+// Union type for all assistant requests from webview
+export type AssistantRequest =
+  | ListAssistantsRequest
+  | CreateAssistantRequest
+  | UpdateAssistantRequest
+  | DeleteAssistantRequest;
+
+// Union type for all assistant responses to webview
+export type AssistantResponse =
+  | ListAssistantsResponse
+  | CreateAssistantResponse
+  | UpdateAssistantResponse
+  | DeleteAssistantResponse;
+
+// --- End Assistant Management Messages ---
+
 export interface ToolInfo {
   id: string; // e.g., 'readFile', 'mcp_github_create_issue'
   name: string; // e.g., 'readFile', 'github: create_issue' (display name)
@@ -355,6 +451,17 @@ export interface WebviewResponseMessage {
 }
 
 
+// --- Payload for sendMessage Action --- Correctly placed
+export interface SendMessagePayload {
+  chatId: string;
+  content: UiMessageContentPart[];
+  tempId: string; // Temporary ID for optimistic UI
+  assistantId?: string; // Optional: ID of the assistant being used
+  // Provider/Model might still be needed if not using an assistant or for backend resolution
+  providerId?: string;
+  modelId?: string;
+}
+
 
 // Structure for storing chat data in workspaceState
 export interface WorkspaceChatState {
@@ -436,12 +543,10 @@ export interface McpConfiguredStatusPayload {
 
 // --- Default Configuration ---
 
-// Structure for default chat configuration (global scope)
+// Structure for default chat configuration (global scope - Now uses Assistant)
 export interface DefaultChatConfig {
-    defaultProviderId?: string; // e.g., "anthropic"
-    defaultModelId?: string;    // e.g., "claude-3-5-sonnet-latest"
-    defaultImageModelId?: string; // Keep for future use
-    defaultOptimizeModelId?: string; // Keep for future use
+    defaultAssistantId?: string; // ID of the default Assistant to use
+    // Removed provider/model specific fields
 }
 
 // --- Pub/Sub Topics ---

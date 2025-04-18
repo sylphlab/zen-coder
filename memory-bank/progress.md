@@ -20,7 +20,7 @@
 *   **VS Code Tools (Partial):** Several tools implemented, filesystem tools refactored.
 *   **MCP Management:** `McpManager`, file-based config, status UI.
 *   **Stream Cancellation:** Implemented via `abortCurrentStream`, triggers save attempt.
-*   **Image Upload (Partial):** UI implemented, data sending logic exists. Backend needs review.
+*   **Image Upload (Partial):** UI implemented, data sending logic exists. Backend needs review. Image preview bug fixed.
 *   **Message Actions:** Copy/Delete implemented.
 *   **UI Basics:** Markdown/Syntax Highlighting, basic styling.
 *   **Fixed MCP Server Settings UI:** Optimistic updates, status display.
@@ -29,31 +29,47 @@
 *   **Suggested Actions Pub/Sub:** Implemented backend push via `SubscriptionManager`, created frontend `$suggestedActions` store, integrated with UI.
 *   **Removed `reconcileFinalAssistantMessage`:** Eliminated redundant finalization logic.
 *   **Unified State Updates (JSON Patch):** Refactored backend managers and frontend stores (`createStore`, `createMutationStore`) to primarily use JSON Patch for state synchronization (except for simple boolean/full payload updates like streaming status/suggested actions).
-*   **Fixed `ConfigResolver` Logic:** Corrected provider/model validation and fallback logic.
+*   **Fixed `ConfigResolver` Logic:** Corrected provider/model validation and fallback logic (partially refactored for Assistants, needs AssistantManager integration).
 *   **Fixed Async Chain:** Ensured `async/await` is used correctly from `SendMessageHandler` down to `ConfigResolver`.
 *   **Fixed `$activeChatHistory` Store:** Removed conflicting `handleUpdate`.
-*   **Fixed `$defaultConfig` Store:** Corrected `SubscriptionManager` push logic (hopefully).
+*   **Fixed `$defaultConfig` Store:** Corrected `SubscriptionManager` push logic (partially refactored for Assistants).
 *   **Refactored Credential Handling:** Updated provider interface, backend logic, and UI to support complex credentials (JSON + optional fields) alongside simple API keys.
+*   **[Resolved] UI Refactoring (Styling):** Systematically reviewed and updated core UI components (`ChatPage`, `MessagesArea`, `InputArea`, `SettingPage`, `ChatListPage`, `ConfirmationDialog`, `CustomSelect`, settings sub-components) for minimalism, theme adherence, borderless design, UnoCSS usage. Removed shadows, borders, unnecessary opacities. Confirmed scrollbar styling.
+*   **[Resolved] Dependency Cleanup:** Removed unused `@heroicons/react`.
+*   **[Resolved] Tool Call UI:** Implemented collapse/expand for tool call section in `MessagesArea`. (Spinner bug remains - upstream issue).
+*   **[Resolved] Error Display UI:** Updated `MessagesArea` to show specific error details from `UiMessage.errorDetails` (requires backend to populate).
+*   **[Resolved] Session List Enhancements:** Improved visibility of individual delete button, added bulk delete UI/logic, added resource usage placeholder.
+*   **[Resolved] Model Selector UI Bugs:** Fixed invisible text in dropdown, added filtering capability.
+*   **[Resolved] Image Preview Bug:** Fixed data URL handling in `useImageUpload` hook.
+*   **Assistant Architecture (Phase 1 Frontend):** Updated types (`Assistant`, `ChatConfig`, `DefaultChatConfig`, `SendMessagePayload`), refactored `InputArea`/`ChatPage`/`SettingPage`/`DefaultAssistantSettings` (pending rename), created placeholder `AssistantSettings` UI. Fixed resulting type errors in frontend and backend files (`configResolver`, `SetDefaultConfigHandler`).
+*   **[Resolved] Assistant Settings UI Bugs:** Fixed dropdown cutoff issue in modal, resolved mouse click selection issue in `CustomSelect`.
+*   **[Resolved] Assistant CRUD Backend:** Implemented and registered backend handlers (`Get`, `Create`, `Update`, `Delete`) for Assistant management. Debugged "No handler found" error (related to build/cache).
+*   **[Resolved] Assistant List Timeout:** Removed debounce timer from `AssistantManager.saveAssistants` to fix timeout during initial load.
 
 ## What's Left / Known Issues
+*   **Assistant Architecture (Phase 2+):**
+    *   Implement backend `AssistantManager` (CRUD operations, persistence) - **Handlers implemented, core logic exists.**
+    *   Implement frontend stores (`assistantStores.ts`) for fetching/managing Assistants - **Implemented, minor debugging done.**
+    *   Replace placeholder Assistant data/logic in `InputArea`, `DefaultAssistantSettings`, `AssistantSettings` with store integration.
+    *   Implement full UI functionality in `AssistantSettings.tsx` (create/edit forms, validation, saving, deleting).
+    *   Update backend `AiService`, `AiStreamer`, `ConfigResolver` to fully utilize selected Assistant configuration (fetching details, applying instructions, using correct model).
+    *   Update `ChatSessionManager` to handle `assistantId` in `ChatConfig`.
+    *   Rename `DefaultModelSettings.tsx` file to `DefaultAssistantSettings.tsx`.
 *   **Complete Static Data:** Add static data for remaining providers (OpenRouter, Ollama, etc.).
 *   **Verify Static Data:** Double-check accuracy of static model info (capabilities, pricing, limits) against latest documentation.
-*   **Vertex AI Testing:** Need to test Vertex AI functionality thoroughly, including JSON credential input, dynamic project ID fetching/selection, location text input (pre-filled), and static model list fallback.
-*   **Vertex AI Dynamic Locations/Models (Deferred):** Dynamic fetching for locations and models was attempted but reverted due to SDK complexities. `getAvailableProjects` is implemented, but `getAvailableLocations` and `getAvailableModels` currently return static/empty lists with TODOs.
-*   **Vertex AI Error Handling:** Improve error handling for API calls (project/location/model fetching) and display informative messages to the user (e.g., permission errors).
-*   **BUGFIX: Tool Call UI:** Spinner doesn't stop, default state isn't collapsed. (Lower Priority - Addressing collapsed state now)
-*   **BUGFIX: Error Message UI:** API errors (like function calling not supported) are logged but not shown in the UI. Need to update `Message` component to handle `status: 'error'`. (Medium Priority)
-*   **BUGFIX: `deepseek-reasoner` Function Calling Error:** While the error is correct (model doesn't support it), the UI should display the error gracefully instead of just stopping. (Related to Error Message UI bug).
-*   **BUGFIX (Fixed): Settings Infinite Reload (Vertex):** Identified root cause as missing backend handlers (`getVertexProjects`, `getVertexLocations`). Replaced dynamic fetching with a static data handler (`GetVertexStaticDataHandler`) providing locations and an empty project list, and updated frontend (`ProviderSettings.tsx`) to use it.
-*   **UI Improvement (Custom Select):** Created and enhanced a custom dropdown component (`CustomSelect.tsx`), moved to `components/ui/`. Integrated it into `ProviderSettings.tsx` for Vertex Location and into `ModelSelector.tsx` for Provider and Model selection. Component displays Name primary and ID secondary (optional). Input field displays selected option's Name. Supports filtering. Implemented keyboard navigation (Up/Down/Enter/Escape). Added logic for `allowCustomValue=false`: autocompletes on exact name match or single filter result on blur/enter, otherwise reverts input display to selected option's name (or clears if none selected).
-*   **Testing (Manual):** Thorough testing needed once critical bugs are fixed, including CustomSelect behavior (especially autocomplete/revert and keyboard nav).
+*   **Vertex AI Testing:** Need to test Vertex AI functionality thoroughly after Assistant refactor.
+*   **Vertex AI Dynamic Locations/Models (Deferred):** Dynamic fetching was reverted.
+*   **Vertex AI Error Handling:** Improve error handling.
+*   **BUG: Tool Call Spinner:** Spinner doesn't stop (likely upstream data issue).
 *   **Resume Image Upload (Backend & Full Test):** Review/update backend and test.
 *   **Compliance Review:** Apply `docs/general_guidelines.md`.
 *   **VS Code Tool Enhancements:** Implement remaining debug tools, enhance `runCommandTool`.
-*   **UI Refinements:** Ongoing task.
+*   **UI Refinements:** Ongoing task (e.g., welcome screen simplification, syntax highlighting theme matching).
 *   **Address Timeout (If Needed):** Monitor if timeouts occur.
+*   **Error Handling/Display:** Improve user feedback for backend errors (e.g., saving Assistant, sending message).
 
 ## Current Status
-*   **Major Refactoring Complete:** Unified state updates using JSON Patch, simplified optimistic UI handling.
-*   **Critical Bugs Persist:** The chat history clearing on send is the most critical issue blocking further testing. The missing model name on pending messages and lack of error display are also important UI bugs.
-*   Settings page stability needs re-verification after Extension Host restart.
+*   Major UI refactoring pass complete.
+*   Pivoted to Assistant-based architecture; Phase 1 (frontend types, component refactoring, placeholder UI) complete.
+*   Core chat functionality works with placeholder Assistant logic.
+*   Assistant CRUD backend handlers implemented and initial timeout issue resolved. Frontend store interaction needs testing/verification.

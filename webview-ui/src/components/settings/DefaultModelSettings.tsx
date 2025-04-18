@@ -1,62 +1,81 @@
-import { useCallback } from 'preact/hooks';
+import { useCallback, useMemo } from 'preact/hooks'; // Added useMemo
 import { JSX } from 'preact/jsx-runtime';
-import { useStore } from '@nanostores/react'; // Import useStore
-// import { requestData } from '../../utils/communication'; // Removed requestData
-import { $defaultConfig } from '../../stores/chatStores'; // Import fetcher store
-import { $setDefaultConfig } from '../../stores/settingsStores'; // Import mutation store
-import { ModelSelector } from '../ModelSelector';
-// Removed: import { useDefaultConfig } from '../../hooks/useDefaultConfig'; // Removed non-existent hook import
-// Removed: import { defaultConfigAtom } from '../../store/atoms';
+import { useStore } from '@nanostores/react';
+import { $defaultConfig } from '../../stores/chatStores';
+import { $setDefaultConfig } from '../../stores/settingsStores';
+import { CustomSelect } from '../ui/CustomSelect'; // Import CustomSelect
+import { Assistant } from '../../../../src/common/types'; // Import Assistant type
 
-export function DefaultModelSettings(): JSX.Element {
-    const defaultConfig = useStore($defaultConfig); // Use the fetcher store
-    const { mutate: setDefaultConfigMutate } = useStore($setDefaultConfig); // Remove unused loading state
-    const isLoadingConfig = defaultConfig === null; // Derive loading state
+// Renamed component
+export function DefaultAssistantSettings(): JSX.Element {
+    const defaultConfig = useStore($defaultConfig);
+    const { mutate: setDefaultConfigMutate } = useStore($setDefaultConfig);
+    const isLoadingConfig = defaultConfig === 'loading' || defaultConfig === null; // Updated loading check
 
-    const handleDefaultChatModelChange = useCallback(async (newProviderId: string | null, newModelId: string | null) => {
-        console.log(`[DefaultModelSettings] Calling mutation store to set default chat model: Provider=${newProviderId}, Model=${newModelId}`);
+    // TODO: Replace placeholder with Assistant store logic
+    const assistants = useMemo(() => {
+        console.log("TODO: Fetch assistants from store");
+        const exampleData: Assistant[] = [
+            { id: 'default-1', name: 'Default Assistant', description: 'General purpose assistant', modelProviderId: 'placeholder-provider', modelId: 'placeholder-model', createdAt: 0, lastModified: 0 },
+            { id: 'coder-py', name: 'Python Coder', description: 'Helps with Python code', modelProviderId: 'placeholder-provider', modelId: 'placeholder-model', createdAt: 0, lastModified: 0 },
+            { id: 'refactor-pro', name: 'Refactor Pro', description: 'Focuses on refactoring', modelProviderId: 'placeholder-provider', modelId: 'placeholder-model', createdAt: 0, lastModified: 0 },
+        ];
+        return exampleData;
+    }, []);
+    const isLoadingAssistants = false; // Placeholder
+
+    // Renamed handler and updated logic
+    const handleDefaultAssistantChange = useCallback(async (newAssistantId: string | null) => {
+        console.log(`[DefaultAssistantSettings] Calling mutation store to set default assistant: ID=${newAssistantId}`);
         try {
-            await setDefaultConfigMutate({ // Pass payload directly
-                defaultProviderId: newProviderId ?? undefined,
-                defaultModelId: newModelId ?? undefined
+            await setDefaultConfigMutate({
+                defaultAssistantId: newAssistantId ?? undefined // Set to undefined if null (meaning no default)
             });
-            console.log(`Default chat model update request sent.`);
-            // Update will happen via $defaultConfig subscription
+            console.log(`Default assistant update request sent.`);
         } catch (error) {
-             console.error(`Error setting default chat model via mutation store:`, error);
+             console.error(`Error setting default assistant via mutation store:`, error);
              // TODO: Display error to user
         }
-    }, [setDefaultConfigMutate]); // Depend on the mutate function
+    }, [setDefaultConfigMutate]);
 
     return (
         <section class="mb-8">
+            {/* Updated title and description */}
             <h3 class="text-xl font-semibold mb-4 text-[var(--vscode-foreground)] flex items-center gap-2">
-                <span class="i-carbon-model h-5 w-5 text-[var(--vscode-button-background)]"></span>
-                Default Models
+                <span class="i-carbon-user-avatar h-5 w-5 text-[var(--vscode-button-background)]"></span>
+                Default Assistant
             </h3>
             <p class="text-sm text-[var(--vscode-foreground)] opacity-70 mb-4">
-                Select the default AI models to be used for new chat sessions or when a chat is set to use defaults.
+                Select the default Assistant to be used for new chat sessions or when a chat is set to use defaults.
             </p>
             <div class="space-y-4">
-                <div class="p-4 border border-[var(--vscode-panel-border)] rounded-lg bg-[var(--vscode-editorWidget-background)] shadow-sm">
-                    {isLoadingConfig && (
+                {/* Removed border, shadow-sm */}
+                <div class="p-4 rounded-lg bg-[var(--vscode-editorWidget-background)]">
+                    {(isLoadingConfig || isLoadingAssistants) && ( // Check both loading states
                         <div class="flex items-center gap-2 text-sm text-[var(--vscode-foreground)] opacity-60">
                             <span class="i-carbon-rotate-clockwise animate-spin h-4 w-4"></span>
-                            <p>Loading default config...</p>
+                            <p>Loading configuration...</p>
                         </div>
                     )}
-                    {/* Render only when not loading and config is a valid object */}
-                    {!isLoadingConfig && defaultConfig && typeof defaultConfig === 'object' && (
-                        <ModelSelector
-                            labelPrefix="Default Chat"
-                            selectedProviderId={defaultConfig.defaultProviderId ?? null}
-                            selectedModelId={defaultConfig.defaultModelId ?? null}
-                            onModelChange={handleDefaultChatModelChange}
+                    {/* Render CustomSelect when not loading */}
+                    {!isLoadingConfig && !isLoadingAssistants && defaultConfig && typeof defaultConfig === 'object' && (
+                        <CustomSelect
+                            // Prepare options for CustomSelect: Add a "None" option
+                            groupedOptions={{
+                                '': [{ id: '', name: '-- None --' }], // Group for "None"
+                                'Assistants': assistants.map(a => ({ id: a.id, name: a.name })) // Group for actual assistants
+                            }}
+                            value={defaultConfig.defaultAssistantId ?? ''} // Use empty string for "None"
+                            onChange={(value) => handleDefaultAssistantChange(value || null)} // Pass null if empty string selected
+                            placeholder="Select Default Assistant"
+                            ariaLabel="Default Assistant Selector"
+                            allowCustomValue={false} // Don't allow custom values here
+                            showId={false} // Don't show ID in dropdown
                         />
                     )}
                     {/* Handle case where config is loaded but null/empty */}
-                    {!isLoadingConfig && (!defaultConfig || typeof defaultConfig !== 'object') && (
-                        <p class="text-sm text-[var(--vscode-foreground)] opacity-60">No default configuration set or invalid data.</p>
+                    {!isLoadingConfig && !isLoadingAssistants && (!defaultConfig || typeof defaultConfig !== 'object') && (
+                        <p class="text-sm text-[var(--vscode-foreground)] opacity-60">Default configuration not loaded.</p>
                     )}
                 </div>
                 {/* TODO: Add selectors for defaultImageModelId and defaultOptimizeModelId later */}

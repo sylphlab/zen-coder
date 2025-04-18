@@ -1,9 +1,10 @@
 import { useStore } from '@nanostores/preact';
 import { ComponentChild } from 'preact';
 // Removed useEffect, useRef
-import './app.css';
+// Removed import './app.css';
 import { SettingPage } from './pages/SettingPage';
 import { ChatPage } from './pages/ChatPage';
+import { ChatListPage } from './pages/ChatListPage'; // Import ChatListPage
 import { router } from './stores/router';
 
 export function App() {
@@ -33,6 +34,8 @@ export function App() {
         CurrentPage = <ChatPage key={chatId || 'new'} chatIdFromRoute={chatId} />;
     } else if (page.route === 'settings') {
         CurrentPage = <SettingPage />;
+    } else if (page.route === 'sessions') { // Add route for sessions
+        CurrentPage = <ChatListPage />;
     } else {
         // Fallback for unknown routes
         CurrentPage = <div class="p-6 text-center text-red-500">404: Page Not Found</div>;

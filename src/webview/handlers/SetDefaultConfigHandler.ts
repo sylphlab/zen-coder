@@ -23,19 +23,13 @@ export class SetDefaultConfigHandler implements RequestHandler {
             const config = vscode.workspace.getConfiguration('zencoder.defaults');
             const updates: Promise<void>[] = [];
 
-            // Prepare updates based on the payload, wrapping in Promise.resolve
-            if (configUpdate.defaultProviderId !== undefined) {
-                updates.push(Promise.resolve(config.update('defaultProviderId', configUpdate.defaultProviderId, vscode.ConfigurationTarget.Global)));
+            // Prepare update for defaultAssistantId
+            if (configUpdate.defaultAssistantId !== undefined) {
+                // Allow setting null or an empty string to clear the default
+                const valueToUpdate = configUpdate.defaultAssistantId === null ? undefined : configUpdate.defaultAssistantId;
+                updates.push(Promise.resolve(config.update('defaultAssistantId', valueToUpdate, vscode.ConfigurationTarget.Global)));
             }
-            if (configUpdate.defaultModelId !== undefined) {
-                updates.push(Promise.resolve(config.update('defaultModelId', configUpdate.defaultModelId, vscode.ConfigurationTarget.Global)));
-            }
-            if (configUpdate.defaultImageModelId !== undefined) {
-                updates.push(Promise.resolve(config.update('imageModelId', configUpdate.defaultImageModelId, vscode.ConfigurationTarget.Global)));
-            }
-            if (configUpdate.defaultOptimizeModelId !== undefined) {
-                updates.push(Promise.resolve(config.update('optimizeModelId', configUpdate.defaultOptimizeModelId, vscode.ConfigurationTarget.Global)));
-            }
+            // Removed updates for old provider/model properties
 
             // Wait for all updates to complete
             await Promise.all(updates);
@@ -44,11 +38,9 @@ export class SetDefaultConfigHandler implements RequestHandler {
             // --- Fetch the complete, updated config state ---
             // Re-read the configuration section after updates
             const updatedConfig = vscode.workspace.getConfiguration('zencoder.defaults');
+            // Read the updated defaultAssistantId
             const finalConfig: DefaultChatConfig = {
-                defaultProviderId: updatedConfig.get<string>('defaultProviderId'),
-                defaultModelId: updatedConfig.get<string>('defaultModelId'),
-                defaultImageModelId: updatedConfig.get<string>('imageModelId'),
-                defaultOptimizeModelId: updatedConfig.get<string>('optimizeModelId'),
+                defaultAssistantId: updatedConfig.get<string>('defaultAssistantId'),
             };
             console.log('[SetDefaultConfigHandler] Final config state after update:', finalConfig);
 

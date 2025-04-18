@@ -34,13 +34,7 @@ interface Ripple {
   scale: number;
 }
 
-// Modern loader with fluid animation
-const LoadingSpinner: FunctionalComponent = () => (
-  <div class="button-spinner">
-    <div class="spinner-ring"></div>
-    <div class="spinner-core"></div>
-  </div>
-);
+// Removed custom LoadingSpinner component
 
 // Enhanced button component with modern aesthetics
 const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -94,32 +88,36 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
     `;
 
     const elevationStyles = useMemo(() => {
+      // Removed shadow styles for 'raised' and 'floating' - defaulting to 'flat'
       switch (elevation) {
-        case 'raised': return 'shadow-sm hover:shadow transition-shadow duration-200';
-        case 'floating': return 'shadow-md hover:shadow-lg transition-shadow duration-200';
-        case 'flat': default: return '';
+        case 'raised':
+        case 'floating':
+        case 'flat':
+        default: return '';
       }
     }, [elevation]);
 
     const variantStyles = useMemo(() => {
       switch (variant) {
         case 'secondary':
+          // Removed button-gradient-secondary
           return 'bg-secondary text-secondary-foreground hover:bg-secondary/90 active:bg-secondary/95 ' +
-                 'dark:hover:bg-secondary/80 dark:active:bg-secondary/85 button-gradient-secondary';
+                 'dark:hover:bg-secondary/80 dark:active:bg-secondary/85';
         case 'outline':
-          return 'border border-input/80 bg-transparent hover:bg-accent/10 hover:border-input ' +
-                 'active:bg-accent/20 text-foreground backdrop-blur-[2px]';
+          // Removed border classes, using background change for hover/active
+          return 'bg-transparent hover:bg-accent/10 active:bg-accent/20 text-foreground';
         case 'ghost':
           return 'hover:bg-accent/10 active:bg-accent/20 text-foreground';
         case 'link':
           return 'text-primary underline-offset-4 hover:underline decoration-2 p-0 h-auto font-normal';
         case 'glass':
-          return 'backdrop-blur-md bg-white/10 dark:bg-black/20 border border-white/20 ' +
-                 'dark:border-white/10 text-foreground hover:bg-white/20 dark:hover:bg-black/30 ' +
-                 'active:bg-white/30 dark:active:bg-black/40 button-gradient-glass';
+          // Removed border classes and button-gradient-glass
+          return 'backdrop-blur-md bg-white/10 dark:bg-black/20 text-foreground hover:bg-white/20 dark:hover:bg-black/30 ' +
+                 'active:bg-white/30 dark:active:bg-black/40';
         case 'primary': default:
+          // Removed button-gradient-primary
           return 'bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 ' +
-                 'dark:hover:bg-primary/85 dark:active:bg-primary/90 button-gradient-primary';
+                 'dark:hover:bg-primary/85 dark:active:bg-primary/90';
       }
     }, [variant]);
 
@@ -191,7 +189,8 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
           </span>
           {loading && (
             <span class="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <LoadingSpinner />
+              {/* Replaced custom spinner with UnoCSS icon (corrected name) */}
+              <span class="i-carbon-circle-dash animate-spin h-4 w-4"></span>
             </span>
           )}
         </span>
@@ -202,24 +201,16 @@ const Button: FunctionalComponent<ButtonProps> = forwardRef<HTMLButtonElement, B
 
 const componentStyles = `
   .button { will-change: transform, opacity; transform: translateZ(0); backface-visibility: hidden; }
-  .button-gradient-primary { background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--primary, #3b82f6) 92%, white) 0%, var(--primary, #3b82f6) 50%, color-mix(in srgb, var(--primary, #3b82f6) 92%, black) 100%); background-position: calc(var(--hover-x, 50%) * 1%) calc(var(--hover-y, 50%) * 1%); background-size: 200% 200%; transition: background-position 0.5s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out; }
-  .button-gradient-secondary { background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--secondary, #475569) 92%, white) 0%, var(--secondary, #475569) 50%, color-mix(in srgb, var(--secondary, #475569) 92%, black) 100%); background-position: calc(var(--hover-x, 50%) * 1%) calc(var(--hover-y, 50%) * 1%); background-size: 200% 200%; transition: background-position 0.5s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out; }
-  .button-gradient-glass { background-image: linear-gradient(145deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.1) 50%, rgba(255, 255, 255, 0.05) 100%); background-position: calc(var(--hover-x, 50%) * 1%) calc(var(--hover-y, 50%) * 1%); background-size: 200% 200%; transition: background-position 0.5s ease-out, transform 0.15s ease-out, box-shadow 0.15s ease-out; }
+  /* Removed button-gradient-* styles */
   .ripple-element { position: absolute; border-radius: 50%; transform: scale(0); animation: ripple-animation 600ms cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none; z-index: 0; background-image: radial-gradient(circle, currentColor 0%, currentColor 20%, transparent 100%); }
   @keyframes ripple-animation { 0% { transform: scale(0); opacity: var(--ripple-opacity, 0.2); } 80% { opacity: 0; } 100% { transform: scale(2.5); opacity: 0; } }
-  .button-spinner { position: relative; width: 1.25em; height: 1.25em; min-width: 16px; min-height: 16px; }
+  /* Removed .button-spinner, .spinner-ring, .spinner-core styles */
   .content-container { min-height: 1.5em; display: grid; grid-template-areas: "content"; }
   .content-container > * { grid-area: content; }
   .button-content { box-sizing: border-box; max-width: 100%; }
-  .spinner-ring { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; opacity: 0.4; animation: spinner-rotate 1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite; }
-  .spinner-core { position: absolute; top: 25%; left: 25%; width: 50%; height: 50%; background-color: currentColor; border-radius: 50%; opacity: 0.7; animation: spinner-pulse 1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate; }
-  @keyframes spinner-rotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-  @keyframes spinner-pulse { 0% { transform: scale(0.8); opacity: 0.5; } 100% { transform: scale(1.1); opacity: 0.8; } }
-  @media (prefers-color-scheme: dark) {
-    .button-gradient-primary { background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--primary, #3b82f6) 90%, white) 0%, var(--primary, #3b82f6) 50%, color-mix(in srgb, var(--primary, #3b82f6) 90%, black) 100%); }
-    .button-gradient-secondary { background-image: linear-gradient(to bottom right, color-mix(in srgb, var(--secondary, #475569) 90%, white) 0%, var(--secondary, #475569) 50%, color-mix(in srgb, var(--secondary, #475569) 90%, black) 100%); }
-  }
-  @media (prefers-reduced-motion) { .button, .ripple-element, .spinner-ring, .spinner-core { transition: none !important; animation-duration: 0.001ms !important; } }
+  /* Removed spinner animations */
+  /* Removed dark mode gradient overrides */
+  @media (prefers-reduced-motion) { .button, .ripple-element { transition: none !important; animation-duration: 0.001ms !important; } } /* Removed spinner refs */
 `;
 
 let stylesInjected = false;

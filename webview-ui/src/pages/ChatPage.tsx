@@ -33,43 +33,27 @@ import { ConfirmationDialog } from '../components/ConfirmationDialog';
 import { useImageUpload } from '../hooks/useImageUpload';
 import { generateUniqueId } from '../utils/communication';
 import { Button } from '../components/ui/Button';
+// Removed ChatListPage import
 
-// Helper function to calculate effective config (Keep as is)
+// Helper function to calculate effective config (Updated for Assistant)
 const calculateEffectiveConfig = (chatSession: ChatSession | null | undefined, defaultConfig: DefaultChatConfig | null): ChatConfig => {
-    const baseDefaults: Partial<ChatConfig> = { useDefaults: true };
-    const effectiveDefaults = { ...baseDefaults, ...(defaultConfig ?? {}) };
-    if (!chatSession) return effectiveDefaults as ChatConfig;
+    const baseDefaults: ChatConfig = { useDefaults: true, assistantId: defaultConfig?.defaultAssistantId };
+    if (!chatSession) return baseDefaults;
+
     const chatConfig = chatSession.config;
     if (chatConfig.useDefaults) {
-        return {
-            ...effectiveDefaults,
-            ...chatConfig,
-            providerId: chatConfig.providerId ?? effectiveDefaults.defaultProviderId,
-            modelId: chatConfig.modelId ?? effectiveDefaults.defaultModelId,
-            useDefaults: true
-        } as ChatConfig;
+        // If chat uses defaults, return the base defaults (which includes defaultAssistantId)
+        return baseDefaults;
     } else {
+        // If chat has specific config, use its assistantId, otherwise fallback to defaultAssistantId
         return {
             useDefaults: false,
-            providerId: chatConfig.providerId ?? effectiveDefaults.defaultProviderId,
-            modelId: chatConfig.modelId ?? effectiveDefaults.defaultModelId,
+            assistantId: chatConfig.assistantId ?? defaultConfig?.defaultAssistantId,
         };
     }
 };
 
-// SVG Icons for minimalist header
-const ChatsIcon: FunctionalComponent<{ className?: string }> = ({ className = "h-5 w-5" }) => (
-    <svg class={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-);
-
-const SettingsIcon: FunctionalComponent<{ className?: string }> = ({ className = "h-5 w-5" }) => (
-    <svg class={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-);
+// Removed SVG Icon components - using UnoCSS icons directly
 
 // Restore chatIdFromRoute prop and router logic
 // Renamed component from ChatView to ChatPage
@@ -107,7 +91,7 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
 
     // --- State Management ---
     const [inputValue, _setInputValue] = useState('');
-    const [optimisticConfig, setOptimisticConfig] = useState<{ providerId: string | null; modelId: string | null } | null>(null);
+    // Removed optimisticConfig for provider/model
     const setInputValue = useCallback((value: string) => { _setInputValue(value); }, []);
 
     // Nanostores state
@@ -144,13 +128,37 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
     const defaultConfig = (defaultConfigStoreValue !== 'loading' && defaultConfigStoreValue !== 'error' && defaultConfigStoreValue !== null) ? defaultConfigStoreValue : null;
     const session = (currentChatSession !== 'loading' && currentChatSession !== null) ? currentChatSession : null;
     const effectiveConfig = useMemo(() => calculateEffectiveConfig(session, defaultConfig), [session, defaultConfig]);
-    const providerId = optimisticConfig?.providerId ?? effectiveConfig.providerId;
-    const modelId = optimisticConfig?.modelId ?? effectiveConfig.modelId;
+    const assistantId = effectiveConfig.assistantId;
+
+    // TODO: Fetch Assistant details based on assistantId
+    // This requires a new store and backend handler for assistants
+    const selectedAssistant = useMemo(() => {
+        if (!assistantId) return null;
+        // Placeholder: Replace with actual fetch logic using a store
+        console.log(`TODO: Fetch assistant details for ID: ${assistantId}`);
+        // Example placeholder structure
+        return {
+            id: assistantId,
+            name: `Assistant ${assistantId.substring(0, 4)}`, // Placeholder name
+            description: 'Placeholder description',
+            customInstructions: 'Placeholder instructions',
+            modelProviderId: 'placeholder-provider', // Placeholder
+            modelId: 'placeholder-model', // Placeholder
+            createdAt: 0,
+            lastModified: 0,
+        };
+    }, [assistantId]);
+
+    // Derive actual provider/model from the selected assistant
+    const actualProviderId = selectedAssistant?.modelProviderId;
+    const actualModelId = selectedAssistant?.modelId;
+    const assistantName = selectedAssistant?.name || (effectiveConfig.useDefaults ? 'Default Assistant' : 'Unknown Assistant');
+
 
     // Refs
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const [showClearConfirm, setShowClearConfirm] = useState(false);
+    // Removed showClearConfirm state
 
     // Custom Hooks
     const {
@@ -172,7 +180,8 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
 
     // --- Event Handlers ---
     const handleSend = useCallback(async () => {
-        if ((inputValue.trim() || selectedImages.length > 0) && !isSending && !isStreaming && providerId && modelId && chatId) {
+        // Use actualProviderId and actualModelId derived from selectedAssistant
+        if ((inputValue.trim() || selectedImages.length > 0) && !isSending && !isStreaming && actualProviderId && actualModelId && chatId) {
             const contentParts: UiMessageContentPart[] = selectedImages.map((img: SelectedImage) => ({ type: 'image', mediaType: img.mediaType ?? (img.data.startsWith('data:image/jpeg') ? 'image/jpeg' : 'image/png'), data: img.data.split(',')[1] } as UiImagePart));
             const optimisticContentParts: UiMessageContentPart[] = selectedImages.map((img: SelectedImage) => ({ type: 'image', mediaType: img.mediaType, data: img.data } as UiImagePart));
             if (inputValue.trim()) {
@@ -184,7 +193,8 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
             const tempId = generateUniqueId();
             const optimisticAssistantId = `pending-assistant-${timestamp}`;
             const optimisticUserMessage: UiMessage = { id: tempId, tempId: tempId, role: 'user', content: optimisticContentParts, timestamp: timestamp };
-            const optimisticPendingMessage: UiMessage = { id: optimisticAssistantId, role: 'assistant', content: [], timestamp: timestamp + 1, status: 'pending', providerId: providerId, providerName: session?.config?.providerName ?? providerId, modelId: modelId, modelName: session?.config?.modelName ?? modelId };
+            // Update pending message: Use actual IDs, remove provider/model names from config
+            const optimisticPendingMessage: UiMessage = { id: optimisticAssistantId, role: 'assistant', content: [], timestamp: timestamp + 1, status: 'pending', providerId: actualProviderId, modelId: actualModelId };
             const currentActualHistory = $activeChatHistory.getActualState();
             let optimisticState: UiMessage[] | null = Array.isArray(currentActualHistory) ? [...currentActualHistory, optimisticUserMessage, optimisticPendingMessage] : [optimisticUserMessage, optimisticPendingMessage];
 
@@ -192,29 +202,35 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
             clearSelectedImages();
             if (textareaRef.current) textareaRef.current.style.height = 'auto';
 
-            const backendPayload: SendMessagePayload = { chatId, content: contentParts, providerId, modelId, tempId };
+            // Update backend payload: Use actual IDs and pass assistantId
+            const backendPayload: SendMessagePayload = { chatId, content: contentParts, assistantId: assistantId, providerId: actualProviderId, modelId: actualModelId, tempId };
             try {
                 await sendMessageMutate(backendPayload, { optimisticState });
             } catch (error) { console.error(`Error sending message:`, error); }
+        } else {
+             console.warn("Send cancelled: Missing required info", { inputValue: !!inputValue.trim(), selectedImages: selectedImages.length, isSending, isStreaming, actualProviderId, actualModelId, chatId });
+             // TODO: Show user feedback if send fails due to missing info
         }
-    }, [ inputValue, selectedImages, isSending, isStreaming, chatId, providerId, modelId, setInputValue, clearSelectedImages, textareaRef, sendMessageMutate, session ]);
+    }, [ inputValue, selectedImages, isSending, isStreaming, chatId, assistantId, actualProviderId, actualModelId, setInputValue, clearSelectedImages, textareaRef, sendMessageMutate ]);
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey && !isSending && !isStreaming) { e.preventDefault(); handleSend(); } }, [handleSend, isSending, isStreaming]);
-    const confirmClearChat = useCallback(async () => { if (chatId) { setShowClearConfirm(false); try { await clearChatHistoryMutate({ chatId }); } catch (error) { console.error(`Error clearing chat history:`, error); } } }, [chatId, clearChatHistoryMutate]);
-    const cancelClearChat = useCallback(() => { setShowClearConfirm(false); }, []);
+    // Removed confirmClearChat and cancelClearChat handlers
     const handleSuggestedActionClick = useCallback(async (action: SuggestedAction) => {
-        if (!chatId || !providerId || !modelId) return;
+        // Use actualProviderId and actualModelId
+        if (!chatId || !actualProviderId || !actualModelId) return;
         try {
             switch (action.action_type) {
                 case 'send_message':
                     if (typeof action.value === 'string') {
                         const text = action.value;
                         const tempId = generateUniqueId();
-                        const payload: SendMessagePayload = { chatId, content: [{ type: 'text', text: text }], providerId, modelId, tempId };
+                        // Update payload: Use actual IDs and pass assistantId
+                        const payload: SendMessagePayload = { chatId, content: [{ type: 'text', text: text }], assistantId: assistantId, providerId: actualProviderId, modelId: actualModelId, tempId };
                         const currentActualHistoryAction = $activeChatHistory.getActualState();
                         let optimisticStateAction: UiMessage[] | null = null;
                         const optimisticUserMessageAction: UiMessage = { id: tempId, tempId: tempId, role: 'user', content: [{ type: 'text', text: text }], timestamp: Date.now() };
-                        const optimisticPendingMessageAction: UiMessage = { id: `pending-assistant-${Date.now()}`, role: 'assistant', content: [], timestamp: Date.now() + 1, status: 'pending', providerId: providerId, providerName: session?.config?.providerName ?? providerId, modelId: modelId, modelName: session?.config?.modelName ?? modelId };
+                        // Update pending message: Use actual IDs, remove provider/model names from config
+                        const optimisticPendingMessageAction: UiMessage = { id: `pending-assistant-${Date.now()}`, role: 'assistant', content: [], timestamp: Date.now() + 1, status: 'pending', providerId: actualProviderId, modelId: actualModelId };
                         if (Array.isArray(currentActualHistoryAction)) { optimisticStateAction = [...currentActualHistoryAction, optimisticUserMessageAction, optimisticPendingMessageAction]; } else { optimisticStateAction = [optimisticUserMessageAction, optimisticPendingMessageAction]; }
                         await sendMessageMutate(payload, { optimisticState: optimisticStateAction });
                     }
@@ -231,16 +247,22 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
                     }
                     break;
             }
-        } catch (error) { console.error(`Error handling suggested action:`, error); }
-    }, [ chatId, providerId, modelId, setInputValue, textareaRef, sendMessageMutate, executeToolActionMutate, session ]);
+    } catch (error) { console.error(`Error handling suggested action:`, error); }
+}, [ chatId, assistantId, actualProviderId, actualModelId, setInputValue, textareaRef, sendMessageMutate, executeToolActionMutate ]);
 
     const handleStopGeneration = useCallback(async () => { try { await stopGenerationMutate(); } catch (error) { console.error('Error stopping generation:', error); } }, [stopGenerationMutate]);
 
-    const handleChatModelChange = useCallback(async (newProviderId: string | null, newModelId: string | null) => {
+    // Handler for when the assistant selection changes in InputArea
+    const handleAssistantChange = useCallback(async (newAssistantId: string | null) => {
         if (chatId) {
-            setOptimisticConfig({ providerId: newProviderId, modelId: newModelId });
-            const cfg: Partial<ChatConfig> = { providerId: newProviderId ?? undefined, modelId: newModelId ?? undefined, useDefaults: false };
+            // Determine if we are setting a specific assistant or reverting to default
+            const useDefaults = newAssistantId === null;
+            const cfg: Partial<ChatConfig> = {
+                assistantId: useDefaults ? undefined : newAssistantId, // Set ID only if not using default
+                useDefaults: useDefaults
+            };
             try {
+                // Optimistic update for session list (similar to old model change)
                 const currentSessions = $chatSessions.getActualState();
                 let optimisticStateSessions: ChatSession[] | null = null;
                 if (Array.isArray(currentSessions)) {
@@ -248,16 +270,20 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
                     if (sessionIndex !== -1) {
                         optimisticStateSessions = JSON.parse(JSON.stringify(currentSessions));
                         if (optimisticStateSessions) {
-                            optimisticStateSessions[sessionIndex].config.providerId = newProviderId ?? undefined;
-                            optimisticStateSessions[sessionIndex].config.modelId = newModelId ?? undefined;
-                            optimisticStateSessions[sessionIndex].config.useDefaults = false;
+                            optimisticStateSessions[sessionIndex].config.assistantId = useDefaults ? undefined : newAssistantId;
+                            optimisticStateSessions[sessionIndex].config.useDefaults = useDefaults;
                             optimisticStateSessions[sessionIndex].lastModified = Date.now();
                             optimisticStateSessions.sort((a, b) => b.lastModified - a.lastModified);
                         }
                     } else { optimisticStateSessions = currentSessions; }
                 }
+                // Call the mutation store
                 await updateChatConfigMutate({ chatId: chatId, config: cfg }, { optimisticState: optimisticStateSessions });
-            } catch (e) { console.error(`Error updating chat config:`, e); setOptimisticConfig(null); }
+                console.log(`Chat config updated for ${chatId}: Assistant set to ${newAssistantId ?? 'Default'}`);
+            } catch (e) {
+                console.error(`Error updating chat config for assistant change:`, e);
+                // TODO: Revert optimistic update? Show error?
+            }
         }
     }, [chatId, updateChatConfigMutate]);
 
@@ -282,8 +308,8 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
         } catch (error) { console.error(`Error deleting message:`, error); }
     }, [chatId, deleteMessageMutate]);
 
-    // Restore header button handlers
-    const handleChatsClick = useCallback(() => router.open('/'), []);
+    // Update handleChatsClick to navigate to /sessions
+    const handleChatsClick = useCallback(() => router.open('/sessions'), []);
     const handleSettingsClick = useCallback(() => router.open('/settings'), []);
 
     // --- Render Logic ---
@@ -301,10 +327,8 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
         return (
             <div class="flex flex-col h-full items-center justify-center">
                 <div class="text-gray-500 dark:text-gray-400 flex items-center space-x-2">
-                    <svg class="animate-spin h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    {/* Corrected icon name */}
+                    <span class="i-carbon-circle-dash animate-spin h-5 w-5 text-[var(--vscode-foreground)] opacity-75"></span>
                     <span>Loading chat...</span>
                 </div>
             </div>
@@ -314,11 +338,9 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
     // Show specific error only if history fetch failed
     if (historyLoadError) {
          return (
-             <div class="flex flex-col h-full items-center justify-center text-rose-500">
+             <div class="flex flex-col h-full items-center justify-center text-[var(--vscode-errorForeground)]">
                  <div class="flex items-center space-x-2">
-                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                     </svg>
+                     <span class="i-carbon-warning-alt h-5 w-5"></span>
                      <span>Error loading chat history</span>
                  </div>
              </div>
@@ -332,6 +354,7 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
     const currentSuggestedActionsMap = suggestedActionsMap;
 
     return (
+        // Restored original single-column layout
         <div class="flex flex-col h-full">
             {/* Simple minimalist header - just back button and chat name */}
             <div class="flex justify-between items-center px-4 py-2 flex-shrink-0 bg-[var(--vscode-editor-background)]">
@@ -340,11 +363,14 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
                     class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[var(--vscode-button-hoverBackground)] transition-colors"
                     aria-label="Back to chats"
                 >
+                    {/* Removed display: block */}
                     <span class="i-carbon-chevron-left h-5 w-5 text-[var(--vscode-foreground)]"></span>
                 </button>
                 
-                <div class="absolute left-1/2 transform -translate-x-1/2 text-sm text-[var(--vscode-foreground)] opacity-60">
-                    {session?.name || 'New Chat'}
+                {/* Display Assistant Name in Header */}
+                <div class="absolute left-1/2 transform -translate-x-1/2 text-sm text-[var(--vscode-foreground)] opacity-80 font-medium flex items-center gap-1" title={assistantName}>
+                     <span class="i-carbon-user-avatar h-3.5 w-3.5 opacity-70"></span> {/* TODO: Use Assistant avatar */}
+                     <span class="truncate max-w-xs">{assistantName}</span>
                 </div>
                 
                 <button
@@ -352,6 +378,7 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
                     class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-[var(--vscode-button-hoverBackground)] transition-colors"
                     title="Settings"
                 >
+                    {/* Removed display: block */}
                     <span class="i-carbon-settings-adjust h-4.5 w-4.5 text-[var(--vscode-foreground)] opacity-70"></span>
                 </button>
             </div>
@@ -375,34 +402,36 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
                     <div class="mb-3 flex flex-wrap gap-2">
                         <button
                             onClick={() => setInputValue("Explain this code to me")}
-                            class="px-3 py-1.5 rounded-full text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
+                            class="px-3 py-1 rounded-md text-xs bg-vscode-button-secondary-background text-vscode-button-secondary-foreground hover:bg-opacity-75 transition-colors"
                         >
                             Explain code
                         </button>
                         <button
                             onClick={() => setInputValue("Fix bugs in this code")}
-                            class="px-3 py-1.5 rounded-full text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
+                            class="px-3 py-1 rounded-md text-xs bg-vscode-button-secondary-background text-vscode-button-secondary-foreground hover:bg-opacity-75 transition-colors"
                         >
                             Debug this
                         </button>
                         <button
                             onClick={() => setInputValue("Add tests for this function")}
-                            class="px-3 py-1.5 rounded-full text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
+                            class="px-3 py-1 rounded-md text-xs bg-vscode-button-secondary-background text-vscode-button-secondary-foreground hover:bg-opacity-75 transition-colors"
                         >
                             Write tests
                         </button>
                         <button
                             onClick={() => setInputValue("Optimize this code")}
-                            class="px-3 py-1.5 rounded-full text-xs bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] transition-colors"
+                            class="px-3 py-1 rounded-md text-xs bg-vscode-button-secondary-background text-vscode-button-secondary-foreground hover:bg-opacity-75 transition-colors"
                         >
                             Optimize
                         </button>
                     </div>
                 )}
                 
-                <InputArea
-                    className="border border-[var(--vscode-input-border)] rounded-lg shadow-sm"
-                    handleKeyDown={handleKeyDown}
+                {/* Wrap InputArea and Clear button in a group */}
+                <div class="relative group">
+                    <InputArea
+                        className="" // Removed border, shadow, rounded-lg for borderless look
+                        handleKeyDown={handleKeyDown}
                     handleSend={handleSend}
                     selectedImages={selectedImages}
                     handleImageFileChange={handleImageFileChange}
@@ -411,36 +440,21 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
                     removeSelectedImage={removeSelectedImage}
                     setSelectedImages={setSelectedImages}
                     handleStopGeneration={handleStopGeneration}
-                    selectedProviderId={providerId ?? null}
-                    selectedModelId={modelId ?? null}
-                    onModelChange={handleChatModelChange}
+                    // Pass assistantId and the new handler
+                    selectedAssistantId={assistantId ?? null}
+                    onAssistantChange={handleAssistantChange}
+                    // Ensure all required props are passed
                     inputValue={inputValue}
                     setInputValue={setInputValue}
                     isStreaming={isStreaming}
                     textareaRef={textareaRef}
                     /* No useAtMention prop since it's not defined in InputArea */
-                />
-                
-                {/* Clear conversation button - subtle but accessible */}
-                <div class="mt-3 text-center">
-                    <button
-                        onClick={() => setShowClearConfirm(true)}
-                        class="text-xs text-[var(--vscode-descriptionForeground)] hover:text-[var(--vscode-foreground)] transition-colors"
-                    >
-                        Clear conversation
-                    </button>
-                </div>
+                    />
+                    {/* Removed Clear conversation button and its wrapper div */}
+                </div> {/* Close group wrapper */}
             </div>
             
-            {/* Confirmation Dialog */}
-            <ConfirmationDialog
-                show={showClearConfirm}
-                title="Confirm Clear History"
-                message="Are you sure you want to clear the history for this chat? This cannot be undone."
-                onCancel={cancelClearChat}
-                onConfirm={confirmClearChat}
-                confirmText="Confirm Clear"
-            />
-        </div>
+            {/* Removed Confirmation Dialog */}
+        </div> // Close main flex-col div
     );
 };
