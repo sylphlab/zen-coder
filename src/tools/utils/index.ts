@@ -5,3 +5,4 @@ export * from './calculateHashTool'; // Replaces md5Hash and sha256Hash
 export { uuidGenerateTool } from './uuidGenerate'; // Only export the tool definition
 export * from './jsonParse';
 export * from './jsonStringify';
+export * from './waitTool';
