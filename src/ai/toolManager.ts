@@ -5,55 +5,44 @@ import { allTools as standardToolsMap, ToolName as StandardToolName } from '../t
 import { McpManager } from './mcpManager';
 
 // Define standard tool categories using the correct exported tool names
+// Define standard tool categories using the correct exported tool names after refactoring
 const STANDARD_TOOL_CATEGORIES: { [key in StandardToolName]?: string } = {
-    // Filesystem
+    // Filesystem (Refactored)
     readFilesTool: 'filesystem',
     writeFilesTool: 'filesystem',
     listFilesTool: 'filesystem',
     createFolderTool: 'filesystem',
     statItemsTool: 'filesystem',
-    deleteItemsTool: 'filesystem',
-    moveRenameTool: 'filesystem',
-    copyFileTool: 'filesystem',
-    copyFolderTool: 'filesystem',
+    deleteItemsTool: 'filesystem', // Replaced deleteFile/deleteFolder
+    copyItemsTool: 'filesystem', // Replaced copyFile/copyFolder
+    moveRenameItemsTool: 'filesystem', // Replaced moveRename
     editFileTool: 'filesystem',
     searchContentTool: 'filesystem',
     replaceContentTool: 'filesystem',
-    // VS Code Interaction
-    getOpenTabsTool: 'vscode',
+    // VS Code Interaction (Refactored & Added)
     getActiveEditorContextTool: 'vscode',
     replaceInActiveEditorTool: 'vscode',
-    formatDocumentTool: 'vscode',
-    saveActiveFileTool: 'vscode',
-    closeActiveFileTool: 'vscode',
-    openFileTool: 'vscode',
-    goToDefinitionTool: 'vscode',
-    findReferencesTool: 'vscode',
-    renameSymbolTool: 'vscode',
+    getActiveTerminalsTool: 'vscode', // Kept in vscode
     getConfigurationTool: 'vscode',
     startDebuggingTool: 'vscode',
     stopDebuggingTool: 'vscode',
-    debugStepOverTool: 'vscode',
-    debugStepIntoTool: 'vscode',
-    debugStepOutTool: 'vscode',
     addBreakpointsTool: 'vscode',
     removeBreakpointsTool: 'vscode',
-    // Utils
+    getDiagnosticsTool: 'vscode', // New
+    getCodeActionsTool: 'vscode', // New
+    applyCodeActionTool: 'vscode', // New
+    findWorkspaceSymbolsTool: 'vscode', // New
+    findDocumentSymbolsTool: 'vscode', // New
+    // Utils (Refactored & Added)
     fetchUrlTool: 'utils',
     base64EncodeTool: 'utils',
     base64DecodeTool: 'utils',
-    md5HashTool: 'utils',
-    sha256HashTool: 'utils',
+    calculateHashTool: 'utils', // Replaced md5/sha256
     uuidGenerateTool: 'utils',
     jsonParseTool: 'utils',
     jsonStringifyTool: 'utils',
-    // System
-    getOsInfoTool: 'system',
-    getCurrentTimeTool: 'system',
-    getTimezoneTool: 'system',
-    getPublicIpTool: 'system',
-    getActiveTerminalsTool: 'system',
-    runCommandTool: 'system',
+    waitTool: 'utils', // New
+    // System category removed as tools were redundant with context info
 };
 
 // Default status if not specified in config
@@ -77,7 +66,7 @@ export class ToolManager {
         const authConfig = this._getToolAuthConfig();
 
         // 1. Process Standard Tools
-        const standardToolNames = Object.keys(standardToolsMap) as StandardToolName[];
+        const standardToolNames = Object.keys(standardToolsMap); // Removed 'as StandardToolName[]'
         standardToolNames.forEach(toolName => {
             const toolDefinition = standardToolsMap[toolName];
             if (!toolDefinition) { return; }
@@ -206,21 +195,25 @@ export class ToolManager {
 
 
         // 1. Process Standard Tools
-        const standardToolNames = Object.keys(standardToolsMap) as StandardToolName[];
-        for (const toolName of standardToolNames) {
+        const standardToolNames = Object.keys(standardToolsMap); // Ensure this is string[]
+        for (const toolNameString of standardToolNames) {
+            // Need to cast back to StandardToolName for map/category lookup if necessary,
+            // but use toolNameString for indexing overrides and assigning id/name.
+            const toolName = toolNameString as StandardToolName;
             const toolDefinition = standardToolsMap[toolName];
             if (!toolDefinition) { continue; }
 
-            const categoryId = this._getStandardToolCategory(toolName); // e.g., 'filesystem'
-            const categoryName = categoryId.charAt(0).toUpperCase() + categoryId.slice(1); // e.g., 'Filesystem'
+            const categoryId = this._getStandardToolCategory(toolName); // Use original type for category lookup
+            const categoryName = categoryId.charAt(0).toUpperCase() + categoryId.slice(1);
             const category = getOrCreateCategory(categoryId, categoryName, DEFAULT_CATEGORY_STATUS);
 
-            const configuredStatus = authConfig.overrides?.[toolName] ?? DEFAULT_TOOL_STATUS;
+            // Use the string version for indexing the overrides map
+            const configuredStatus = authConfig.overrides?.[toolNameString] ?? DEFAULT_TOOL_STATUS;
             const resolvedStatus = this._resolveToolStatus(configuredStatus, category.status);
 
             category.tools.push({
-                id: toolName,
-                name: toolName, // Use the internal name for now
+                id: toolNameString, // Use string for ID
+                name: toolNameString, // Use string for name
                 description: toolDefinition.description,
                 status: configuredStatus,
                 resolvedStatus: resolvedStatus,
