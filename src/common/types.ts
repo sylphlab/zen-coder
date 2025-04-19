@@ -456,7 +456,7 @@ export interface SendMessagePayload {
   chatId: string;
   content: UiMessageContentPart[];
   tempId: string; // Temporary ID for optimistic UI
-  assistantId?: string; // Optional: ID of the assistant being used
+  assistantId?: string | null; // Optional: ID of the assistant being used (allow null for default)
   // Provider/Model might still be needed if not using an assistant or for backend resolution
   providerId?: string;
   modelId?: string;

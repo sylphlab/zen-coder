@@ -11,7 +11,7 @@ import {
     $stopGeneration,
     $updateChatConfig,
     $isStreamingResponse,
-    SendMessagePayload,
+    // SendMessagePayload removed from here
     $chatSessions
 } from '../stores/chatStores';
 import { $activeChatHistory, $activeChatSession } from '../stores/activeChatHistoryStore';
@@ -24,15 +24,18 @@ import {
     UiTextMessagePart,
     ChatSession,
     DefaultChatConfig,
-    UiMessage
+    UiMessage,
+    SendMessagePayload // Import SendMessagePayload from correct location
 } from '../../../src/common/types';
 // Updated import paths after moving from components/ to pages/
 import { MessagesArea } from '../components/MessagesArea';
 import { InputArea, SelectedImage } from '../components/InputArea';
-import { ConfirmationDialog } from '../components/ConfirmationDialog';
+import { useAssistantStore } from '../stores/assistantStores'; // Import assistant store
+// Removed unused ConfirmationDialog import (Already removed?)
+// Removed duplicate import
 import { useImageUpload } from '../hooks/useImageUpload';
 import { generateUniqueId } from '../utils/communication';
-import { Button } from '../components/ui/Button';
+// Removed unused Button import (Already removed?)
 // Removed ChatListPage import
 
 // Helper function to calculate effective config (Updated for Assistant)
@@ -103,7 +106,7 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
     // Removed useEffect for manual store triggering - relying on stores reacting to router change
     const defaultConfigStoreValue = useStore($defaultConfig);
     const { mutate: sendMessageMutate, loading: isSending } = useStore($sendMessage);
-    const { mutate: clearChatHistoryMutate } = useStore($clearChatHistory);
+    // Removed unused clearChatHistoryMutate
     const { mutate: executeToolActionMutate } = useStore($executeToolAction);
     const { mutate: stopGenerationMutate } = useStore($stopGeneration);
     const { mutate: updateChatConfigMutate } = useStore($updateChatConfig);
@@ -122,7 +125,7 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
     // Removed duplicate isHistoryLoading declaration below
     const historyLoadError = messagesState === 'error';
     // Treat session === null after loading as "not found / new chat", not necessarily an error
-    const isNewChatScenario = !isLoadingSessionData && currentChatSession === null && !historyLoadError;
+    // Removed unused isNewChatScenario
     // Messages are empty if loading, error, null, or explicitly empty array
     const messages = (isHistoryLoading || historyLoadError || messagesState === null || !Array.isArray(messagesState)) ? [] : messagesState;
     const defaultConfig = (defaultConfigStoreValue !== 'loading' && defaultConfigStoreValue !== 'error' && defaultConfigStoreValue !== null) ? defaultConfigStoreValue : null;
@@ -130,30 +133,30 @@ export const ChatPage: FunctionalComponent<{ chatIdFromRoute?: string }> = ({ ch
     const effectiveConfig = useMemo(() => calculateEffectiveConfig(session, defaultConfig), [session, defaultConfig]);
     const assistantId = effectiveConfig.assistantId;
 
-    // TODO: Fetch Assistant details based on assistantId
-    // This requires a new store and backend handler for assistants
+    // Get assistant details from the store
+    const { assistantMap } = useAssistantStore.getState(); // Get map directly for memo
     const selectedAssistant = useMemo(() => {
         if (!assistantId) return null;
-        // Placeholder: Replace with actual fetch logic using a store
-        console.log(`TODO: Fetch assistant details for ID: ${assistantId}`);
-        // Example placeholder structure
-        return {
-            id: assistantId,
-            name: `Assistant ${assistantId.substring(0, 4)}`, // Placeholder name
-            description: 'Placeholder description',
-            customInstructions: 'Placeholder instructions',
-            modelProviderId: 'placeholder-provider', // Placeholder
-            modelId: 'placeholder-model', // Placeholder
-            createdAt: 0,
-            lastModified: 0,
-        };
-    }, [assistantId]);
+        // Fetch from the assistantMap in the store
+        const assistant = assistantMap[assistantId];
+        if (!assistant) {
+            console.warn(`[ChatPage] Assistant with ID ${assistantId} not found in store map.`);
+            // Return a minimal placeholder or null if not found
+            return null;
+            // Or return a placeholder structure if needed for downstream logic:
+            // return { id: assistantId, name: 'Unknown Assistant', description: '', instructions: '', modelConfig: { providerId: '', modelId: '' }, createdAt: '', updatedAt: '' };
+        }
+        return assistant;
+    }, [assistantId, assistantMap]); // Depend on assistantId and the map itself
+
+
+
 
     // Derive actual provider/model from the selected assistant
-    const actualProviderId = selectedAssistant?.modelProviderId;
-    const actualModelId = selectedAssistant?.modelId;
+    const actualProviderId = selectedAssistant?.modelConfig.providerId; // Access via modelConfig
+    const actualModelId = selectedAssistant?.modelConfig.modelId; // Access via modelConfig
     const assistantName = selectedAssistant?.name || (effectiveConfig.useDefaults ? 'Default Assistant' : 'Unknown Assistant');
-
+    // Removed customInstructions from here, it's resolved later if needed
 
     // Refs
     const messagesEndRef = useRef<null | HTMLDivElement>(null);

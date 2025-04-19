@@ -1,8 +1,8 @@
 import { FunctionalComponent } from 'preact';
-import { useState, useRef, useEffect, useCallback, useMemo } from 'preact/hooks'; // Ensure useMemo is imported
-import { useStore } from '@nanostores/react';
-// Removed provider/model store imports
-import { Button } from './ui/Button';
+import { useState, useRef, useEffect, useCallback } from 'preact/hooks'; // Removed useMemo
+// Removed useStore import if not used elsewhere, keep if needed for other stores
+import { useAssistantStore } from '../stores/assistantStores'; // Corrected import path
+// Removed unused Button import
 import { JSX } from 'preact/jsx-runtime';
 import { Assistant } from '../../../src/common/types'; // Import Assistant type
 
@@ -55,19 +55,19 @@ export const InputArea: FunctionalComponent<InputAreaProps> = ({
     const [dropdownFilter, setDropdownFilter] = useState('');
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // TODO: Replace placeholder with Assistant store logic
-    const assistants = useMemo(() => {
-        console.log("TODO: Fetch assistants from store");
-        // Example data structure matching Assistant type
-        const exampleData: Assistant[] = [
-            { id: 'default-1', name: 'Default Assistant', description: 'General purpose assistant', modelProviderId: 'placeholder-provider', modelId: 'placeholder-model', createdAt: 0, lastModified: 0 },
-            { id: 'coder-py', name: 'Python Coder', description: 'Helps with Python code', modelProviderId: 'placeholder-provider', modelId: 'placeholder-model', createdAt: 0, lastModified: 0 },
-            { id: 'refactor-pro', name: 'Refactor Pro', description: 'Focuses on refactoring', modelProviderId: 'placeholder-provider', modelId: 'placeholder-model', createdAt: 0, lastModified: 0 },
-        ];
-        return exampleData;
-    }, []);
-    const isLoadingAssistants = false; // Placeholder
-    const assistantsError = null; // Placeholder
+    // Use the Assistant store
+    const { assistants, isLoading: isLoadingAssistants, error: assistantsError, actions: assistantActions } = useAssistantStore();
+
+    // Effect to fetch assistants on mount
+    useEffect(() => {
+        assistantActions.fetchAssistants();
+    }, [assistantActions]); // Dependency array ensures it runs once on mount
+
+    // Removed placeholder useMemo and loading/error states
+
+
+
+
 
     // Auto-resize textarea functionality
     const handleTextAreaChange = (e: Event) => {

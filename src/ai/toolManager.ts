@@ -42,7 +42,7 @@ const STANDARD_TOOL_CATEGORIES: { [key in StandardToolName]?: string } = {
     jsonParseTool: 'utils',
     jsonStringifyTool: 'utils',
     waitTool: 'utils', // New
-    // System category removed as tools were redundant with context info
+    // System category tools were removed
 };
 
 // Default status if not specified in config
@@ -67,13 +67,14 @@ export class ToolManager {
 
         // 1. Process Standard Tools
         const standardToolNames = Object.keys(standardToolsMap); // Removed 'as StandardToolName[]'
-        standardToolNames.forEach(toolName => {
-            const toolDefinition = standardToolsMap[toolName];
+        standardToolNames.forEach(toolNameString => {
+            const toolName = toolNameString as StandardToolName; // Cast to specific type
+            const toolDefinition = standardToolsMap[toolName]; // Use casted name for indexing
             if (!toolDefinition) { return; }
-            const categoryId = this._getStandardToolCategory(toolName);
-            const enabled = this._isToolEffectivelyEnabled(toolName, categoryId, null, authConfig);
+            const categoryId = this._getStandardToolCategory(toolName); // Use casted name for category lookup
+            const enabled = this._isToolEffectivelyEnabled(toolNameString, categoryId, null, authConfig); // Use string for ID check
             if (enabled) {
-                finalTools[toolName] = toolDefinition;
+                finalTools[toolNameString] = toolDefinition; // Use string for final key
             }
         });
 

@@ -1,28 +1,28 @@
-import { useCallback, useMemo } from 'preact/hooks'; // Added useMemo
+import { useCallback, useMemo, useEffect } from 'preact/hooks'; // Added useEffect
 import { JSX } from 'preact/jsx-runtime';
 import { useStore } from '@nanostores/react';
 import { $defaultConfig } from '../../stores/chatStores';
 import { $setDefaultConfig } from '../../stores/settingsStores';
 import { CustomSelect } from '../ui/CustomSelect'; // Import CustomSelect
 import { Assistant } from '../../../../src/common/types'; // Import Assistant type
-
+import { useAssistantStore } from '../../stores/assistantStores'; // Import the assistant store
 // Renamed component
 export function DefaultAssistantSettings(): JSX.Element {
     const defaultConfig = useStore($defaultConfig);
     const { mutate: setDefaultConfigMutate } = useStore($setDefaultConfig);
     const isLoadingConfig = defaultConfig === 'loading' || defaultConfig === null; // Updated loading check
 
-    // TODO: Replace placeholder with Assistant store logic
-    const assistants = useMemo(() => {
-        console.log("TODO: Fetch assistants from store");
-        const exampleData: Assistant[] = [
-            { id: 'default-1', name: 'Default Assistant', description: 'General purpose assistant', modelProviderId: 'placeholder-provider', modelId: 'placeholder-model', createdAt: 0, lastModified: 0 },
-            { id: 'coder-py', name: 'Python Coder', description: 'Helps with Python code', modelProviderId: 'placeholder-provider', modelId: 'placeholder-model', createdAt: 0, lastModified: 0 },
-            { id: 'refactor-pro', name: 'Refactor Pro', description: 'Focuses on refactoring', modelProviderId: 'placeholder-provider', modelId: 'placeholder-model', createdAt: 0, lastModified: 0 },
-        ];
-        return exampleData;
-    }, []);
-    const isLoadingAssistants = false; // Placeholder
+    // Use the Assistant store
+    const { assistants, isLoading: isLoadingAssistants, actions: assistantActions } = useAssistantStore();
+
+    // Effect to fetch assistants on mount
+    useEffect(() => {
+        assistantActions.fetchAssistants();
+    }, [assistantActions]); // Dependency array ensures it runs once on mount
+
+    // Removed placeholder useMemo and loading state
+
+
 
     // Renamed handler and updated logic
     const handleDefaultAssistantChange = useCallback(async (newAssistantId: string | null) => {

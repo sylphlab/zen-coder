@@ -30,9 +30,18 @@ export class AssistantManager {
             await vscode.workspace.fs.createDirectory(this.storageUri);
             logDebug(`AssistantManager: Storage directory ensured at ${this.storageUri.fsPath}`);
             await this.loadAssistants(); // Load existing assistants
-            await this.ensureDefaultAssistantExists(); // Add check for default assistant
+
+            // Ensure default exists and check if save was attempted and failed
+            const saveAttemptResult = await this.ensureDefaultAssistantExists();
+            if (saveAttemptResult === false) { // Explicitly check for false (save failed)
+                 // If the save failed, we consider initialization failed.
+                 throw new Error('Failed to save the initial default assistant.');
+            }
+
         } catch (error: any) {
             logError('AssistantManager: Failed to initialize storage or load/create assistants.', error);
+            // Re-throw the error to ensure the initializationPromise rejects
+            throw error;
             // Allow initialization to "complete" but in a potentially empty state
             // The error is logged, subsequent operations might fail if load failed badly
         }
@@ -119,7 +128,7 @@ export class AssistantManager {
     }
 
     // Ensure a default assistant exists if none were loaded
-    private async ensureDefaultAssistantExists(): Promise<void> {
+    private async ensureDefaultAssistantExists(): Promise<boolean | void> { // Allow boolean return
         if (this.assistants.size === 0) {
             logDebug('AssistantManager: No assistants found, creating default assistant.');
             const defaultId = uuidv4(); // Generate ID for the default
@@ -151,12 +160,13 @@ export class AssistantManager {
                  // Remove from map if save failed?
                  this.assistants.delete(defaultId);
             }
+            return saved; // Return the save status
         }
     }
 
     // Safer save: Write to temp/backup, then rename/overwrite main file
     private async saveAssistants(): Promise<boolean> {
-        await this.ensureInitialized(); // Ensure init is done before saving
+        // await this.ensureInitialized(); // REMOVED: Causes deadlock during initialization
         const filePath = this.getFilePath();
         const backupFilePath = this.getFilePath(true);
         if (!filePath || !backupFilePath) {
@@ -170,15 +180,31 @@ export class AssistantManager {
             const fileContent = Buffer.from(JSON.stringify(assistantsArray, null, 2), 'utf-8');
 
             // 1. Write to backup file first
-            await vscode.workspace.fs.writeFile(backupFilePath, fileContent);
+            try {
+                await vscode.workspace.fs.writeFile(backupFilePath, fileContent);
+                logDebug(`AssistantManager: Successfully wrote backup file: ${backupFilePath.fsPath}`);
+            } catch (backupWriteError) {
+                 logError(`AssistantManager: Failed to write backup file ${backupFilePath.fsPath}.`, backupWriteError);
+                 // Decide if we should proceed to write the main file or fail here
+                 // For now, let's try writing the main file anyway, but log the backup failure.
+                 // Consider returning false immediately in a stricter implementation.
+            }
 
             // 2. Overwrite main file
-            await vscode.workspace.fs.writeFile(filePath, fileContent);
+            try {
+                await vscode.workspace.fs.writeFile(filePath, fileContent);
+                logDebug(`AssistantManager: Successfully wrote main file: ${filePath.fsPath}`);
+            } catch (mainWriteError) {
+                 logError(`AssistantManager: Failed to write main file ${filePath.fsPath}.`, mainWriteError);
+                 return false; // Fail if main file write fails
+            }
 
-            logDebug(`AssistantManager: Saved ${assistantsArray.length} assistants to ${filePath.fsPath} (and backup).`);
-            return true; // Indicate success
+
+            logDebug(`AssistantManager: Save process completed for ${assistantsArray.length} assistants.`);
+            return true; // Indicate overall success (assuming main file write is the critical one)
         } catch (error) {
-            logError(`AssistantManager: Failed to write assistants file.`, error);
+            // Catch any unexpected errors during the overall save process
+            logError(`AssistantManager: Unexpected error during saveAssistants process.`, error);
             return false; // Indicate save failure
         }
     }

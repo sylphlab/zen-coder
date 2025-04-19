@@ -82,17 +82,19 @@ try {
         const chatSessionManagerInstance = new ChatSessionManager(context, subscriptionManagerInstance);
         // Corrected: Pass both chatSessionManagerInstance and subscriptionManagerInstance
         const historyManagerInstance = new HistoryManager(chatSessionManagerInstance, subscriptionManagerInstance);
+        const assistantManagerInstance = new AssistantManager(context); // Instantiate AssistantManager here
+        const configResolverInstance = new ConfigResolver(chatSessionManagerInstance, assistantManagerInstance); // Instantiate ConfigResolver here
 
-        // AiService constructor needs the correct historyManagerInstance now
-        aiServiceInstance = new AiService(context, historyManagerInstance, providerStatusManagerInstance, chatSessionManagerInstance, subscriptionManagerInstance);
+        // AiService constructor now needs ConfigResolver
+        aiServiceInstance = new AiService(context, historyManagerInstance, providerStatusManagerInstance, chatSessionManagerInstance, subscriptionManagerInstance, configResolverInstance); // Pass 6 args
         await aiServiceInstance.initialize();
 
         if (!aiServiceInstance) {
             throw new Error("AiService failed to initialize.");
         }
 
-        // Pass the single historyManagerInstance to the View Provider
-        const provider = new ZenCoderChatViewProvider(context, aiServiceInstance, chatSessionManagerInstance, historyManagerInstance); // Pass 4 args
+        // Pass AssistantManager and ConfigResolver to the View Provider
+        const provider = new ZenCoderChatViewProvider(context, aiServiceInstance, chatSessionManagerInstance, historyManagerInstance, assistantManagerInstance, configResolverInstance); // Pass 6 args
 
         context.subscriptions.push(
             vscode.window.registerWebviewViewProvider(ZenCoderChatViewProvider.viewType, provider, {
@@ -141,7 +143,9 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         context: vscode.ExtensionContext,
         aiService: AiService,
         chatSessionManager: ChatSessionManager,
-        historyManager: HistoryManager // Accept the single HistoryManager instance
+        historyManager: HistoryManager, // Accept the single HistoryManager instance
+        assistantManager: AssistantManager, // Accept AssistantManager
+        configResolver: ConfigResolver // Accept ConfigResolver
     ) {
         this._context = context;
         this._extensionUri = context.extensionUri;
@@ -149,13 +153,12 @@ class ZenCoderChatViewProvider implements vscode.WebviewViewProvider {
         this._aiService = aiService;
         this._chatSessionManager = chatSessionManager;
         this._historyManager = historyManager; // Store the passed instance
-        // Pass ProviderManager from AiService to ConfigResolver
-        this._configResolver = new ConfigResolver(this._chatSessionManager); // Remove second argument
+        this._assistantManager = assistantManager; // Store the passed AssistantManager instance
+        this._configResolver = configResolver; // Store the passed ConfigResolver instance
         this._modelResolver = new ModelResolver(context, aiService.providerStatusManager, aiService);
         this._handlers = new Map();
         // Pass postMessageCallback directly to McpManager constructor
         this._mcpManager = new McpManager(context, this.postMessageToWebview.bind(this));
-        this._assistantManager = new AssistantManager(context); // Instantiate AssistantManager
         console.log("ZenCoderChatViewProvider constructed.");
     }
 

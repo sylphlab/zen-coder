@@ -37,7 +37,7 @@ export class AiService {
     private readonly _providerStatusManager: ProviderStatusManager;
     private readonly _toolManager: ToolManager;
     private readonly _subscriptionManager: SubscriptionManager;
-    private readonly _configResolver: ConfigResolver;
+    private readonly _configResolver: ConfigResolver; // Keep the property
     private readonly _streamProcessor: StreamProcessor; // Instantiate StreamProcessor here
     private readonly _aiStreamer: AiStreamer;
     public readonly eventEmitter: EventEmitter;
@@ -66,7 +66,8 @@ export class AiService {
         historyManager: HistoryManager,
         providerStatusManager: ProviderStatusManager,
         chatSessionManager: ChatSessionManager,
-        subscriptionManager: SubscriptionManager
+        subscriptionManager: SubscriptionManager,
+        configResolver: ConfigResolver // Add configResolver as argument
     ) {
         this.context = context;
         this.historyManager = historyManager;
@@ -78,8 +79,7 @@ export class AiService {
         this._subscriptionManager = subscriptionManager;
         this._mcpManager = new McpManager(context, (msg) => this.postMessageCallback?.(msg));
         this._toolManager = new ToolManager(context, this._mcpManager);
-        // Inject ProviderManager into ConfigResolver
-        this._configResolver = new ConfigResolver(this.chatSessionManager); // Remove second argument
+        this._configResolver = configResolver; // Assign passed configResolver
         // Instantiate StreamProcessor here, passing only historyManager
         this._streamProcessor = new StreamProcessor(historyManager); // Pass only historyManager
         // AiStreamer constructor takes 5 arguments

@@ -71,11 +71,23 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
              try {
                  // Use requestData for creation
                  const responsePayload = await requestData<CreateAssistantPayload>('assistants/create', payload);
-                 console.log("[assistantStore] addAssistant requestData successful:", responsePayload); // Log success
-                 // Refetch list on success to ensure consistency
-                 get().actions.fetchAssistants(); // Trigger refetch but don't await it here
-                 console.log("[assistantStore] addAssistant refetch triggered."); // Log after triggering refetch
-                 return responsePayload.assistant ?? null; // Keep return for now, maybe needed later
+                 const newAssistant = responsePayload.assistant;
+                 if (newAssistant) {
+                     set(state => {
+                         const newMap = { ...state.assistantMap, [newAssistant.id]: newAssistant };
+                         const newList = Object.values(newMap).sort((a, b) => a.name.localeCompare(b.name));
+                         return {
+                             assistants: newList,
+                             assistantMap: newMap,
+                             isLoading: false, // Set loading false here
+                             error: null
+                         };
+                     });
+                 } else {
+                      // Handle case where backend didn't return the assistant?
+                      set({ isLoading: false, error: 'Failed to add assistant: No assistant data returned.' });
+                 }
+                 return newAssistant ?? null;
              } catch (error: any) {
                  console.error("Error creating assistant:", error);
                  set({ error: error.message || 'Error creating assistant.', isLoading: false });
@@ -89,9 +101,23 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
             set({ isLoading: true, error: null });
              try {
                  const responsePayload = await requestData<UpdateAssistantPayloadResponse>('assistants/update', payload);
-                 // Refetch list on success
-                 await get().actions.fetchAssistants();
-                 return responsePayload.assistant ?? null;
+                 const updatedAssistant = responsePayload.assistant;
+                 if (updatedAssistant) {
+                     set(state => {
+                         const newMap = { ...state.assistantMap, [updatedAssistant.id]: updatedAssistant };
+                         const newList = Object.values(newMap).sort((a, b) => a.name.localeCompare(b.name));
+                         return {
+                             assistants: newList,
+                             assistantMap: newMap,
+                             isLoading: false, // Set loading false here
+                             error: null
+                         };
+                     });
+                 } else {
+                     // Handle case where backend didn't return the assistant?
+                     set({ isLoading: false, error: 'Failed to update assistant: No assistant data returned.' });
+                 }
+                 return updatedAssistant ?? null;
              } catch (error: any) {
                  console.error("Error updating assistant:", error);
                  set({ error: error.message || 'Error updating assistant.', isLoading: false });
@@ -104,8 +130,20 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
             set({ isLoading: true, error: null });
              try {
                  await requestData<DeleteAssistantPayload>('assistants/delete', { id });
-                 // Refetch list on success
-                 await get().actions.fetchAssistants();
+                 // Remove from local state on success
+                 set(state => {
+                     const newMap = { ...state.assistantMap };
+                     delete newMap[id];
+                     const newList = Object.values(newMap).sort((a, b) => a.name.localeCompare(b.name));
+                     const newCurrentId = state.currentAssistantId === id ? null : state.currentAssistantId; // Deselect if deleted
+                     return {
+                         assistants: newList,
+                         assistantMap: newMap,
+                         currentAssistantId: newCurrentId,
+                         isLoading: false, // Set loading false here
+                         error: null
+                     };
+                 });
                  return true;
              } catch (error: any) {
                  console.error("Error deleting assistant:", error);

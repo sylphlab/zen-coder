@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { ChatSessionManager } from '../session/chatSessionManager';
 import { DefaultChatConfig, ChatConfig, Assistant } from '../common/types'; // Import necessary types
-// Removed ProviderManager and ModelDefinition imports as they are not directly needed here anymore
-// TODO: Import AssistantManager when created
+import { AssistantManager } from '../session/AssistantManager'; // Import AssistantManager
+
 
 // Define EffectiveChatConfig locally - Now includes Assistant details
 export interface EffectiveChatConfig {
@@ -19,13 +19,13 @@ export interface EffectiveChatConfig {
  */
 export class ConfigResolver {
     private readonly _sessionManager: ChatSessionManager;
-    // TODO: Add AssistantManager dependency when created
-    // private readonly _assistantManager: AssistantManager;
+    private readonly _assistantManager: AssistantManager; // Add AssistantManager dependency
+
 
     // Updated constructor
-    constructor(sessionManager: ChatSessionManager /* TODO: , assistantManager: AssistantManager */) {
+    constructor(sessionManager: ChatSessionManager, assistantManager: AssistantManager) { // Add assistantManager to constructor
         this._sessionManager = sessionManager;
-        // this._assistantManager = assistantManager; // Store AssistantManager
+        this._assistantManager = assistantManager; // Store AssistantManager
     }
 
     /**
@@ -65,36 +65,36 @@ export class ConfigResolver {
 
         effectiveConfig.assistantId = targetAssistantId;
 
-        // 2. Fetch the Assistant details (using placeholder logic)
-        let selectedAssistant: Assistant | null = null;
+        // 2. Fetch the Assistant details using AssistantManager
+        let selectedAssistant: Assistant | undefined | null = null; // Allow undefined from getAssistantById
         if (targetAssistantId) {
             try {
-                // TODO: Replace with actual call to AssistantManager
-                // selectedAssistant = await this._assistantManager.getAssistant(targetAssistantId);
-                console.log(`[ConfigResolver|${chatId}] TODO: Fetching assistant details for ${targetAssistantId}`);
-                // Placeholder data for now
-                // Placeholder data matching the NEW Assistant structure
-                selectedAssistant = {
-                    id: targetAssistantId,
-                    name: `Assistant ${targetAssistantId.substring(0, 4)}`,
-                    description: 'Placeholder description',
-                    instructions: 'Placeholder instructions', // Use 'instructions'
-                    modelConfig: { // Use nested 'modelConfig'
-                        providerId: 'placeholder-provider-from-assistant',
-                        modelId: 'placeholder-model-from-assistant',
-                    },
-                    createdAt: new Date(0).toISOString(), // Use ISO string
-                    updatedAt: new Date(0).toISOString(), // Use ISO string (renamed from lastModified)
-                };
+                // Use the actual AssistantManager
+                selectedAssistant = await this._assistantManager.getAssistantById(targetAssistantId);
                 if (!selectedAssistant) {
-                     console.warn(`[ConfigResolver|${chatId}] Assistant with ID ${targetAssistantId} not found.`);
+                    console.warn(`[ConfigResolver|${chatId}] Assistant with ID ${targetAssistantId} not found.`);
+                } else {
+                    console.log(`[ConfigResolver|${chatId}] Successfully fetched assistant details for ${targetAssistantId}.`);
                 }
             } catch (error) {
-                 console.error(`[ConfigResolver|${chatId}] Error fetching assistant ${targetAssistantId}:`, error);
+                console.error(`[ConfigResolver|${chatId}] Error fetching assistant ${targetAssistantId}:`, error);
+                selectedAssistant = null; // Ensure it's null on error
             }
         } else {
-             console.log(`[ConfigResolver|${chatId}] No target assistant ID resolved.`);
+            console.log(`[ConfigResolver|${chatId}] No target assistant ID resolved.`);
         }
+
+        // Removed placeholder data block
+
+
+
+
+
+
+
+
+
+
 
         // 3. Populate effectiveConfig from the fetched Assistant
         if (selectedAssistant) {
